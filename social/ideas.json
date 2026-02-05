@@ -1,0 +1,42 @@
+{
+  "categories": {
+    "product_demo": [
+      "Show lineup drag-and-drop in action",
+      "Equipment QR code scanning demo",
+      "Weather integration feature",
+      "Rigging database walkthrough",
+      "Mobile app overview",
+      "Coach dashboard tour"
+    ],
+    "rowing_humor": [
+      "When the novice asks why we practice at 5am",
+      "Cox box battery dies mid-piece",
+      "Erg screen says 2:00 but body says 2:30",
+      "Coaches when athletes ask about steady state",
+      "That one rower who always forgets their uni"
+    ],
+    "tips": [
+      "5 things to check before launching",
+      "How to read weather for safe rowing",
+      "Quick rigging adjustment tips",
+      "Pre-practice checklist",
+      "Equipment care basics"
+    ],
+    "behind_scenes": [
+      "Building Radl: this week's features",
+      "Bug squashing session timelapse",
+      "Coffee + code morning routine",
+      "User feedback we're implementing"
+    ],
+    "community": [
+      "Repost user content",
+      "Regatta season prep tips",
+      "Feature request spotlight",
+      "Beta tester shoutout"
+    ]
+  },
+  "hashtags": {
+    "instagram": "#rowing #crew #rowinglife #erging #rowingcoach #boathouse #radlapp #rowingteam #coxswain #sculling #sweep",
+    "twitter": "#rowing #rowinglife #radlapp"
+  }
+}
