@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sprint Management System
+# Sprint Management System (Python-based JSON, no jq required)
 # Usage:
 #   ./sprint.sh start "Phase 53.1" "Rigging Database" "3 hours"
 #   ./sprint.sh task "Task description"
@@ -16,6 +16,47 @@ source /home/hb/radl-ops/.env 2>/dev/null || true
 
 SPRINT_DIR="/home/hb/radl/.planning/sprints"
 CURRENT_SPRINT="$SPRINT_DIR/current.json"
+
+mkdir -p "$SPRINT_DIR"
+
+# Python JSON helper
+json_get() {
+  local file="$1"
+  local key="$2"
+  python3 -c "import json; print(json.load(open('$file')).get('$key', ''))"
+}
+
+json_get_len() {
+  local file="$1"
+  local key="$2"
+  python3 -c "import json; print(len(json.load(open('$file')).get('$key', [])))"
+}
+
+json_update() {
+  local file="$1"
+  local updates="$2"
+  python3 << EOF
+import json
+from datetime import datetime
+
+with open('$file', 'r') as f:
+    data = json.load(f)
+
+# Apply updates
+updates = $updates
+for key, value in updates.items():
+    if key.startswith('append_'):
+        arr_key = key[7:]
+        if arr_key not in data:
+            data[arr_key] = []
+        data[arr_key].append(value)
+    else:
+        data[key] = value
+
+with open('$file', 'w') as f:
+    json.dump(data, f, indent=2)
+EOF
+}
 
 # Slack notification helper
 notify_slack() {
@@ -101,11 +142,10 @@ cmd_task() {
   fi
 
   local task_id=$(date '+%s')
-  local updated=$(jq --arg desc "$description" --arg id "$task_id" \
-    '.tasks += [{"id": $id, "description": $desc, "status": "pending", "addedAt": (now | todate)}]' \
-    "$CURRENT_SPRINT")
+  local now=$(date -Iseconds)
 
-  echo "$updated" > "$CURRENT_SPRINT"
+  json_update "$CURRENT_SPRINT" "{\"append_tasks\": {\"id\": \"$task_id\", \"description\": \"$description\", \"status\": \"pending\", \"addedAt\": \"$now\"}}"
+
   echo "Task added: $description"
 }
 
@@ -118,16 +158,13 @@ cmd_progress() {
     exit 1
   fi
 
-  local phase=$(jq -r '.phase' "$CURRENT_SPRINT")
-  local title=$(jq -r '.title' "$CURRENT_SPRINT")
-  local completed=$(jq -r '.completedTasks | length' "$CURRENT_SPRINT")
-  local total=$(jq -r '.tasks | length' "$CURRENT_SPRINT")
+  local phase=$(json_get "$CURRENT_SPRINT" "phase")
+  local title=$(json_get "$CURRENT_SPRINT" "title")
+  local completed=$(json_get_len "$CURRENT_SPRINT" "completedTasks")
+  local now=$(date -Iseconds)
 
   # Add to completed tasks
-  local updated=$(jq --arg msg "$message" \
-    '.completedTasks += [{"message": $msg, "completedAt": (now | todate)}]' \
-    "$CURRENT_SPRINT")
-  echo "$updated" > "$CURRENT_SPRINT"
+  json_update "$CURRENT_SPRINT" "{\"append_completedTasks\": {\"message\": \"$message\", \"completedAt\": \"$now\"}}"
 
   completed=$((completed + 1))
 
@@ -159,14 +196,12 @@ cmd_blocker() {
     exit 1
   fi
 
-  local phase=$(jq -r '.phase' "$CURRENT_SPRINT")
-  local title=$(jq -r '.title' "$CURRENT_SPRINT")
+  local phase=$(json_get "$CURRENT_SPRINT" "phase")
+  local title=$(json_get "$CURRENT_SPRINT" "title")
+  local now=$(date -Iseconds)
 
   # Add blocker to sprint
-  local updated=$(jq --arg desc "$description" \
-    '.blockers += [{"description": $desc, "reportedAt": (now | todate), "resolved": false}]' \
-    "$CURRENT_SPRINT")
-  echo "$updated" > "$CURRENT_SPRINT"
+  json_update "$CURRENT_SPRINT" "{\"append_blockers\": {\"description\": \"$description\", \"reportedAt\": \"$now\", \"resolved\": False}}"
 
   echo "Blocker reported: $description"
 
@@ -201,17 +236,14 @@ cmd_checkpoint() {
   fi
 
   local checkpoint_time=$(date -Iseconds)
-  local phase=$(jq -r '.phase' "$CURRENT_SPRINT")
-  local completed=$(jq -r '.completedTasks | length' "$CURRENT_SPRINT")
+  local phase=$(json_get "$CURRENT_SPRINT" "phase")
+  local completed=$(json_get_len "$CURRENT_SPRINT" "completedTasks")
 
   # Add checkpoint
-  local updated=$(jq --arg time "$checkpoint_time" --arg tasks "$completed" \
-    '.checkpoints += [{"time": $time, "completedTasks": ($tasks | tonumber)}]' \
-    "$CURRENT_SPRINT")
-  echo "$updated" > "$CURRENT_SPRINT"
+  json_update "$CURRENT_SPRINT" "{\"append_checkpoints\": {\"time\": \"$checkpoint_time\", \"completedTasks\": $completed}}"
 
   # Also copy to archive
-  local sprint_id=$(jq -r '.id' "$CURRENT_SPRINT")
+  local sprint_id=$(json_get "$CURRENT_SPRINT" "id")
   cp "$CURRENT_SPRINT" "$SPRINT_DIR/checkpoint-$sprint_id-$(date '+%H%M%S').json"
 
   echo "Checkpoint saved at $checkpoint_time ($completed tasks completed)"
@@ -227,21 +259,19 @@ cmd_complete() {
     exit 1
   fi
 
-  local phase=$(jq -r '.phase' "$CURRENT_SPRINT")
-  local title=$(jq -r '.title' "$CURRENT_SPRINT")
-  local estimate=$(jq -r '.estimate' "$CURRENT_SPRINT")
-  local sprint_id=$(jq -r '.id' "$CURRENT_SPRINT")
-  local completed=$(jq -r '.completedTasks | length' "$CURRENT_SPRINT")
-  local blockers=$(jq -r '.blockers | length' "$CURRENT_SPRINT")
+  local phase=$(json_get "$CURRENT_SPRINT" "phase")
+  local title=$(json_get "$CURRENT_SPRINT" "title")
+  local estimate=$(json_get "$CURRENT_SPRINT" "estimate")
+  local sprint_id=$(json_get "$CURRENT_SPRINT" "id")
+  local completed=$(json_get_len "$CURRENT_SPRINT" "completedTasks")
+  local blockers=$(json_get_len "$CURRENT_SPRINT" "blockers")
+  local end_time=$(date -Iseconds)
 
   # Update sprint status
-  local updated=$(jq --arg commit "$commit" --arg actual "$actual_time" \
-    '.status = "completed" | .commit = $commit | .actualTime = $actual | .endTime = (now | todate)' \
-    "$CURRENT_SPRINT")
+  json_update "$CURRENT_SPRINT" "{\"status\": \"completed\", \"commit\": \"$commit\", \"actualTime\": \"$actual_time\", \"endTime\": \"$end_time\"}"
 
   # Move to archive
-  echo "$updated" > "$SPRINT_DIR/completed-$sprint_id.json"
-  rm "$CURRENT_SPRINT"
+  mv "$CURRENT_SPRINT" "$SPRINT_DIR/completed-$sprint_id.json"
 
   echo "Sprint completed!"
   echo "  Phase: $phase"
@@ -292,22 +322,21 @@ cmd_status() {
     # Show recent completed sprints
     echo ""
     echo "Recent completed sprints:"
-    ls -t "$SPRINT_DIR"/completed-*.json 2>/dev/null | head -5 | while read f; do
-      local phase=$(jq -r '.phase' "$f")
-      local title=$(jq -r '.title' "$f")
-      local actual=$(jq -r '.actualTime' "$f")
+    for f in $(ls -t "$SPRINT_DIR"/completed-*.json 2>/dev/null | head -5); do
+      local phase=$(json_get "$f" "phase")
+      local title=$(json_get "$f" "title")
+      local actual=$(json_get "$f" "actualTime")
       echo "  - $phase: $title ($actual)"
     done
     exit 0
   fi
 
-  local phase=$(jq -r '.phase' "$CURRENT_SPRINT")
-  local title=$(jq -r '.title' "$CURRENT_SPRINT")
-  local estimate=$(jq -r '.estimate' "$CURRENT_SPRINT")
-  local start=$(jq -r '.startTime' "$CURRENT_SPRINT")
-  local completed=$(jq -r '.completedTasks | length' "$CURRENT_SPRINT")
-  local total=$(jq -r '.tasks | length' "$CURRENT_SPRINT")
-  local blockers=$(jq -r '.blockers | map(select(.resolved == false)) | length' "$CURRENT_SPRINT")
+  local phase=$(json_get "$CURRENT_SPRINT" "phase")
+  local title=$(json_get "$CURRENT_SPRINT" "title")
+  local estimate=$(json_get "$CURRENT_SPRINT" "estimate")
+  local start=$(json_get "$CURRENT_SPRINT" "startTime")
+  local completed=$(json_get_len "$CURRENT_SPRINT" "completedTasks")
+  local blockers=$(json_get_len "$CURRENT_SPRINT" "blockers")
 
   echo "=== Current Sprint ==="
   echo "Phase: $phase"
@@ -320,7 +349,14 @@ cmd_status() {
   if [ "$blockers" -gt 0 ]; then
     echo ""
     echo "Blockers:"
-    jq -r '.blockers | map(select(.resolved == false)) | .[] | "  - \(.description)"' "$CURRENT_SPRINT"
+    python3 << EOF
+import json
+with open('$CURRENT_SPRINT', 'r') as f:
+    data = json.load(f)
+for b in data.get('blockers', []):
+    if not b.get('resolved', False):
+        print(f"  - {b['description']}")
+EOF
   fi
 }
 
