@@ -1,0 +1,157 @@
+name: Weekly Briefing
+
+on:
+  schedule:
+    # Saturday 7am EST = 12:00 UTC
+    - cron: '0 12 * * 6'
+  workflow_dispatch:
+
+jobs:
+  generate-weekly-briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout radl-ops
+        uses: actions/checkout@v4
+        with:
+          repository: Sn1ckerDood1e/radl-ops
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Checkout radl (for planning files)
+        uses: actions/checkout@v4
+        with:
+          repository: Sn1ckerDood1e/Radl
+          path: radl
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Generate Weekly Briefing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          DATE=$(date '+%Y-%m-%d')
+          WEEK_START=$(date -d 'last monday' '+%Y-%m-%d')
+          WEEK_END=$(date -d 'last friday' '+%Y-%m-%d')
+
+          echo "## Weekly Briefing — Week of $WEEK_START" > briefing.md
+          echo "" >> briefing.md
+
+          # --- Week in Review ---
+          echo "### 📈 Week in Review" >> briefing.md
+
+          # Commits this week
+          COMMIT_COUNT=$(gh api "repos/Sn1ckerDood1e/Radl/commits?since=${WEEK_START}T00:00:00Z" --jq 'length' 2>/dev/null || echo "0")
+          echo "- **Commits:** $COMMIT_COUNT" >> briefing.md
+
+          # PRs merged
+          PR_MERGED=$(gh pr list --repo Sn1ckerDood1e/Radl --state merged --search "merged:>=$WEEK_START" --json number --jq 'length' 2>/dev/null || echo "0")
+          echo "- **PRs Merged:** $PR_MERGED" >> briefing.md
+
+          # Issues closed
+          ISSUES_CLOSED=$(gh issue list --repo Sn1ckerDood1e/Radl --state closed --search "closed:>=$WEEK_START" --json number --jq 'length' 2>/dev/null || echo "0")
+          echo "- **Issues Closed:** $ISSUES_CLOSED" >> briefing.md
+
+          # Recent commit messages
+          echo "- **Highlights:**" >> briefing.md
+          gh api "repos/Sn1ckerDood1e/Radl/commits?since=${WEEK_START}T00:00:00Z&per_page=10" --jq '.[].commit.message | split("\n")[0]' 2>/dev/null | head -5 | while read msg; do
+            echo "  - $msg" >> briefing.md
+          done
+          echo "" >> briefing.md
+
+          # --- Sprint Progress ---
+          echo "### 🎯 Sprint Progress" >> briefing.md
+          if [ -d "radl/.planning/sprints" ]; then
+            COMPLETED=$(ls radl/.planning/sprints/completed-*.json 2>/dev/null | wc -l)
+            echo "- **Sprints Completed This Cycle:** $COMPLETED" >> briefing.md
+
+            # List recent completed sprints
+            for f in $(ls -t radl/.planning/sprints/completed-*.json 2>/dev/null | head -3); do
+              PHASE=$(jq -r '.phase' "$f" 2>/dev/null || echo "Unknown")
+              TITLE=$(jq -r '.title' "$f" 2>/dev/null || echo "Unknown")
+              TIME=$(jq -r '.actualTime' "$f" 2>/dev/null || echo "Unknown")
+              echo "  - $PHASE: $TITLE ($TIME)" >> briefing.md
+            done
+          else
+            echo "- No sprint data available" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
+          # --- Next Week Focus ---
+          echo "### 🔮 Next Week Focus" >> briefing.md
+          if [ -f "radl/.planning/STATE.md" ]; then
+            PHASE=$(grep -A1 "| Phase |" radl/.planning/STATE.md | tail -1 | sed 's/.*| //' | sed 's/ |.*//')
+            echo "- **Current Phase:** $PHASE" >> briefing.md
+          fi
+          if [ -f "radl/.planning/ROADMAP.md" ]; then
+            echo "- Review ROADMAP.md for upcoming phases" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
+          # --- Training Week Ahead ---
+          echo "### 💪 Training Week Ahead" >> briefing.md
+          if [ -f "training/schedule.json" ]; then
+            WEEK_OF_YEAR=$(date -d 'next monday' '+%V')
+            CYCLE_WEEK=$(( (WEEK_OF_YEAR % 4) + 1 ))
+            echo "- **Cycle Week:** $CYCLE_WEEK of 4" >> briefing.md
+
+            python3 << PYEOF >> briefing.md
+          import json
+          with open('training/schedule.json', 'r') as f:
+              schedule = json.load(f)
+          week = "week$CYCLE_WEEK"
+          if week in schedule['workouts']:
+              workouts = schedule['workouts'][week]
+              for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
+                  if day in workouts:
+                      name = workouts[day].get('name', 'Workout')
+                      print(f"- **{day.capitalize()}:** {name}")
+          PYEOF
+          fi
+          echo "" >> briefing.md
+
+          # --- Win of the Week ---
+          echo "### 🏆 Reflection" >> briefing.md
+          echo "- What went well this week?" >> briefing.md
+          echo "- What could improve?" >> briefing.md
+          echo "- One thing to celebrate?" >> briefing.md
+          echo "" >> briefing.md
+
+      - name: Send to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          WEBHOOK_URL=$(echo "$SLACK_WEBHOOK_URL" | tr -d '[:space:]')
+          BRIEFING=$(cat briefing.md | sed 's/^## /*/g' | sed 's/^### /*/g' | head -c 2900)
+          BRIEFING_JSON=$(echo "$BRIEFING" | jq -Rs .)
+          DATE_STR=$(date '+%Y-%m-%d')
+
+          cat > slack_payload.json << EOFPAYLOAD
+          {
+            "text": "Weekly Briefing - ${DATE_STR}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "📊 Weekly Briefing — ${DATE_STR}",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ${BRIEFING_JSON}
+                }
+              }
+            ]
+          }
+          EOFPAYLOAD
+
+          curl -f -X POST -H 'Content-type: application/json' -d @slack_payload.json "$WEBHOOK_URL"
+
+      - name: Save briefing artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-briefing-${{ github.run_number }}
+          path: briefing.md
+          retention-days: 30

@@ -1,15 +1,43 @@
 /**
- * Briefing Tool - Generate daily and weekly business summaries
+ * Briefing Tools - Generate daily and weekly business summaries
+ *
+ * All briefing tools are read-tier (automatic execution, no approval needed)
  */
 
+import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
-import type { Tool, ToolResult, Briefing } from '../types/index.js';
+import type { Tool, ToolResult, Briefing, ToolExecutionContext } from '../types/index.js';
 import { config } from '../config/index.js';
 import { toolRegistry } from './registry.js';
+import { logger } from '../config/logger.js';
+import { audit } from '../audit/index.js';
 
 const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
 });
+
+// ============================================
+// Input Validation Schemas
+// ============================================
+
+const dailyBriefingSchema = z.object({
+  include_github: z.boolean().optional().default(true),
+  include_social: z.boolean().optional().default(false),
+  custom_focus: z.string().max(500).optional(),
+});
+
+const weeklyBriefingSchema = z.object({
+  week_start: z.string().optional(),
+});
+
+const roadmapIdeasSchema = z.object({
+  focus_area: z.string().max(200).optional(),
+  constraint: z.string().max(200).optional(),
+});
+
+// ============================================
+// Tools
+// ============================================
 
 /**
  * Generate a daily briefing
@@ -17,16 +45,20 @@ const anthropic = new Anthropic({
 const generateDailyBriefing: Tool = {
   name: 'generate_daily_briefing',
   description: 'Generate a daily briefing summarizing business activity, tasks, and priorities',
+  category: 'briefing',
+  permissionTier: 'read',
   parameters: {
     include_github: {
       type: 'boolean',
       description: 'Include GitHub activity summary',
       optional: true,
+      default: true,
     },
     include_social: {
       type: 'boolean',
       description: 'Include social media metrics',
       optional: true,
+      default: false,
     },
     custom_focus: {
       type: 'string',
@@ -34,8 +66,14 @@ const generateDailyBriefing: Tool = {
       optional: true,
     },
   },
-  async execute(params): Promise<ToolResult> {
+  inputSchema: dailyBriefingSchema,
+  rateLimit: 5, // 5 briefings per minute
+  async execute(params, context): Promise<ToolResult> {
+    const startTime = Date.now();
+
     try {
+      const validated = dailyBriefingSchema.parse(params);
+
       // Gather data from various sources
       const data: Record<string, unknown> = {
         date: new Date().toISOString().split('T')[0],
@@ -43,29 +81,21 @@ const generateDailyBriefing: Tool = {
       };
 
       // Get GitHub activity if requested
-      if (params.include_github !== false) {
-        const githubTool = toolRegistry.get('github_repo_stats');
-        if (githubTool) {
-          const statsResult = await githubTool.execute({});
-          if (statsResult.success) {
-            data.github = statsResult.data;
-          }
+      if (validated.include_github) {
+        // Use the registry's execute method for proper audit/rate limiting
+        const statsResult = await toolRegistry.execute('github_repo_stats', {}, context);
+        if (statsResult.success) {
+          data.github = statsResult.data;
         }
 
-        const issuesTool = toolRegistry.get('github_list_issues');
-        if (issuesTool) {
-          const issuesResult = await issuesTool.execute({ limit: 5 });
-          if (issuesResult.success) {
-            data.open_issues = issuesResult.data;
-          }
+        const issuesResult = await toolRegistry.execute('github_list_issues', { limit: 5 }, context);
+        if (issuesResult.success) {
+          data.open_issues = issuesResult.data;
         }
 
-        const prsTool = toolRegistry.get('github_list_prs');
-        if (prsTool) {
-          const prsResult = await prsTool.execute({ limit: 5 });
-          if (prsResult.success) {
-            data.open_prs = prsResult.data;
-          }
+        const prsResult = await toolRegistry.execute('github_list_prs', { limit: 5 }, context);
+        if (prsResult.success) {
+          data.open_prs = prsResult.data;
         }
       }
 
@@ -75,7 +105,7 @@ const generateDailyBriefing: Tool = {
 Data available:
 ${JSON.stringify(data, null, 2)}
 
-${params.custom_focus ? `Custom focus area: ${params.custom_focus}` : ''}
+${validated.custom_focus ? `Custom focus area: ${validated.custom_focus}` : ''}
 
 Format the briefing as:
 1. **Summary** - 2-3 sentence overview
@@ -96,6 +126,7 @@ Keep it brief and actionable. Use bullet points.`;
       const briefingText = content.type === 'text' ? content.text : '';
 
       const briefing: Briefing = {
+        id: `briefing_${Date.now().toString(36)}`,
         type: 'daily',
         generatedAt: new Date(),
         sections: [
@@ -105,10 +136,25 @@ Keep it brief and actionable. Use bullet points.`;
             priority: 'high',
           },
         ],
+        distribution: ['slack', 'email'],
+        status: 'generated',
       };
+
+      // Audit the briefing generation
+      audit('briefing_generated', {
+        channel: context.channel,
+        result: 'success',
+        metadata: {
+          type: 'daily',
+          executionTimeMs: Date.now() - startTime,
+        },
+      });
+
+      logger.info('Daily briefing generated', { briefingId: briefing.id });
 
       return { success: true, data: briefing };
     } catch (error) {
+      logger.error('generate_daily_briefing failed', { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to generate briefing',
@@ -123,6 +169,8 @@ Keep it brief and actionable. Use bullet points.`;
 const generateWeeklyBriefing: Tool = {
   name: 'generate_weekly_briefing',
   description: 'Generate a comprehensive weekly briefing with trends and planning',
+  category: 'briefing',
+  permissionTier: 'read',
   parameters: {
     week_start: {
       type: 'string',
@@ -130,10 +178,16 @@ const generateWeeklyBriefing: Tool = {
       optional: true,
     },
   },
-  async execute(params): Promise<ToolResult> {
+  inputSchema: weeklyBriefingSchema,
+  rateLimit: 2, // 2 weekly briefings per minute
+  async execute(params, context): Promise<ToolResult> {
+    const startTime = Date.now();
+
     try {
-      const weekStart = params.week_start
-        ? new Date(params.week_start as string)
+      const validated = weeklyBriefingSchema.parse(params);
+
+      const weekStart = validated.week_start
+        ? new Date(validated.week_start)
         : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
       const data: Record<string, unknown> = {
@@ -142,12 +196,9 @@ const generateWeeklyBriefing: Tool = {
       };
 
       // Gather GitHub data
-      const githubTool = toolRegistry.get('github_repo_stats');
-      if (githubTool) {
-        const result = await githubTool.execute({});
-        if (result.success) {
-          data.github = result.data;
-        }
+      const statsResult = await toolRegistry.execute('github_repo_stats', {}, context);
+      if (statsResult.success) {
+        data.github = statsResult.data;
       }
 
       // Generate weekly briefing
@@ -178,6 +229,7 @@ Be thorough but organized. Use headers and bullet points.`;
       const briefingText = content.type === 'text' ? content.text : '';
 
       const briefing: Briefing = {
+        id: `briefing_${Date.now().toString(36)}`,
         type: 'weekly',
         generatedAt: new Date(),
         sections: [
@@ -187,10 +239,25 @@ Be thorough but organized. Use headers and bullet points.`;
             priority: 'high',
           },
         ],
+        distribution: ['slack', 'email'],
+        status: 'generated',
       };
+
+      // Audit the briefing generation
+      audit('briefing_generated', {
+        channel: context.channel,
+        result: 'success',
+        metadata: {
+          type: 'weekly',
+          executionTimeMs: Date.now() - startTime,
+        },
+      });
+
+      logger.info('Weekly briefing generated', { briefingId: briefing.id });
 
       return { success: true, data: briefing };
     } catch (error) {
+      logger.error('generate_weekly_briefing failed', { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to generate weekly briefing',
@@ -205,6 +272,8 @@ Be thorough but organized. Use headers and bullet points.`;
 const generateRoadmapIdeas: Tool = {
   name: 'generate_roadmap_ideas',
   description: 'Brainstorm and prioritize potential features for the Radl roadmap',
+  category: 'briefing',
+  permissionTier: 'read',
   parameters: {
     focus_area: {
       type: 'string',
@@ -217,8 +286,12 @@ const generateRoadmapIdeas: Tool = {
       optional: true,
     },
   },
-  async execute(params): Promise<ToolResult> {
+  inputSchema: roadmapIdeasSchema,
+  rateLimit: 5,
+  async execute(params, context): Promise<ToolResult> {
     try {
+      const validated = roadmapIdeasSchema.parse(params);
+
       const prompt = `You are helping plan the roadmap for Radl, a rowing team management SaaS.
 
 Radl helps rowing coaches and clubs manage:
@@ -228,8 +301,8 @@ Radl helps rowing coaches and clubs manage:
 - Lineup management
 - Compliance tracking (SafeSport, background checks)
 
-${params.focus_area ? `Focus area: ${params.focus_area}` : ''}
-${params.constraint ? `Constraint: ${params.constraint}` : ''}
+${validated.focus_area ? `Focus area: ${validated.focus_area}` : ''}
+${validated.constraint ? `Constraint: ${validated.constraint}` : ''}
 
 Generate 5-7 feature ideas with:
 1. **Feature Name** - Short, descriptive title
@@ -249,8 +322,11 @@ Also suggest which features should be grouped together and a recommended impleme
       const content = response.content[0];
       const ideas = content.type === 'text' ? content.text : '';
 
+      logger.info('Roadmap ideas generated');
+
       return { success: true, data: { ideas } };
     } catch (error) {
+      logger.error('generate_roadmap_ideas failed', { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to generate roadmap ideas',
@@ -259,9 +335,14 @@ Also suggest which features should be grouped together and a recommended impleme
   },
 };
 
-// Register all briefing tools
+// ============================================
+// Registration
+// ============================================
+
 export function registerBriefingTools(): void {
   toolRegistry.register(generateDailyBriefing);
   toolRegistry.register(generateWeeklyBriefing);
   toolRegistry.register(generateRoadmapIdeas);
+
+  logger.info('Briefing tools registered', { count: 3 });
 }

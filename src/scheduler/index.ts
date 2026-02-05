@@ -1,16 +1,30 @@
 /**
  * Scheduler - Run periodic tasks like briefings
+ *
+ * Uses audit logging for all scheduled task executions.
  */
 
-import type { ScheduledTask } from '../types/index.js';
+import type { ScheduledTask, ToolExecutionContext } from '../types/index.js';
 import { logger } from '../config/logger.js';
 import { toolRegistry } from '../tools/registry.js';
 import { sendBriefing } from '../integrations/slack.js';
 import { sendBriefingEmail } from '../integrations/email.js';
 import type { Briefing } from '../types/index.js';
+import { audit } from '../audit/index.js';
 
 const tasks = new Map<string, ScheduledTask>();
 const intervals = new Map<string, NodeJS.Timeout>();
+
+/**
+ * Create execution context for scheduled tasks
+ */
+function createSchedulerContext(): ToolExecutionContext {
+  return {
+    channel: 'scheduler',
+    conversationId: `scheduler-${Date.now()}`,
+    userId: 'system',
+  };
+}
 
 /**
  * Parse cron expression to get next run time
@@ -162,13 +176,15 @@ export function registerDefaultTasks(): void {
     schedule: '0 9 * * *', // 9:00 AM every day
     enabled: true,
     handler: async () => {
-      const briefingTool = toolRegistry.get('generate_daily_briefing');
-      if (!briefingTool) {
-        logger.error('Daily briefing tool not found');
-        return;
-      }
+      const context = createSchedulerContext();
 
-      const result = await briefingTool.execute({ include_github: true });
+      // Use toolRegistry.execute for proper audit/rate limiting
+      const result = await toolRegistry.execute(
+        'generate_daily_briefing',
+        { include_github: true },
+        context
+      );
+
       if (!result.success || !result.data) {
         logger.error('Failed to generate daily briefing', { error: result.error });
         return;
@@ -187,6 +203,13 @@ export function registerDefaultTasks(): void {
         day: 'numeric',
       });
       await sendBriefingEmail(`Daily Briefing - ${date}`, content, 'daily');
+
+      // Audit the briefing sent
+      audit('briefing_sent', {
+        channel: 'scheduler',
+        result: 'success',
+        metadata: { type: 'daily', briefingId: briefing.id },
+      });
     },
   });
 
@@ -198,13 +221,15 @@ export function registerDefaultTasks(): void {
     schedule: '0 9 * * 1', // 9:00 AM every Monday
     enabled: true,
     handler: async () => {
-      const briefingTool = toolRegistry.get('generate_weekly_briefing');
-      if (!briefingTool) {
-        logger.error('Weekly briefing tool not found');
-        return;
-      }
+      const context = createSchedulerContext();
 
-      const result = await briefingTool.execute({});
+      // Use toolRegistry.execute for proper audit/rate limiting
+      const result = await toolRegistry.execute(
+        'generate_weekly_briefing',
+        {},
+        context
+      );
+
       if (!result.success || !result.data) {
         logger.error('Failed to generate weekly briefing', { error: result.error });
         return;
@@ -221,6 +246,13 @@ export function registerDefaultTasks(): void {
       weekStart.setDate(weekStart.getDate() - 7);
       const dateRange = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
       await sendBriefingEmail(`Weekly Briefing - ${dateRange}`, content, 'weekly');
+
+      // Audit the briefing sent
+      audit('briefing_sent', {
+        channel: 'scheduler',
+        result: 'success',
+        metadata: { type: 'weekly', briefingId: briefing.id },
+      });
     },
   });
 }

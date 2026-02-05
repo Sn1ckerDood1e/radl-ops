@@ -46,8 +46,11 @@ async function handleCommand(input: string): Promise<string | null> {
       return WELCOME_MESSAGE;
 
     case '/tools':
-      const tools = toolRegistry.getAll();
-      const toolList = tools.map(t => `  • ${t.name}${t.requiresApproval ? ' (requires approval)' : ''}\n    ${t.description}`).join('\n\n');
+      const tools = toolRegistry.getToolInfo();
+      const toolList = tools.map(t => {
+        const approval = t.requiresApproval ? ' [requires approval]' : '';
+        return `  • ${t.name} (${t.tier})${approval}\n    ${t.description}`;
+      }).join('\n\n');
       return `Available tools (${tools.length}):\n\n${toolList}`;
 
     case '/tasks':

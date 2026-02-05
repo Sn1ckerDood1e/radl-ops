@@ -228,6 +228,131 @@ cmd_blocker() {
   }"
 }
 
+# Resolve a blocker
+cmd_resolve() {
+  local blocker_num="$1"
+
+  if [ ! -f "$CURRENT_SPRINT" ]; then
+    echo "No active sprint."
+    exit 1
+  fi
+
+  if [ -z "$blocker_num" ]; then
+    # List blockers with numbers
+    echo "Active blockers:"
+    python3 << EOF
+import json
+with open('$CURRENT_SPRINT', 'r') as f:
+    data = json.load(f)
+blockers = data.get('blockers', [])
+for i, b in enumerate(blockers):
+    status = "✅" if b.get('resolved', False) else "❌"
+    print(f"  {i+1}. {status} {b['description']}")
+if not blockers:
+    print("  No blockers")
+EOF
+    echo ""
+    echo "Usage: sprint.sh resolve <number>"
+    exit 0
+  fi
+
+  # Mark blocker as resolved
+  python3 << EOF
+import json
+with open('$CURRENT_SPRINT', 'r') as f:
+    data = json.load(f)
+idx = int('$blocker_num') - 1
+if 0 <= idx < len(data.get('blockers', [])):
+    data['blockers'][idx]['resolved'] = True
+    data['blockers'][idx]['resolvedAt'] = '$(date -Iseconds)'
+    with open('$CURRENT_SPRINT', 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f"Blocker {int('$blocker_num')} resolved: {data['blockers'][idx]['description']}")
+else:
+    print(f"Invalid blocker number: $blocker_num")
+    exit(1)
+EOF
+}
+
+# Show sprint analytics
+cmd_analytics() {
+  echo "=== Sprint Analytics ==="
+  echo ""
+
+  python3 << 'EOF'
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+
+sprint_dir = Path('/home/hb/radl/.planning/sprints')
+completed_files = sorted(sprint_dir.glob('completed-*.json'), reverse=True)
+
+if not completed_files:
+    print("No completed sprints found.")
+    exit(0)
+
+total_sprints = 0
+total_tasks = 0
+total_blockers = 0
+estimates = []
+actuals = []
+
+for f in completed_files[:20]:  # Last 20 sprints
+    try:
+        with open(f, 'r') as file:
+            data = json.load(file)
+        total_sprints += 1
+        total_tasks += len(data.get('completedTasks', []))
+        total_blockers += len(data.get('blockers', []))
+
+        # Parse times if available
+        est = data.get('estimate', '')
+        act = data.get('actualTime', '')
+        if est and act:
+            # Simple parsing for "X hours" or "X.X hours"
+            try:
+                est_hrs = float(est.split()[0])
+                act_hrs = float(act.split()[0])
+                estimates.append(est_hrs)
+                actuals.append(act_hrs)
+            except:
+                pass
+    except:
+        pass
+
+print(f"Sprints analyzed: {total_sprints}")
+print(f"Total tasks completed: {total_tasks}")
+print(f"Total blockers encountered: {total_blockers}")
+print(f"Avg tasks per sprint: {total_tasks / total_sprints:.1f}")
+print(f"Avg blockers per sprint: {total_blockers / total_sprints:.1f}")
+
+if estimates and actuals:
+    avg_est = sum(estimates) / len(estimates)
+    avg_act = sum(actuals) / len(actuals)
+    accuracy = (avg_act / avg_est) * 100 if avg_est > 0 else 0
+    print(f"\nTime estimation:")
+    print(f"  Avg estimated: {avg_est:.1f} hours")
+    print(f"  Avg actual: {avg_act:.1f} hours")
+    print(f"  Accuracy: {accuracy:.0f}% (100% = perfect)")
+
+print("\nRecent sprints:")
+for f in completed_files[:5]:
+    try:
+        with open(f, 'r') as file:
+            data = json.load(file)
+        phase = data.get('phase', 'Unknown')
+        title = data.get('title', 'Unknown')
+        est = data.get('estimate', '?')
+        act = data.get('actualTime', '?')
+        tasks = len(data.get('completedTasks', []))
+        print(f"  - {phase}: {title}")
+        print(f"    Est: {est} → Actual: {act} | Tasks: {tasks}")
+    except:
+        pass
+EOF
+}
+
 # Save a checkpoint
 cmd_checkpoint() {
   if [ ! -f "$CURRENT_SPRINT" ]; then
@@ -366,9 +491,11 @@ case "$1" in
   task) cmd_task "$2" ;;
   progress) cmd_progress "$2" "$3" ;;
   blocker) cmd_blocker "$2" ;;
+  resolve) cmd_resolve "$2" ;;
   checkpoint) cmd_checkpoint ;;
   complete) cmd_complete "$2" "$3" ;;
   status) cmd_status ;;
+  analytics) cmd_analytics ;;
   *)
     echo "Sprint Management System"
     echo ""
@@ -379,8 +506,10 @@ case "$1" in
     echo "  task <description>                Add a task to current sprint"
     echo "  progress <message> [--notify]     Record task completion"
     echo "  blocker <description>             Report a blocker (notifies Slack immediately)"
+    echo "  resolve [number]                  List blockers or resolve one by number"
     echo "  checkpoint                        Save sprint state checkpoint"
     echo "  complete <commit> <actual_time>   Complete the sprint"
     echo "  status                            Show current sprint status"
+    echo "  analytics                         Show sprint analytics and trends"
     ;;
 esac

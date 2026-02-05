@@ -3,6 +3,8 @@
  *
  * An autonomous AI assistant for managing the Radl business.
  *
+ * Security-first design based on research of OpenClaw, Leon, and OVOS.
+ *
  * Usage:
  *   npm start          - Start all services (CLI + Slack + Scheduler)
  *   npm run cli        - Start CLI only
@@ -17,6 +19,9 @@ import { startCli } from './cli/index.js';
 import { startSlack, initSlack } from './integrations/slack.js';
 import { initEmail } from './integrations/email.js';
 import { startScheduler, registerDefaultTasks } from './scheduler/index.js';
+import { initMemory, cleanupExpired, saveMarkdownExport } from './memory/index.js';
+import { cleanupOldLogs } from './audit/index.js';
+import { toolRegistry } from './tools/registry.js';
 
 type RunMode = 'all' | 'cli' | 'slack' | 'scheduler';
 
@@ -26,7 +31,22 @@ async function main(): Promise<void> {
   logger.info('Starting Radl Ops', {
     mode,
     env: config.app.env,
+    version: '0.2.0', // Updated with security enhancements
   });
+
+  // Initialize core systems
+  logger.info('Initializing core systems...');
+
+  // Configure guardrails based on environment
+  toolRegistry.configure({
+    approvalRequiredTiers: ['delete', 'external', 'dangerous'],
+    globalRateLimit: config.app.isDev ? 1000 : 100,
+    approvalTimeoutSeconds: 300,
+    auditAllActions: true,
+  });
+
+  // Initialize memory system
+  initMemory();
 
   // Register all tools
   registerAllTools();
@@ -38,6 +58,20 @@ async function main(): Promise<void> {
   // Register scheduled tasks
   registerDefaultTasks();
 
+  // Run cleanup tasks
+  cleanupExpired(); // Clean expired memories
+  cleanupOldLogs(); // Clean old audit logs
+
+  // Log system status
+  const tools = toolRegistry.getToolInfo();
+  logger.info('System initialized', {
+    totalTools: tools.length,
+    toolsByCategory: tools.reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>),
+  });
+
   switch (mode) {
     case 'cli':
       logger.info('Starting CLI mode');
@@ -48,20 +82,14 @@ async function main(): Promise<void> {
       logger.info('Starting Slack mode');
       await startSlack();
       // Keep process running
-      process.on('SIGINT', () => {
-        logger.info('Shutting down...');
-        process.exit(0);
-      });
+      setupGracefulShutdown();
       break;
 
     case 'scheduler':
       logger.info('Starting scheduler mode');
       startScheduler();
       // Keep process running
-      process.on('SIGINT', () => {
-        logger.info('Shutting down...');
-        process.exit(0);
-      });
+      setupGracefulShutdown();
       break;
 
     case 'all':
@@ -82,9 +110,31 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * Setup graceful shutdown handlers
+ */
+function setupGracefulShutdown(): void {
+  const shutdown = async (signal: string) => {
+    logger.info(`Received ${signal}, shutting down gracefully...`);
+
+    // Save memory state before exit
+    try {
+      saveMarkdownExport();
+      logger.info('Memory state saved');
+    } catch (error) {
+      logger.error('Failed to save memory state', { error });
+    }
+
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception', { error });
+  logger.error('Uncaught exception', { error: error.message, stack: error.stack });
   process.exit(1);
 });
 
@@ -94,6 +144,6 @@ process.on('unhandledRejection', (reason) => {
 });
 
 main().catch((error) => {
-  logger.error('Failed to start', { error });
+  logger.error('Failed to start', { error: error.message });
   process.exit(1);
 });

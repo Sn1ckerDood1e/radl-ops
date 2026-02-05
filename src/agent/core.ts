@@ -1,24 +1,41 @@
 /**
  * Core Agent - The brain of Radl Ops
  *
- * Uses Claude API with tool use to:
- * - Understand requests and context
- * - Decide which tools to use
- * - Execute actions (with approval workflow for sensitive ops)
- * - Generate responses and briefings
+ * Security-first design based on research of OpenClaw and industry best practices.
+ *
+ * Features:
+ * - Permission tier enforcement
+ * - Audit logging for all actions
+ * - Memory integration for context
+ * - Approval workflow for sensitive operations
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { Tool, ToolResult, AgentContext, AgentResponse, ToolCall, ApprovalRequest } from '../types/index.js';
+import type {
+  Tool,
+  ToolResult,
+  AgentContext,
+  AgentResponse,
+  ToolCall,
+  ApprovalRequest,
+  PermissionTier,
+  ToolExecutionContext,
+} from '../types/index.js';
 import { toolRegistry } from '../tools/registry.js';
 import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
+import { audit, auditApprovalRequested, auditApprovalResponse } from '../audit/index.js';
+import { recall, remember, getRelevantContext } from '../memory/index.js';
 
 const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
 });
 
-const SYSTEM_PROMPT = `You are Radl Ops, an autonomous AI assistant helping manage the Radl rowing team management SaaS business.
+/**
+ * Build system prompt with relevant context
+ */
+function buildSystemPrompt(context: AgentContext): string {
+  const basePrompt = `You are Radl Ops, an autonomous AI assistant helping manage the Radl rowing team management SaaS business.
 
 Your responsibilities:
 1. **Feature Planning & Roadmap** - Help brainstorm, prioritize, and plan new features for the Radl app
@@ -34,87 +51,121 @@ Guidelines:
 - Be transparent: explain your reasoning, admit uncertainty
 - Stay in scope: you manage Radl business ops, not personal tasks
 
-When using tools:
+Tool Usage:
+- Tools marked [REQUIRES APPROVAL] need human confirmation before execution
 - Chain multiple tool calls when needed to complete a task
-- If a tool requires approval, explain why and wait for confirmation
 - Always summarize what you did after completing actions
 
+Security Notes:
+- Never expose API keys, tokens, or credentials in responses
+- Always validate user requests before executing sensitive actions
+- Log all actions for audit purposes
+
 Current date: ${new Date().toISOString().split('T')[0]}
+Channel: ${context.channel}
 `;
+
+  // Add relevant memories if available
+  const memories = getRelevantContext('', 5);
+  if (memories) {
+    return basePrompt + '\n\n' + memories;
+  }
+
+  return basePrompt;
+}
 
 interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string | Anthropic.ContentBlock[] | Anthropic.ToolResultBlockParam[];
 }
 
-// In-memory conversation storage (could be persisted to Supabase later)
+// In-memory conversation storage
 const conversations = new Map<string, ConversationMessage[]>();
 
-// Pending approval requests
+// Pending approval requests with expiration
 const pendingApprovals = new Map<string, ApprovalRequest>();
 
+// Approval timeout (5 minutes)
+const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
+
 /**
- * Format tools for Claude API
+ * Clean up expired approvals
  */
-function formatToolsForClaude(): Anthropic.Tool[] {
-  return toolRegistry.getAll().map(tool => ({
-    name: tool.name,
-    description: tool.description,
-    input_schema: {
-      type: 'object' as const,
-      properties: tool.parameters,
-      required: Object.keys(tool.parameters).filter(
-        key => !(tool.parameters[key] as { optional?: boolean }).optional
-      ),
-    },
-  }));
+function cleanupExpiredApprovals(): void {
+  const now = new Date();
+  for (const [id, request] of pendingApprovals) {
+    if (request.expiresAt < now && request.status === 'pending') {
+      request.status = 'expired';
+      audit('approval_expired', {
+        tool: request.tool,
+        channel: request.requestedFrom.channel,
+        result: 'failure',
+      });
+      pendingApprovals.delete(id);
+    }
+  }
 }
 
 /**
- * Execute a tool call
+ * Execute a tool with security checks
  */
 async function executeTool(
   toolName: string,
   params: Record<string, unknown>,
-  context: AgentContext
+  context: AgentContext,
+  approvalId?: string
 ): Promise<ToolResult> {
-  const tool = toolRegistry.get(toolName);
-  if (!tool) {
-    return { success: false, error: `Unknown tool: ${toolName}` };
-  }
+  const execContext: ToolExecutionContext = {
+    userId: context.userId,
+    channel: context.channel ?? 'cli',
+    conversationId: context.conversationId,
+    approvalId,
+    approvedBy: approvalId ? pendingApprovals.get(approvalId)?.respondedBy : undefined,
+  };
 
-  // Check if tool requires approval
-  if (tool.requiresApproval) {
-    const approvalId = crypto.randomUUID();
-    const request: ApprovalRequest = {
-      id: approvalId,
-      tool: toolName,
-      params,
-      reason: `Tool ${toolName} requires approval before execution`,
-      requestedAt: new Date(),
-      status: 'pending',
-    };
-    pendingApprovals.set(approvalId, request);
+  return toolRegistry.execute(toolName, params, execContext);
+}
 
-    return {
-      success: false,
-      error: `APPROVAL_REQUIRED:${approvalId}`,
-      data: { approvalId, request },
-    };
-  }
+/**
+ * Handle approval requirement
+ */
+function createApprovalRequest(
+  toolName: string,
+  params: Record<string, unknown>,
+  tier: PermissionTier,
+  context: AgentContext
+): ApprovalRequest {
+  const approvalId = crypto.randomUUID();
+  const now = new Date();
 
-  try {
-    logger.info(`Executing tool: ${toolName}`, { params, context });
-    const result = await tool.execute(params);
-    logger.info(`Tool result: ${toolName}`, { success: result.success });
-    return result;
-  } catch (error) {
-    logger.error(`Tool execution failed: ${toolName}`, { error });
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
+  const request: ApprovalRequest = {
+    id: approvalId,
+    tool: toolName,
+    params,
+    permissionTier: tier,
+    reason: `Tool "${toolName}" requires ${tier}-level approval before execution`,
+    requestedAt: now,
+    expiresAt: new Date(now.getTime() + APPROVAL_TIMEOUT_MS),
+    status: 'pending',
+    requestedFrom: {
+      channel: context.channel ?? 'unknown',
+      userId: context.userId,
+      conversationId: context.conversationId,
+    },
+  };
+
+  pendingApprovals.set(approvalId, request);
+
+  // Audit the approval request
+  auditApprovalRequested(
+    toolName,
+    tier,
+    context.channel ?? 'unknown',
+    context.conversationId,
+    params
+  );
+
+  return request;
 }
 
 /**
@@ -124,18 +175,32 @@ export async function processMessage(
   message: string,
   context: AgentContext
 ): Promise<AgentResponse> {
+  // Clean up expired approvals
+  cleanupExpiredApprovals();
+
+  // Log agent activity
+  audit('agent_started', {
+    channel: context.channel ?? 'unknown',
+    conversationId: context.conversationId,
+    userId: context.userId,
+    result: 'success',
+  });
+
   // Get or create conversation history
   let history = conversations.get(context.conversationId) || [];
 
   // Add user message
   history.push({ role: 'user', content: message });
 
+  // Build system prompt with context
+  const systemPrompt = buildSystemPrompt(context);
+
   // Call Claude
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    tools: formatToolsForClaude(),
+    system: systemPrompt,
+    tools: toolRegistry.formatForClaude(),
     messages: history.map(m => ({
       role: m.role,
       content: m.content,
@@ -147,6 +212,7 @@ export async function processMessage(
   let textResponse = '';
   let requiresApproval = false;
   let approvalReason = '';
+  let highestTier: PermissionTier = 'read';
 
   for (const block of response.content) {
     if (block.type === 'text') {
@@ -157,6 +223,15 @@ export async function processMessage(
         name: block.name,
         input: block.input as Record<string, unknown>,
       });
+
+      // Track highest permission tier
+      const tool = toolRegistry.get(block.name);
+      if (tool) {
+        const tierOrder: PermissionTier[] = ['read', 'create', 'modify', 'delete', 'external', 'dangerous'];
+        if (tierOrder.indexOf(tool.permissionTier) > tierOrder.indexOf(highestTier)) {
+          highestTier = tool.permissionTier;
+        }
+      }
     }
   }
 
@@ -169,14 +244,21 @@ export async function processMessage(
 
       // Check for approval requirement
       if (result.error?.startsWith('APPROVAL_REQUIRED:')) {
+        const tier = result.error.split(':')[1] as PermissionTier;
+        const approvalRequest = createApprovalRequest(call.name, call.input, tier, context);
+
         requiresApproval = true;
-        approvalReason = `Action "${call.name}" requires your approval before proceeding.`;
+        approvalReason = `Action "${call.name}" requires ${tier}-level approval before proceeding. Approval ID: ${approvalRequest.id}`;
+
         toolResults.push({
           type: 'tool_result',
           tool_use_id: call.id,
           content: JSON.stringify({
             status: 'pending_approval',
+            approvalId: approvalRequest.id,
+            tier,
             message: 'This action requires approval. Please approve or reject.',
+            expiresAt: approvalRequest.expiresAt.toISOString(),
           }),
         });
       } else {
@@ -198,8 +280,8 @@ export async function processMessage(
     const followUp = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      tools: formatToolsForClaude(),
+      system: systemPrompt,
+      tools: toolRegistry.formatForClaude(),
       messages: history.map(m => ({
         role: m.role,
         content: m.content,
@@ -220,28 +302,45 @@ export async function processMessage(
     history.push({ role: 'assistant', content: response.content });
   }
 
-  // Save conversation
+  // Save conversation (limit history length to prevent memory bloat)
+  if (history.length > 50) {
+    history = history.slice(-40);
+  }
   conversations.set(context.conversationId, history);
+
+  // Consider saving important information to memory
+  // (This could be enhanced with AI-based importance detection)
 
   return {
     message: textResponse,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
     requiresApproval,
     approvalReason: requiresApproval ? approvalReason : undefined,
+    highestTier,
   };
 }
 
 /**
  * Approve a pending action
  */
-export async function approveAction(approvalId: string, approvedBy: string): Promise<ToolResult> {
+export async function approveAction(
+  approvalId: string,
+  approvedBy: string
+): Promise<ToolResult> {
   const request = pendingApprovals.get(approvalId);
   if (!request) {
-    return { success: false, error: 'Approval request not found' };
+    return { success: false, error: 'Approval request not found or expired' };
   }
 
   if (request.status !== 'pending') {
     return { success: false, error: `Request already ${request.status}` };
+  }
+
+  // Check expiration
+  if (request.expiresAt < new Date()) {
+    request.status = 'expired';
+    pendingApprovals.delete(approvalId);
+    return { success: false, error: 'Approval request expired' };
   }
 
   // Update status
@@ -249,14 +348,30 @@ export async function approveAction(approvalId: string, approvedBy: string): Pro
   request.respondedAt = new Date();
   request.respondedBy = approvedBy;
 
-  // Execute the tool
-  const tool = toolRegistry.get(request.tool);
-  if (!tool) {
-    return { success: false, error: 'Tool not found' };
-  }
+  // Audit the approval
+  auditApprovalResponse(
+    request.tool,
+    true,
+    approvedBy,
+    request.requestedFrom.channel
+  );
+
+  // Execute the tool with approval context
+  const execContext: ToolExecutionContext = {
+    userId: request.requestedFrom.userId,
+    channel: request.requestedFrom.channel as 'slack' | 'cli' | 'scheduler' | 'email',
+    conversationId: request.requestedFrom.conversationId,
+    approvalId,
+    approvedBy,
+  };
 
   try {
-    const result = await tool.execute(request.params);
+    const tool = toolRegistry.get(request.tool);
+    if (!tool) {
+      return { success: false, error: 'Tool not found' };
+    }
+
+    const result = await tool.execute(request.params, execContext);
     pendingApprovals.delete(approvalId);
     return result;
   } catch (error) {
@@ -273,12 +388,25 @@ export async function approveAction(approvalId: string, approvedBy: string): Pro
 export function rejectAction(approvalId: string, rejectedBy: string): ToolResult {
   const request = pendingApprovals.get(approvalId);
   if (!request) {
-    return { success: false, error: 'Approval request not found' };
+    return { success: false, error: 'Approval request not found or expired' };
+  }
+
+  if (request.status !== 'pending') {
+    return { success: false, error: `Request already ${request.status}` };
   }
 
   request.status = 'rejected';
   request.respondedAt = new Date();
   request.respondedBy = rejectedBy;
+
+  // Audit the rejection
+  auditApprovalResponse(
+    request.tool,
+    false,
+    rejectedBy,
+    request.requestedFrom.channel
+  );
+
   pendingApprovals.delete(approvalId);
 
   return { success: true, data: { message: 'Action rejected' } };
@@ -288,7 +416,8 @@ export function rejectAction(approvalId: string, rejectedBy: string): ToolResult
  * Get pending approvals
  */
 export function getPendingApprovals(): ApprovalRequest[] {
-  return Array.from(pendingApprovals.values());
+  cleanupExpiredApprovals();
+  return Array.from(pendingApprovals.values()).filter(r => r.status === 'pending');
 }
 
 /**
@@ -296,4 +425,28 @@ export function getPendingApprovals(): ApprovalRequest[] {
  */
 export function clearConversation(conversationId: string): void {
   conversations.delete(conversationId);
+}
+
+/**
+ * Save a memory from the conversation
+ */
+export function saveToMemory(
+  type: 'fact' | 'preference' | 'context' | 'task' | 'reminder',
+  content: string,
+  context: AgentContext,
+  options?: {
+    tags?: string[];
+    importance?: number;
+    expiresInDays?: number;
+  }
+): void {
+  remember(type, content, {
+    tags: options?.tags || [],
+    importance: options?.importance ?? 5,
+    expiresInDays: options?.expiresInDays,
+    source: {
+      channel: context.channel ?? 'unknown',
+      conversationId: context.conversationId,
+    },
+  });
 }
