@@ -2,7 +2,7 @@ name: Uptime Monitor
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes
+    - cron: '*/30 * * * *'  # Every 30 minutes (1,440 runs/month, well within limits)
   workflow_dispatch:
 
 jobs:
