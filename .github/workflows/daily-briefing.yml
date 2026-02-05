@@ -1,0 +1,154 @@
+name: Daily Briefing
+
+on:
+  schedule:
+    # 7am EST = 12:00 UTC (winter) / 11:00 UTC (summer)
+    # Using 12:00 UTC to cover EST
+    - cron: '0 12 * * 1-5'  # Mon-Fri at 7am EST
+  workflow_dispatch:  # Manual trigger for testing
+
+jobs:
+  generate-briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout radl-ops
+        uses: actions/checkout@v4
+        with:
+          repository: Sn1ckerDood1e/radl-ops
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Checkout radl (for planning files)
+        uses: actions/checkout@v4
+        with:
+          repository: Sn1ckerDood1e/Radl
+          path: radl
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate Briefing
+        id: briefing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          # Get current date
+          DATE=$(date '+%Y-%m-%d')
+          DAY=$(date '+%A')
+
+          echo "## Daily Briefing — $DAY, $DATE" > briefing.md
+          echo "" >> briefing.md
+
+          # --- GitHub Status ---
+          echo "### 📊 GitHub Status" >> briefing.md
+
+          # Open issues
+          ISSUES=$(gh issue list --repo Sn1ckerDood1e/Radl --state open --limit 10 --json number,title,createdAt 2>/dev/null || echo "[]")
+          ISSUE_COUNT=$(echo "$ISSUES" | jq 'length')
+          echo "- **Open Issues:** $ISSUE_COUNT" >> briefing.md
+
+          # Open PRs
+          PRS=$(gh pr list --repo Sn1ckerDood1e/Radl --state open --limit 10 --json number,title 2>/dev/null || echo "[]")
+          PR_COUNT=$(echo "$PRS" | jq 'length')
+          echo "- **Open PRs:** $PR_COUNT" >> briefing.md
+
+          # Recent commits (last 24h)
+          COMMITS=$(gh api repos/Sn1ckerDood1e/Radl/commits --jq '.[0:5] | .[] | "  - \(.commit.message | split("\n")[0])"' 2>/dev/null || echo "  - Unable to fetch")
+          echo "- **Recent Commits:**" >> briefing.md
+          echo "$COMMITS" >> briefing.md
+          echo "" >> briefing.md
+
+          # --- Vercel Status ---
+          echo "### 🚀 Vercel Status" >> briefing.md
+          if [ -n "$VERCEL_TOKEN" ]; then
+            # Get latest deployment
+            DEPLOY=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=prj_radl&limit=1" 2>/dev/null | jq -r '.deployments[0] // empty')
+            if [ -n "$DEPLOY" ]; then
+              STATE=$(echo "$DEPLOY" | jq -r '.state // "unknown"')
+              CREATED=$(echo "$DEPLOY" | jq -r '.created // 0')
+              echo "- **Latest Deploy:** $STATE" >> briefing.md
+            else
+              echo "- **Latest Deploy:** Unable to fetch" >> briefing.md
+            fi
+          else
+            echo "- **Status:** Token not configured" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
+          # --- Supabase Status ---
+          echo "### 🗄️ Supabase Status" >> briefing.md
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_PROJECT_ID" ]; then
+            # Check for recent errors in logs
+            ERRORS=$(curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/analytics/endpoints/logs.all?sql=select%20count(*)%20as%20count%20from%20edge_logs%20where%20timestamp%20%3E%20now()%20-%20interval%20'24%20hours'%20and%20response_status_code%20%3E%3D%20500" 2>/dev/null | jq -r '.result[0].count // "0"')
+            echo "- **5xx Errors (24h):** $ERRORS" >> briefing.md
+
+            # Get advisors
+            SEC_ADVISORS=$(curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/advisors/security" 2>/dev/null | jq 'length')
+            echo "- **Security Advisors:** $SEC_ADVISORS items" >> briefing.md
+          else
+            echo "- **Status:** Token not configured" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
+          # --- Current Sprint ---
+          echo "### 🎯 Current Focus" >> briefing.md
+          if [ -f "radl/.planning/STATE.md" ]; then
+            # Extract current phase from STATE.md
+            PHASE=$(grep -A1 "| Phase |" radl/.planning/STATE.md | tail -1 | sed 's/.*| //' | sed 's/ |.*//')
+            SPRINT=$(grep -A1 "| Sprint |" radl/.planning/STATE.md | tail -1 | sed 's/.*| //' | sed 's/ |.*//')
+            echo "- **Phase:** $PHASE" >> briefing.md
+            echo "- **Sprint:** $SPRINT" >> briefing.md
+          else
+            echo "- Unable to read planning files" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
+          # --- Output ---
+          BRIEFING=$(cat briefing.md)
+          echo "briefing<<EOF" >> $GITHUB_OUTPUT
+          echo "$BRIEFING" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # Convert markdown to Slack mrkdwn format
+          BRIEFING=$(cat briefing.md | sed 's/^## /*/g' | sed 's/^### /*/g' | sed 's/$/*/' | head -c 2900)
+
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \"Daily Briefing - $(date '+%Y-%m-%d')\",
+            \"blocks\": [
+              {
+                \"type\": \"header\",
+                \"text\": {
+                  \"type\": \"plain_text\",
+                  \"text\": \"📋 Daily Briefing — $(date '+%A, %Y-%m-%d')\",
+                  \"emoji\": true
+                }
+              },
+              {
+                \"type\": \"section\",
+                \"text\": {
+                  \"type\": \"mrkdwn\",
+                  \"text\": $(echo "$BRIEFING" | jq -Rs .)
+                }
+              }
+            ]
+          }" "$SLACK_WEBHOOK_URL"
+
+      - name: Save briefing artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing-${{ github.run_number }}
+          path: briefing.md
+          retention-days: 30
