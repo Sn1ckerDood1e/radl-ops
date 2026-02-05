@@ -112,6 +112,68 @@ jobs:
           fi
           echo "" >> briefing.md
 
+          # --- Today's Workout ---
+          echo "### 💪 Today's Workout" >> briefing.md
+          if [ -f "training/schedule.json" ]; then
+            # Get day of week (lowercase)
+            DOW=$(date '+%A' | tr '[:upper:]' '[:lower:]')
+
+            # Calculate week in cycle (1-4) based on week of year
+            WEEK_OF_YEAR=$(date '+%V')
+            CYCLE_WEEK=$(( (WEEK_OF_YEAR % 4) + 1 ))
+
+            # Extract workout using Python (more reliable than jq for nested access)
+            python3 << PYEOF >> briefing.md
+          import json
+
+          with open('training/schedule.json', 'r') as f:
+              schedule = json.load(f)
+
+          dow = "$DOW"
+          week = "week$CYCLE_WEEK"
+
+          if dow in ['saturday', 'sunday']:
+              print("**Rest Day** - recover and enjoy!")
+          elif week in schedule['workouts'] and dow in schedule['workouts'][week]:
+              workout = schedule['workouts'][week][dow]
+              print(f"**{workout['name']}** (Week {$CYCLE_WEEK})")
+              print("")
+              if 'warmup' in workout:
+                  print(f"🔥 **Warmup:** {workout['warmup']}")
+                  print("")
+              if 'strength' in workout:
+                  print("🏋️ **Strength:**")
+                  for ex in workout['strength']:
+                      print(f"- {ex}")
+                  print("")
+              if 'wod' in workout:
+                  print(f"⚡ **WOD:**")
+                  print(f"{workout['wod']}")
+                  print("")
+              if 'main' in workout:
+                  print(f"🚴 **Main:**")
+                  print(f"{workout['main']}")
+                  print("")
+              if 'flow' in workout:
+                  print(f"🌊 **KB Flow:**")
+                  print(f"{workout['flow']}")
+                  print("")
+              if 'finisher' in workout:
+                  print(f"🔥 **Finisher:** {workout['finisher']}")
+                  print("")
+              if 'cashout' in workout:
+                  print(f"💰 **Cashout:** {workout['cashout']}")
+                  print("")
+              if 'cooldown' in workout:
+                  print(f"🧘 **Cooldown:** {workout['cooldown']}")
+          else:
+              print("Workout not found for today")
+          PYEOF
+          else
+            echo "- Training schedule not found" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
           # --- Output ---
           BRIEFING=$(cat briefing.md)
           echo "briefing<<EOF" >> $GITHUB_OUTPUT
