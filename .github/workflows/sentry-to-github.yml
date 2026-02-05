@@ -20,16 +20,15 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Fetch unresolved Sentry issues from last 24h that haven't been synced
+          # Fetch unresolved Sentry issues from last 24h
           ISSUES=$(curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
             "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/issues/?query=is:unresolved+lastSeen:-24h" 2>/dev/null)
 
-          # Process each issue
-          echo "$ISSUES" | python3 << 'PYEOF'
+          # Process each issue with Python
+          echo "$ISSUES" | python3 - << 'PYEOF'
           import json
           import sys
           import subprocess
-          import os
 
           try:
               issues = json.load(sys.stdin)
@@ -40,7 +39,7 @@ jobs:
               print("Failed to parse Sentry response")
               sys.exit(0)
 
-          for issue in issues[:5]:  # Limit to 5 issues per run
+          for issue in issues[:5]:
               issue_id = issue.get('id', '')
               title = issue.get('title', 'Unknown Error')[:100]
               culprit = issue.get('culprit', 'Unknown location')
@@ -48,7 +47,7 @@ jobs:
               first_seen = issue.get('firstSeen', '')
               permalink = issue.get('permalink', '')
 
-              # Check if GitHub issue already exists with this Sentry ID
+              # Check if GitHub issue already exists
               search_result = subprocess.run(
                   ['gh', 'issue', 'list', '--repo', 'Sn1ckerDood1e/Radl',
                    '--search', f'sentry-id:{issue_id}', '--json', 'number'],
@@ -61,22 +60,21 @@ jobs:
                   print(f"Issue {issue_id} already exists as GitHub issue")
                   continue
 
-              # Create GitHub issue
+              # Build issue body without markdown bold to avoid YAML issues
               body = f"""## Sentry Error Report
 
-**Error:** {title}
-**Location:** {culprit}
-**Events:** {count}
-**First Seen:** {first_seen}
+          Error: {title}
+          Location: {culprit}
+          Events: {count}
+          First Seen: {first_seen}
 
-[View in Sentry]({permalink})
+          [View in Sentry]({permalink})
 
----
-*Auto-created from Sentry*
-<!-- sentry-id:{issue_id} -->
-"""
+          ---
+          Auto-created from Sentry
+          <!-- sentry-id:{issue_id} -->
+          """
 
-              # Try with labels, fall back to no labels if they don't exist
               result = subprocess.run(
                   ['gh', 'issue', 'create', '--repo', 'Sn1ckerDood1e/Radl',
                    '--title', f'[Sentry] {title[:80]}',

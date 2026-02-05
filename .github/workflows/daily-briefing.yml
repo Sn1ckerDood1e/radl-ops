@@ -113,15 +113,7 @@ jobs:
 
             if [ "$ISSUE_COUNT" -gt 0 ]; then
               echo "- **⚠️ Unresolved Issues (24h):** $ISSUE_COUNT" >> briefing.md
-              echo "$ISSUES" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-if isinstance(data, list):
-    for issue in data[:3]:
-        title = issue.get('title', 'Unknown')[:50]
-        count = issue.get('count', 0)
-        print(f'  - {title} ({count} events)')
-" >> briefing.md 2>/dev/null
+              echo "$ISSUES" | python3 -c "import sys,json;data=json.load(sys.stdin);[print(f'  - {i.get(\"title\",\"?\")[:50]} ({i.get(\"count\",0)} events)') for i in (data[:3] if isinstance(data,list) else [])]" >> briefing.md 2>/dev/null
             else
               echo "- **Unresolved Issues (24h):** None ✅" >> briefing.md
             fi
