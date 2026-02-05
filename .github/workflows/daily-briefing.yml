@@ -122,6 +122,12 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          # Trim any whitespace/newlines from webhook URL
+          WEBHOOK_URL=$(echo "$SLACK_WEBHOOK_URL" | tr -d '[:space:]')
+
+          # Debug: show URL length (not the URL itself)
+          echo "Webhook URL length: ${#WEBHOOK_URL}"
+
           # Convert markdown to Slack mrkdwn format and escape for JSON
           BRIEFING=$(cat briefing.md | sed 's/^## /*/g' | sed 's/^### /*/g' | head -c 2900)
           BRIEFING_JSON=$(echo "$BRIEFING" | jq -Rs .)
@@ -153,7 +159,7 @@ jobs:
           EOFPAYLOAD
 
           # Send to Slack
-          curl -f -X POST -H 'Content-type: application/json' -d @slack_payload.json "${SLACK_WEBHOOK_URL}"
+          curl -f -X POST -H 'Content-type: application/json' -d @slack_payload.json "$WEBHOOK_URL"
 
       - name: Save briefing artifact
         uses: actions/upload-artifact@v4
