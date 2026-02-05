@@ -44,10 +44,71 @@ cd /home/hb/radl && npx prisma studio # Database GUI
 
 # Check project status
 cat /home/hb/radl/.planning/STATE.md
+
+# Sprint management
+/home/hb/radl-ops/scripts/sprint.sh start "Phase 53.1" "Rigging Database" "3 hours"
+/home/hb/radl-ops/scripts/sprint.sh progress "Task completed" [--notify]
+/home/hb/radl-ops/scripts/sprint.sh blocker "Description"  # Alerts Slack immediately
+/home/hb/radl-ops/scripts/sprint.sh checkpoint             # Save state snapshot
+/home/hb/radl-ops/scripts/sprint.sh complete "commit" "1.5 hours"
+/home/hb/radl-ops/scripts/sprint.sh status
+
+# Service health
+/home/hb/radl-ops/scripts/health-check.sh         # Terminal output
+/home/hb/radl-ops/scripts/health-check.sh --json  # JSON output
+
+# Direct notifications
+/home/hb/radl-ops/scripts/notify-sprint.sh "Phase X" "Title" "commit" "time"
 ```
+
+## Sprint Workflow
+
+**Start sprint:**
+```bash
+/home/hb/radl-ops/scripts/sprint.sh start "Phase 53.1" "Rigging Database" "3 hours"
+```
+→ Creates persistent JSON state, sends Slack notification
+
+**Track progress:**
+```bash
+/home/hb/radl-ops/scripts/sprint.sh progress "Added Prisma model"
+```
+→ Logs completion, notifies Slack every 3 tasks
+
+**Report blockers:**
+```bash
+/home/hb/radl-ops/scripts/sprint.sh blocker "RLS migration failing"
+```
+→ Logs blocker, **immediately** notifies Slack
+
+**Complete sprint:**
+```bash
+/home/hb/radl-ops/scripts/sprint.sh complete "abc1234" "1.5 hours"
+```
+→ Archives sprint, sends completion notification with stats
+
+**Data location:** `/home/hb/radl/.planning/sprints/`
 
 ## Briefing Delivery
 
 - **Email**: kinseymi@radl.solutions
 - **Daily**: Mon-Fri 7:00 AM — GitHub, Vercel, Supabase status + today's priorities
 - **Weekly**: Saturday 7:00 AM — Progress summary, next week goals, social content plan
+
+## Morning Planning Routine
+
+When the founder starts a session saying "start the day" or similar:
+
+1. **Generate briefing** if not already sent (or run `/home/hb/radl-ops/scripts/health-check.sh`)
+2. **Service health checks**: Vercel deploys, Supabase logs (postgres, auth), security advisors
+3. **Planning discussion**:
+   - Review briefing priorities
+   - Ask clarifying questions about today's sprint
+   - Discuss any blocking issues or future planning
+   - Collect specific details needed for execution
+4. **Update planning files**: ROADMAP.md, STATE.md as needed
+5. **Create sprint plan**: 3-4 hours of realistic work (calibrate estimates to actual time)
+6. **Start sprint**: Run `sprint.sh start "Phase X.X" "Title" "estimate"`
+7. **Execute**: Begin implementation after plan is agreed
+8. **Track progress**: Run `sprint.sh progress "message"` after completing tasks
+9. **Complete**: Run `sprint.sh complete "commit" "time"` when done
