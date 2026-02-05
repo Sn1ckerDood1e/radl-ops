@@ -1,9 +1,9 @@
 name: Uptime Monitor
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'  # Every 30 minutes (1,440 runs/month, well within limits)
-  workflow_dispatch:
+  # schedule:
+  #   - cron: '*/30 * * * *'  # Temporarily disabled - false positives
+  workflow_dispatch:  # Can still trigger manually if needed
 
 jobs:
   check-uptime:
