@@ -37,6 +37,9 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: |
           # Get current date
           DATE=$(date '+%Y-%m-%d')
@@ -96,6 +99,34 @@ jobs:
             echo "- **Security Advisors:** $SEC_ADVISORS items" >> briefing.md
           else
             echo "- **Status:** Token not configured" >> briefing.md
+          fi
+          echo "" >> briefing.md
+
+          # --- Sentry Status ---
+          echo "### 🐛 Sentry Status" >> briefing.md
+          if [ -n "$SENTRY_AUTH_TOKEN" ] && [ -n "$SENTRY_ORG" ] && [ -n "$SENTRY_PROJECT" ]; then
+            # Get unresolved issues from last 24h
+            ISSUES=$(curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+              "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/issues/?query=is:unresolved+lastSeen:-24h" 2>/dev/null)
+
+            ISSUE_COUNT=$(echo "$ISSUES" | python3 -c "import sys,json; data=json.load(sys.stdin); print(len(data) if isinstance(data, list) else 0)" 2>/dev/null || echo "0")
+
+            if [ "$ISSUE_COUNT" -gt 0 ]; then
+              echo "- **⚠️ Unresolved Issues (24h):** $ISSUE_COUNT" >> briefing.md
+              echo "$ISSUES" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if isinstance(data, list):
+    for issue in data[:3]:
+        title = issue.get('title', 'Unknown')[:50]
+        count = issue.get('count', 0)
+        print(f'  - {title} ({count} events)')
+" >> briefing.md 2>/dev/null
+            else
+              echo "- **Unresolved Issues (24h):** None ✅" >> briefing.md
+            fi
+          else
+            echo "- **Status:** Not configured" >> briefing.md
           fi
           echo "" >> briefing.md
 

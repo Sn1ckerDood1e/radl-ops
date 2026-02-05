@@ -131,4 +131,40 @@ else
 fi
 echo ""
 
+# --- Sentry ---
+echo "### Sentry ###"
+if [ -n "$SENTRY_AUTH_TOKEN" ] && [ -n "$SENTRY_ORG" ] && [ -n "$SENTRY_PROJECT" ]; then
+  # Get unresolved issues from last 24h
+  ISSUES_RESPONSE=$(curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+    "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/issues/?query=is:unresolved+lastSeen:-24h" 2>/dev/null)
+
+  ISSUE_COUNT=$(echo "$ISSUES_RESPONSE" | python3 -c "import sys,json; data=json.load(sys.stdin); print(len(data) if isinstance(data, list) else 0)" 2>/dev/null || echo "0")
+
+  if [ "$ISSUE_COUNT" -gt 0 ]; then
+    print_status "Unresolved Issues (24h)" "WARN" "$ISSUE_COUNT new issues"
+    # Show top 3 issues
+    echo "$ISSUES_RESPONSE" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if isinstance(data, list):
+    for issue in data[:3]:
+        title = issue.get('title', 'Unknown')[:60]
+        count = issue.get('count', 0)
+        print(f'    - {title} ({count} events)')
+" 2>/dev/null
+  else
+    print_status "Unresolved Issues (24h)" "OK" "No new issues"
+  fi
+
+  # Get error rate
+  STATS=$(curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+    "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/stats/?stat=received&resolution=1d" 2>/dev/null)
+
+  TODAY_ERRORS=$(echo "$STATS" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[-1][1] if data else 0)" 2>/dev/null || echo "0")
+  print_status "Events Today" "OK" "$TODAY_ERRORS events"
+else
+  print_status "Sentry" "WARN" "SENTRY_AUTH_TOKEN, SENTRY_ORG, or SENTRY_PROJECT not configured"
+fi
+echo ""
+
 echo "=== Health Check Complete ==="

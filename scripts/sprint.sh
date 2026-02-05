@@ -398,6 +398,54 @@ cmd_complete() {
   # Move to archive
   mv "$CURRENT_SPRINT" "$SPRINT_DIR/completed-$sprint_id.json"
 
+  # Update STATE.md with sprint info
+  STATE_FILE="/home/hb/radl/.planning/STATE.md"
+  if [ -f "$STATE_FILE" ]; then
+    # Update Last Sprint and Actual time in STATE.md
+    python3 << PYEOF
+import re
+
+with open('$STATE_FILE', 'r') as f:
+    content = f.read()
+
+# Update Last Sprint line
+content = re.sub(
+    r'\| Last Sprint \| .* \|',
+    '| Last Sprint | $phase ($title) |',
+    content
+)
+
+# Update Actual line
+content = re.sub(
+    r'\| Actual \| .* \|',
+    '| Actual | $actual_time |',
+    content
+)
+
+# Update Sprint Status line
+content = re.sub(
+    r'\| Sprint Status \| .* \|',
+    '| Sprint Status | Complete |',
+    content
+)
+
+# Add to Sprint Log if exists
+if '## Sprint Log' in content:
+    log_entry = "| $(date '+%Y-%m-%d') | $phase ($title) | Complete |"
+    # Insert after the header row
+    content = re.sub(
+        r'(\| Date \| Sprint \| Status \|\n\|[-|]+\|)',
+        r'\1\n' + log_entry,
+        content
+    )
+
+with open('$STATE_FILE', 'w') as f:
+    f.write(content)
+
+print("STATE.md updated")
+PYEOF
+  fi
+
   echo "Sprint completed!"
   echo "  Phase: $phase"
   echo "  Title: $title"
