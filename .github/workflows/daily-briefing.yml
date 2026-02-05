@@ -122,29 +122,38 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # Convert markdown to Slack mrkdwn format
-          BRIEFING=$(cat briefing.md | sed 's/^## /*/g' | sed 's/^### /*/g' | sed 's/$/*/' | head -c 2900)
+          # Convert markdown to Slack mrkdwn format and escape for JSON
+          BRIEFING=$(cat briefing.md | sed 's/^## /*/g' | sed 's/^### /*/g' | head -c 2900)
+          BRIEFING_JSON=$(echo "$BRIEFING" | jq -Rs .)
+          DATE_STR=$(date '+%Y-%m-%d')
+          DAY_STR=$(date '+%A')
 
-          curl -X POST -H 'Content-type: application/json' --data "{
-            \"text\": \"Daily Briefing - $(date '+%Y-%m-%d')\",
-            \"blocks\": [
+          # Build JSON payload to file (more robust)
+          cat > slack_payload.json << EOFPAYLOAD
+          {
+            "text": "Daily Briefing - ${DATE_STR}",
+            "blocks": [
               {
-                \"type\": \"header\",
-                \"text\": {
-                  \"type\": \"plain_text\",
-                  \"text\": \"📋 Daily Briefing — $(date '+%A, %Y-%m-%d')\",
-                  \"emoji\": true
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "📋 Daily Briefing — ${DAY_STR}, ${DATE_STR}",
+                  "emoji": true
                 }
               },
               {
-                \"type\": \"section\",
-                \"text\": {
-                  \"type\": \"mrkdwn\",
-                  \"text\": $(echo "$BRIEFING" | jq -Rs .)
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ${BRIEFING_JSON}
                 }
               }
             ]
-          }" "$SLACK_WEBHOOK_URL"
+          }
+          EOFPAYLOAD
+
+          # Send to Slack
+          curl -f -X POST -H 'Content-type: application/json' -d @slack_payload.json "${SLACK_WEBHOOK_URL}"
 
       - name: Save briefing artifact
         uses: actions/upload-artifact@v4
