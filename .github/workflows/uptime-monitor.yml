@@ -1,0 +1,84 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Every 5 minutes
+  workflow_dispatch:
+
+jobs:
+  check-uptime:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Production URL
+        id: check
+        run: |
+          URL="https://radl.vercel.app"
+          START=$(date +%s%3N)
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL" || echo "000")
+
+          END=$(date +%s%3N)
+          RESPONSE_TIME=$((END - START))
+
+          echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          echo "response_time=$RESPONSE_TIME" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -Iseconds)" >> $GITHUB_OUTPUT
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=up" >> $GITHUB_OUTPUT
+          else
+            echo "status=down" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Alert on Downtime
+        if: steps.check.outputs.status == 'down'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"🚨 ALERT: Radl is DOWN\",
+              \"blocks\": [
+                {
+                  \"type\": \"header\",
+                  \"text\": {
+                    \"type\": \"plain_text\",
+                    \"text\": \"🚨 Production Down Alert\",
+                    \"emoji\": true
+                  }
+                },
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*Status:* HTTP ${{ steps.check.outputs.http_code }}\n*URL:* https://radl.vercel.app\n*Time:* ${{ steps.check.outputs.timestamp }}\"
+                  }
+                }
+              ]
+            }" "$SLACK_WEBHOOK_URL"
+
+      - name: Alert on Slow Response
+        if: steps.check.outputs.status == 'up' && steps.check.outputs.response_time > 5000
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"⚠️ Radl is slow\",
+              \"blocks\": [
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"⚠️ *Slow Response Warning*\n*Response Time:* ${{ steps.check.outputs.response_time }}ms\n*Threshold:* 5000ms\"
+                  }
+                }
+              ]
+            }" "$SLACK_WEBHOOK_URL"
+
+      - name: Log Status
+        run: |
+          echo "Status: ${{ steps.check.outputs.status }}"
+          echo "HTTP Code: ${{ steps.check.outputs.http_code }}"
+          echo "Response Time: ${{ steps.check.outputs.response_time }}ms"

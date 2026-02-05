@@ -274,7 +274,7 @@ else:
 EOF
 }
 
-# Show sprint analytics
+# Show sprint analytics with velocity tracking
 cmd_analytics() {
   echo "=== Sprint Analytics ==="
   echo ""
@@ -297,6 +297,7 @@ total_tasks = 0
 total_blockers = 0
 estimates = []
 actuals = []
+ratios = []  # actual/estimated for each sprint
 
 for f in completed_files[:20]:  # Last 20 sprints
     try:
@@ -310,33 +311,79 @@ for f in completed_files[:20]:  # Last 20 sprints
         est = data.get('estimate', '')
         act = data.get('actualTime', '')
         if est and act:
-            # Simple parsing for "X hours" or "X.X hours"
             try:
                 est_hrs = float(est.split()[0])
                 act_hrs = float(act.split()[0])
                 estimates.append(est_hrs)
                 actuals.append(act_hrs)
+                if est_hrs > 0:
+                    ratios.append(act_hrs / est_hrs)
             except:
                 pass
     except:
         pass
 
-print(f"Sprints analyzed: {total_sprints}")
-print(f"Total tasks completed: {total_tasks}")
-print(f"Total blockers encountered: {total_blockers}")
-print(f"Avg tasks per sprint: {total_tasks / total_sprints:.1f}")
-print(f"Avg blockers per sprint: {total_blockers / total_sprints:.1f}")
+print(f"📊 Sprints analyzed: {total_sprints}")
+print(f"📋 Total tasks completed: {total_tasks}")
+print(f"🚧 Total blockers encountered: {total_blockers}")
+print(f"📈 Avg tasks per sprint: {total_tasks / total_sprints:.1f}")
+print(f"⚠️  Avg blockers per sprint: {total_blockers / total_sprints:.1f}")
 
 if estimates and actuals:
     avg_est = sum(estimates) / len(estimates)
     avg_act = sum(actuals) / len(actuals)
-    accuracy = (avg_act / avg_est) * 100 if avg_est > 0 else 0
-    print(f"\nTime estimation:")
+    avg_ratio = sum(ratios) / len(ratios) if ratios else 1.0
+    accuracy = 100 - abs(100 - (avg_ratio * 100))  # How close to 100%
+
+    print(f"\n⏱️  Time Estimation Accuracy:")
     print(f"  Avg estimated: {avg_est:.1f} hours")
     print(f"  Avg actual: {avg_act:.1f} hours")
-    print(f"  Accuracy: {accuracy:.0f}% (100% = perfect)")
+    print(f"  Velocity ratio: {avg_ratio:.2f}x (1.0 = perfect)")
+    print(f"  Accuracy score: {accuracy:.0f}%")
 
-print("\nRecent sprints:")
+    # Trend analysis
+    if len(ratios) >= 3:
+        recent_ratio = sum(ratios[:3]) / 3
+        older_ratio = sum(ratios[3:min(6, len(ratios))]) / max(1, len(ratios[3:6]))
+
+        print(f"\n📈 Velocity Trend:")
+        if recent_ratio < older_ratio - 0.1:
+            print(f"  ✅ Improving! Recent: {recent_ratio:.2f}x vs Prior: {older_ratio:.2f}x")
+        elif recent_ratio > older_ratio + 0.1:
+            print(f"  ⚠️  Slipping. Recent: {recent_ratio:.2f}x vs Prior: {older_ratio:.2f}x")
+        else:
+            print(f"  ➡️  Stable. Recent: {recent_ratio:.2f}x vs Prior: {older_ratio:.2f}x")
+
+    # Prediction for next sprint
+    print(f"\n🔮 Prediction:")
+    print(f"  If you estimate 3 hours, expect ~{3 * avg_ratio:.1f} hours actual")
+    print(f"  Calibration factor: multiply estimates by {avg_ratio:.2f}")
+
+# Sprint history chart (simple ASCII)
+if len(ratios) >= 3:
+    print(f"\n📉 Recent Sprints (est vs actual):")
+    for i, (f, ratio) in enumerate(zip(completed_files[:8], ratios[:8])):
+        try:
+            with open(f, 'r') as file:
+                data = json.load(file)
+            phase = data.get('phase', '?')
+            est = data.get('estimate', '?')
+            act = data.get('actualTime', '?')
+
+            # Visual bar
+            bar_len = min(20, int(ratio * 10))
+            if ratio <= 0.8:
+                bar = "▓" * bar_len + " ⚡ fast"
+            elif ratio <= 1.2:
+                bar = "▓" * bar_len + " ✓ on target"
+            else:
+                bar = "▓" * bar_len + " ⏰ over"
+
+            print(f"  {phase}: {est} → {act} [{bar}]")
+        except:
+            pass
+
+print("\n📝 Recent sprint details:")
 for f in completed_files[:5]:
     try:
         with open(f, 'r') as file:
@@ -346,8 +393,9 @@ for f in completed_files[:5]:
         est = data.get('estimate', '?')
         act = data.get('actualTime', '?')
         tasks = len(data.get('completedTasks', []))
+        blockers = len([b for b in data.get('blockers', []) if not b.get('resolved', False)])
         print(f"  - {phase}: {title}")
-        print(f"    Est: {est} → Actual: {act} | Tasks: {tasks}")
+        print(f"    {est} → {act} | {tasks} tasks | {blockers} blockers")
     except:
         pass
 EOF

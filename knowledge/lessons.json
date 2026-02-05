@@ -1,0 +1,10 @@
+{
+  "lessons": [
+    {
+      "id": 1,
+      "situation": "jq not available on GitHub Actions runners",
+      "learning": "Use Python for JSON parsing in shell scripts for cross-platform compatibility",
+      "date": "2026-02-05T13:20:34.898727"
+    }
+  ]
+}

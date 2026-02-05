@@ -1,0 +1,18 @@
+{
+  "patterns": [
+    {
+      "id": 1,
+      "name": "CSRF Protection",
+      "description": "Always include X-CSRF-Token header in authenticated API calls",
+      "example": "fetch(url, { headers: { 'X-CSRF-Token': token } })",
+      "date": "2026-02-05T13:20:32.508975"
+    },
+    {
+      "id": 2,
+      "name": "Toast Notifications",
+      "description": "Use toast for user feedback on actions",
+      "example": "toast.success('Saved\\!') or toast.error('Failed')",
+      "date": "2026-02-05T13:20:33.804428"
+    }
+  ]
+}

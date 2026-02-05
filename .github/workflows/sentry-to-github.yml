@@ -1,0 +1,95 @@
+name: Sentry to GitHub Issues
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # Every 4 hours
+  workflow_dispatch:
+
+jobs:
+  sync-sentry-issues:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch Sentry Issues and Create GitHub Issues
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          # Fetch unresolved Sentry issues from last 24h that haven't been synced
+          ISSUES=$(curl -s -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+            "https://sentry.io/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/issues/?query=is:unresolved+lastSeen:-24h" 2>/dev/null)
+
+          # Process each issue
+          echo "$ISSUES" | python3 << 'PYEOF'
+          import json
+          import sys
+          import subprocess
+          import os
+
+          try:
+              issues = json.load(sys.stdin)
+              if not isinstance(issues, list):
+                  print("No issues found or invalid response")
+                  sys.exit(0)
+          except:
+              print("Failed to parse Sentry response")
+              sys.exit(0)
+
+          for issue in issues[:5]:  # Limit to 5 issues per run
+              issue_id = issue.get('id', '')
+              title = issue.get('title', 'Unknown Error')[:100]
+              culprit = issue.get('culprit', 'Unknown location')
+              count = issue.get('count', 0)
+              first_seen = issue.get('firstSeen', '')
+              permalink = issue.get('permalink', '')
+
+              # Check if GitHub issue already exists with this Sentry ID
+              search_result = subprocess.run(
+                  ['gh', 'issue', 'list', '--repo', 'Sn1ckerDood1e/Radl',
+                   '--search', f'sentry-id:{issue_id}', '--json', 'number'],
+                  capture_output=True, text=True
+              )
+
+              existing = json.loads(search_result.stdout) if search_result.stdout else []
+
+              if existing:
+                  print(f"Issue {issue_id} already exists as GitHub issue")
+                  continue
+
+              # Create GitHub issue
+              body = f"""## Sentry Error Report
+
+**Error:** {title}
+**Location:** {culprit}
+**Events:** {count}
+**First Seen:** {first_seen}
+
+[View in Sentry]({permalink})
+
+---
+*Auto-created from Sentry*
+<!-- sentry-id:{issue_id} -->
+"""
+
+              # Try with labels, fall back to no labels if they don't exist
+              result = subprocess.run(
+                  ['gh', 'issue', 'create', '--repo', 'Sn1ckerDood1e/Radl',
+                   '--title', f'[Sentry] {title[:80]}',
+                   '--body', body,
+                   '--label', 'bug'],
+                  capture_output=True, text=True
+              )
+
+              if result.returncode == 0:
+                  print(f"Created GitHub issue for Sentry {issue_id}: {title[:50]}")
+              else:
+                  print(f"Failed to create issue: {result.stderr}")
+          PYEOF
+
+      - name: Summary
+        run: echo "Sentry to GitHub sync complete"
