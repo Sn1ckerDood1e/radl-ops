@@ -133,14 +133,7 @@ export function dispatch(message: string): DispatchDecision {
   });
 
   // Strategy selection decision tree (from Anthropic research)
-  if (chars.complexity <= 2 && !chars.requiresPlanning) {
-    return {
-      strategy: 'direct',
-      taskType: chars.taskType,
-      reasoning: 'Simple task, direct execution is optimal.',
-    };
-  }
-
+  // Check eval-opt FIRST - tasks with explicit quality criteria always benefit
   if (chars.hasEvalCriteria && chars.taskType === 'briefing') {
     return {
       strategy: 'eval-opt',
@@ -159,6 +152,24 @@ export function dispatch(message: string): DispatchDecision {
     };
   }
 
+  // Simple tasks with no special pattern needed
+  if (chars.complexity <= 2 && !chars.requiresPlanning) {
+    return {
+      strategy: 'direct',
+      taskType: chars.taskType,
+      reasoning: 'Simple task, direct execution is optimal.',
+    };
+  }
+
+  // Orchestrator before sequential: complex planning tasks subsume step ordering
+  if (chars.requiresPlanning && chars.complexity >= 4) {
+    return {
+      strategy: 'orchestrator',
+      taskType: chars.taskType,
+      reasoning: 'Complex task requiring planning and delegation.',
+    };
+  }
+
   if (chars.benefitsFromParallel && !chars.hasSequentialSteps) {
     return {
       strategy: 'concurrent',
@@ -174,14 +185,6 @@ export function dispatch(message: string): DispatchDecision {
       taskType: chars.taskType,
       steps: ['step-1', 'step-2', 'step-3'],
       reasoning: 'Task has ordered dependencies requiring sequential execution.',
-    };
-  }
-
-  if (chars.requiresPlanning && chars.complexity >= 4) {
-    return {
-      strategy: 'orchestrator',
-      taskType: chars.taskType,
-      reasoning: 'Complex task requiring planning and delegation.',
     };
   }
 

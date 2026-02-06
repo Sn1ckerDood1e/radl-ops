@@ -55,6 +55,7 @@ export const config = {
   // Supabase
   supabase: {
     url: optionalEnv('SUPABASE_URL'),
+    anonKey: optionalEnv('SUPABASE_ANON_KEY'),
     serviceKey: optionalEnv('SUPABASE_SERVICE_KEY'),
   },
 

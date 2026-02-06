@@ -1,6 +1,7 @@
 /**
  * Briefing Tools - Generate daily and weekly business summaries
  *
+ * Uses the evaluator-optimizer loop for quality-assured briefings.
  * All briefing tools are read-tier (automatic execution, no approval needed)
  */
 
@@ -12,10 +13,31 @@ import { toolRegistry } from './registry.js';
 import { logger } from '../config/logger.js';
 import { audit } from '../audit/index.js';
 import { getRoute, trackUsage, getCostSummaryForBriefing } from '../models/index.js';
+import { runEvalOptLoop } from '../patterns/index.js';
 
 const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
 });
+
+// ============================================
+// Briefing Quality Criteria
+// ============================================
+
+const DAILY_BRIEFING_CRITERIA = [
+  'Completeness: Covers summary, metrics, priorities, blockers, wins, and API costs',
+  'Accuracy: All facts and data are correct and current',
+  'Actionability: Clear next steps with specific priorities identified',
+  'Conciseness: No fluff, appropriate length for a 2-minute read',
+  'Formatting: Well-structured with headers, bullet points, and visual hierarchy',
+];
+
+const WEEKLY_BRIEFING_CRITERIA = [
+  'Completeness: Covers review, progress, metrics, challenges, goals, strategy, and costs',
+  'Accuracy: All facts, trends, and data are correct',
+  'Strategic insight: Identifies patterns and provides forward-looking analysis',
+  'Actionability: Next week goals are specific and achievable',
+  'Organization: Well-structured with clear headers and logical flow',
+];
 
 // ============================================
 // Input Validation Schemas
@@ -41,7 +63,7 @@ const roadmapIdeasSchema = z.object({
 // ============================================
 
 /**
- * Generate a daily briefing
+ * Generate a daily briefing using evaluator-optimizer loop
  */
 const generateDailyBriefing: Tool = {
   name: 'generate_daily_briefing',
@@ -68,7 +90,7 @@ const generateDailyBriefing: Tool = {
     },
   },
   inputSchema: dailyBriefingSchema,
-  rateLimit: 5, // 5 briefings per minute
+  rateLimit: 5,
   async execute(params, context): Promise<ToolResult> {
     const startTime = Date.now();
 
@@ -81,9 +103,7 @@ const generateDailyBriefing: Tool = {
         timestamp: new Date().toISOString(),
       };
 
-      // Get GitHub activity if requested
       if (validated.include_github) {
-        // Use the registry's execute method for proper audit/rate limiting
         const statsResult = await toolRegistry.execute('github_repo_stats', {}, context);
         if (statsResult.success) {
           data.github = statsResult.data;
@@ -100,15 +120,10 @@ const generateDailyBriefing: Tool = {
         }
       }
 
-      // Generator/Critic pattern: Haiku generates, Sonnet reviews
-      const generateRoute = getRoute('briefing');
-      const reviewRoute = getRoute('review');
-
-      // Include API cost summary in briefing data
       const costSummary = getCostSummaryForBriefing();
       data.api_costs = costSummary;
 
-      const generatePrompt = `Generate a concise daily briefing for Radl (a rowing team management SaaS).
+      const prompt = `Generate a concise daily briefing for Radl (a rowing team management SaaS).
 
 Data available:
 ${JSON.stringify(data, null, 2)}
@@ -125,48 +140,14 @@ Format the briefing as:
 
 Keep it brief and actionable. Use bullet points.`;
 
-      // Pass 1: Generate with Haiku (fast, cheap)
-      const draft = await anthropic.messages.create({
-        model: generateRoute.model,
-        max_tokens: generateRoute.maxTokens,
-        messages: [{ role: 'user', content: generatePrompt }],
+      // Use eval-opt loop: Haiku generates, Sonnet evaluates
+      const result = await runEvalOptLoop(prompt, {
+        generatorTaskType: 'briefing',
+        evaluatorTaskType: 'review',
+        qualityThreshold: 7,
+        maxIterations: 2,
+        evaluationCriteria: DAILY_BRIEFING_CRITERIA,
       });
-
-      trackUsage(
-        generateRoute.model,
-        draft.usage.input_tokens,
-        draft.usage.output_tokens,
-        'briefing',
-        'generate_daily_briefing'
-      );
-
-      const draftContent = draft.content[0];
-      const draftText = draftContent.type === 'text' ? draftContent.text : '';
-
-      // Pass 2: Review with Sonnet (quality check)
-      const reviewPrompt = `Review this daily briefing for accuracy, clarity, and actionability. Fix any issues and return the improved version. If it's already good, return it as-is with minimal changes.
-
-DRAFT BRIEFING:
-${draftText}
-
-Return ONLY the improved briefing text, no meta-commentary.`;
-
-      const reviewed = await anthropic.messages.create({
-        model: reviewRoute.model,
-        max_tokens: reviewRoute.maxTokens,
-        messages: [{ role: 'user', content: reviewPrompt }],
-      });
-
-      trackUsage(
-        reviewRoute.model,
-        reviewed.usage.input_tokens,
-        reviewed.usage.output_tokens,
-        'review',
-        'generate_daily_briefing'
-      );
-
-      const content = reviewed.content[0];
-      const briefingText = content.type === 'text' ? content.text : draftText;
 
       const briefing: Briefing = {
         id: `briefing_${Date.now().toString(36)}`,
@@ -175,7 +156,7 @@ Return ONLY the improved briefing text, no meta-commentary.`;
         sections: [
           {
             title: 'Daily Briefing',
-            content: briefingText,
+            content: result.finalOutput,
             priority: 'high',
           },
         ],
@@ -183,17 +164,25 @@ Return ONLY the improved briefing text, no meta-commentary.`;
         status: 'generated',
       };
 
-      // Audit the briefing generation
       audit('briefing_generated', {
         channel: context.channel,
         result: 'success',
         metadata: {
           type: 'daily',
+          evalScore: result.finalScore,
+          evalIterations: result.iterations,
+          evalConverged: result.converged,
+          evalCostUsd: result.totalCostUsd,
           executionTimeMs: Date.now() - startTime,
         },
       });
 
-      logger.info('Daily briefing generated', { briefingId: briefing.id });
+      logger.info('Daily briefing generated', {
+        briefingId: briefing.id,
+        score: result.finalScore,
+        iterations: result.iterations,
+        converged: result.converged,
+      });
 
       return { success: true, data: briefing };
     } catch (error) {
@@ -207,7 +196,7 @@ Return ONLY the improved briefing text, no meta-commentary.`;
 };
 
 /**
- * Generate a weekly briefing
+ * Generate a weekly briefing using evaluator-optimizer loop
  */
 const generateWeeklyBriefing: Tool = {
   name: 'generate_weekly_briefing',
@@ -222,7 +211,7 @@ const generateWeeklyBriefing: Tool = {
     },
   },
   inputSchema: weeklyBriefingSchema,
-  rateLimit: 2, // 2 weekly briefings per minute
+  rateLimit: 2,
   async execute(params, context): Promise<ToolResult> {
     const startTime = Date.now();
 
@@ -238,21 +227,15 @@ const generateWeeklyBriefing: Tool = {
         week_end: new Date().toISOString().split('T')[0],
       };
 
-      // Gather GitHub data
       const statsResult = await toolRegistry.execute('github_repo_stats', {}, context);
       if (statsResult.success) {
         data.github = statsResult.data;
       }
 
-      // Generator/Critic pattern for weekly briefing
-      const generateRoute = getRoute('briefing');
-      const reviewRoute = getRoute('review');
-
-      // Include weekly cost analytics
       const costSummary = getCostSummaryForBriefing();
       data.api_costs = costSummary;
 
-      const generatePrompt = `Generate a comprehensive weekly briefing for Radl (a rowing team management SaaS).
+      const prompt = `Generate a comprehensive weekly briefing for Radl (a rowing team management SaaS).
 
 Week: ${data.week_start} to ${data.week_end}
 
@@ -270,48 +253,14 @@ Format the briefing as:
 
 Be thorough but organized. Use headers and bullet points.`;
 
-      // Pass 1: Generate with Haiku
-      const draft = await anthropic.messages.create({
-        model: generateRoute.model,
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: generatePrompt }],
+      // Use eval-opt loop: Haiku generates, Sonnet evaluates
+      const result = await runEvalOptLoop(prompt, {
+        generatorTaskType: 'briefing',
+        evaluatorTaskType: 'review',
+        qualityThreshold: 7,
+        maxIterations: 2,
+        evaluationCriteria: WEEKLY_BRIEFING_CRITERIA,
       });
-
-      trackUsage(
-        generateRoute.model,
-        draft.usage.input_tokens,
-        draft.usage.output_tokens,
-        'briefing',
-        'generate_weekly_briefing'
-      );
-
-      const draftContent = draft.content[0];
-      const draftText = draftContent.type === 'text' ? draftContent.text : '';
-
-      // Pass 2: Review with Sonnet
-      const reviewPrompt = `Review this weekly briefing for accuracy, completeness, and strategic insight. Improve it and return the final version. If it's already good, return it with minimal changes.
-
-DRAFT BRIEFING:
-${draftText}
-
-Return ONLY the improved briefing text, no meta-commentary.`;
-
-      const reviewed = await anthropic.messages.create({
-        model: reviewRoute.model,
-        max_tokens: reviewRoute.maxTokens,
-        messages: [{ role: 'user', content: reviewPrompt }],
-      });
-
-      trackUsage(
-        reviewRoute.model,
-        reviewed.usage.input_tokens,
-        reviewed.usage.output_tokens,
-        'review',
-        'generate_weekly_briefing'
-      );
-
-      const content = reviewed.content[0];
-      const briefingText = content.type === 'text' ? content.text : draftText;
 
       const briefing: Briefing = {
         id: `briefing_${Date.now().toString(36)}`,
@@ -320,7 +269,7 @@ Return ONLY the improved briefing text, no meta-commentary.`;
         sections: [
           {
             title: 'Weekly Briefing',
-            content: briefingText,
+            content: result.finalOutput,
             priority: 'high',
           },
         ],
@@ -328,17 +277,25 @@ Return ONLY the improved briefing text, no meta-commentary.`;
         status: 'generated',
       };
 
-      // Audit the briefing generation
       audit('briefing_generated', {
         channel: context.channel,
         result: 'success',
         metadata: {
           type: 'weekly',
+          evalScore: result.finalScore,
+          evalIterations: result.iterations,
+          evalConverged: result.converged,
+          evalCostUsd: result.totalCostUsd,
           executionTimeMs: Date.now() - startTime,
         },
       });
 
-      logger.info('Weekly briefing generated', { briefingId: briefing.id });
+      logger.info('Weekly briefing generated', {
+        briefingId: briefing.id,
+        score: result.finalScore,
+        iterations: result.iterations,
+        converged: result.converged,
+      });
 
       return { success: true, data: briefing };
     } catch (error) {
@@ -352,7 +309,7 @@ Return ONLY the improved briefing text, no meta-commentary.`;
 };
 
 /**
- * Generate feature roadmap suggestions
+ * Generate feature roadmap suggestions (uses Opus for strategic reasoning)
  */
 const generateRoadmapIdeas: Tool = {
   name: 'generate_roadmap_ideas',

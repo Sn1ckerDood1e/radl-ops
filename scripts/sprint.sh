@@ -533,6 +533,14 @@ PYEOF
       }
     ]
   }"
+
+  # Auto-trigger compound learning extraction
+  COMPOUND_SCRIPT="/home/hb/radl-ops/scripts/compound.sh"
+  if [ -x "$COMPOUND_SCRIPT" ]; then
+    echo ""
+    echo "Extracting compound learnings..."
+    "$COMPOUND_SCRIPT" extract 2>/dev/null && echo "Compound learnings captured." || echo "Warning: compound extraction failed (non-critical)"
+  fi
 }
 
 # Show current sprint status

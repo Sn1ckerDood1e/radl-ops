@@ -4,6 +4,8 @@
 
 import { registerGitHubTools } from './github.js';
 import { registerBriefingTools } from './briefing.js';
+import { registerSocialTools } from './social.js';
+import { registerMonitoringTools } from './monitoring.js';
 import { toolRegistry } from './registry.js';
 import { logger } from '../config/logger.js';
 
@@ -15,6 +17,8 @@ export function registerAllTools(): void {
 
   registerGitHubTools();
   registerBriefingTools();
+  registerSocialTools();
+  registerMonitoringTools();
 
   logger.info(`Registered ${toolRegistry.list().length} tools: ${toolRegistry.list().join(', ')}`);
 }
