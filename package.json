@@ -1,6 +1,6 @@
 {
   "name": "radl-ops",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Autonomous AI assistant for managing Radl business operations",
   "type": "module",
   "main": "dist/index.js",

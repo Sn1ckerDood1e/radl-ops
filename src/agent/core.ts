@@ -28,6 +28,7 @@ import { logger } from '../config/logger.js';
 import { audit, auditApprovalRequested, auditApprovalResponse } from '../audit/index.js';
 import { recall, remember, getRelevantContext } from '../memory/index.js';
 import { getRoute, detectTaskType, trackUsage } from '../models/index.js';
+import { checkIronLaws, recordError, clearError, getErrorCount } from '../guardrails/index.js';
 
 const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
@@ -117,6 +118,25 @@ async function executeTool(
   context: AgentContext,
   approvalId?: string
 ): Promise<ToolResult> {
+  // Check iron laws before execution
+  const lawCheck = checkIronLaws({
+    action: 'tool_execution',
+    toolName,
+    params,
+  });
+
+  if (!lawCheck.passed) {
+    const violations = lawCheck.violations
+      .filter(v => v.severity === 'block')
+      .map(v => v.message)
+      .join('; ');
+    logger.warn('Iron law blocked tool execution', { toolName, violations });
+    return {
+      success: false,
+      error: `IRON LAW VIOLATION: ${violations}`,
+    };
+  }
+
   const execContext: ToolExecutionContext = {
     userId: context.userId,
     channel: context.channel ?? 'cli',
@@ -266,7 +286,33 @@ export async function processMessage(
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
     for (const call of toolCalls) {
+      // Check 3-strike rule before executing
+      const errorKey = `${call.name}:${JSON.stringify(call.input).substring(0, 100)}`;
+      const strikeCheck = checkIronLaws({
+        action: 'tool_execution',
+        toolName: call.name,
+        params: call.input,
+        errorCount: getErrorCount(errorKey),
+      });
+
+      if (!strikeCheck.passed) {
+        const msg = strikeCheck.violations.map(v => v.message).join('; ');
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: call.id,
+          content: JSON.stringify({ success: false, error: msg }),
+        });
+        continue;
+      }
+
       const result = await executeTool(call.name, call.input, context);
+
+      // Track errors for 3-strike rule
+      if (!result.success && result.error) {
+        recordError(errorKey);
+      } else if (result.success) {
+        clearError(errorKey);
+      }
 
       // Check for approval requirement
       if (result.error?.startsWith('APPROVAL_REQUIRED:')) {

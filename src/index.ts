@@ -23,6 +23,7 @@ import { initMemory, cleanupExpired, saveMarkdownExport } from './memory/index.j
 import { cleanupOldLogs } from './audit/index.js';
 import { toolRegistry } from './tools/registry.js';
 import { initTokenTracker, getAllRoutes, cleanupOldUsageLogs } from './models/index.js';
+import { getIronLaws } from './guardrails/index.js';
 
 type RunMode = 'all' | 'cli' | 'slack' | 'scheduler';
 
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
       acc[task] = `${route.model.split('-')[1]}/${route.effort}`;
       return acc;
     }, {} as Record<string, string>),
+    ironLaws: getIronLaws().map(l => l.id),
   });
 
   switch (mode) {
