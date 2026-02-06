@@ -1,0 +1,31 @@
+#!/bin/bash
+# Git pre-push hook: Block pushes to main/master
+# Enforces Iron Law #1: Never push directly to main branch
+#
+# Install: cp this file to .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+# Or run: radl-ops/scripts/install-hooks.sh
+
+remote="$1"
+
+while read local_ref local_sha remote_ref remote_sha; do
+  # Extract branch name from ref
+  remote_branch="${remote_ref##refs/heads/}"
+
+  if [ "$remote_branch" = "main" ] || [ "$remote_branch" = "master" ]; then
+    echo ""
+    echo "BLOCKED: Push to '$remote_branch' is not allowed."
+    echo ""
+    echo "Iron Law #1: Never push directly to main/master."
+    echo "Create a feature branch and open a PR instead:"
+    echo ""
+    echo "  git checkout -b feat/<your-feature>"
+    echo "  git push -u origin feat/<your-feature>"
+    echo "  gh pr create"
+    echo ""
+    echo "To bypass (EMERGENCY ONLY): git push --no-verify"
+    echo ""
+    exit 1
+  fi
+done
+
+exit 0

@@ -2,39 +2,26 @@
 
 When the user says "run autonomous sprint" or similar, follow this workflow.
 
-## Setup Phase
+## Pre-Sprint Checklist
 
-1. **Create STATUS.md** at `/home/hb/radl-ops/STATUS.md`:
-```markdown
-# Radl Ops Work Status
+1. **Create feature branch** from main:
+   ```bash
+   cd /home/hb/radl && git checkout main && git pull origin main
+   git checkout -b feat/<phase-slug>
+   ```
+   NEVER work directly on main.
 
-**Started:** [timestamp]
-**Last Updated:** [timestamp]
+2. **Start sprint tracking**:
+   ```bash
+   /home/hb/radl-ops/scripts/sprint.sh start "Phase X" "Title" "estimate"
+   ```
 
-## Current Task
-Setting up task queue...
-
-## Task Queue
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 1 | [task] | PENDING | [notes] |
-
-## Completed Work
-(None yet)
-
-## Errors / Blockers
-(None yet)
-
-## Commits
-(None yet)
-```
-
-2. **Create tasks** using TaskCreate tool:
+3. **Create tasks** using TaskCreate tool:
    - Max 5-7 tasks per sprint
    - Each task should be completable in 30-60 minutes
    - Include clear acceptance criteria
 
-3. **Set dependencies** using TaskUpdate:
+4. **Set dependencies** using TaskUpdate:
    - Chain tasks that depend on each other
    - Allow parallel execution where possible
 
@@ -42,56 +29,79 @@ Setting up task queue...
 
 For each task:
 
-1. **Update STATUS.md** - Mark task IN PROGRESS
-2. **Update task status** - Set to `in_progress`
-3. **Spawn background agent** using Task tool with `run_in_background: true`
-4. **Wait for completion** - Agent will notify when done
-5. **On completion:**
-   - Update task status to `completed`
-   - Update STATUS.md with summary
-   - Start next task in queue
+1. **Update task status** - Set to `in_progress`
+2. **Record sprint progress**:
+   ```bash
+   /home/hb/radl-ops/scripts/sprint.sh progress "Starting: task description"
+   ```
+3. **Execute the work** - Write code, run tests
+4. **Typecheck after changes**: `npm run typecheck`
+5. **Commit to feature branch** (never to main):
+   ```bash
+   git add <specific-files> && git commit -m "feat(<scope>): description"
+   ```
+6. **Update task status** to `completed`
+7. **Record progress**:
+   ```bash
+   /home/hb/radl-ops/scripts/sprint.sh progress "Done: task description"
+   ```
 
-## Agent Prompt Template
+## Checkpoint Protocol
 
+Every 30-45 minutes or after completing 2-3 tasks:
+```bash
+/home/hb/radl-ops/scripts/sprint.sh checkpoint
 ```
-You are working on the Radl codebase at /home/hb/radl.
 
-**Task:** [description]
+If context window is filling up (>75%), use `/strategic-compact` skill.
 
-**Requirements:**
-[detailed requirements]
+## Code Review (Mandatory)
 
-**After completing:**
-1. Run `npm run typecheck` to verify no type errors
-2. Run `npm run build` to verify build passes
-3. Commit with: `git add -A && git commit -m "[message]"`
-4. Push with: `git push origin main`
+After completing all tasks, before creating PR:
+1. Run **code-reviewer** agent on all changed files
+2. Run **security-reviewer** agent if auth/API changes were made
+3. Fix any CRITICAL or HIGH issues
+4. Run final typecheck: `npm run typecheck`
 
-Report what you built and any issues encountered.
-```
+## Completion
+
+1. **Final checks**:
+   ```bash
+   cd /home/hb/radl
+   npm run typecheck
+   npm run lint
+   ```
+
+2. **Complete sprint**:
+   ```bash
+   COMMIT=$(git rev-parse --short HEAD)
+   /home/hb/radl-ops/scripts/sprint.sh complete "$COMMIT" "actual_time"
+   ```
+
+3. **Extract learnings**:
+   ```bash
+   /home/hb/radl-ops/scripts/compound.sh extract
+   ```
+
+4. **Push and create PR** (not direct to main):
+   ```bash
+   git push -u origin feat/<phase-slug>
+   gh pr create --title "feat: description" --body "..."
+   ```
+
+5. **Update STATE.md** with sprint results
 
 ## Error Recovery
 
 If a task fails:
-1. Note error in STATUS.md under "Errors / Blockers"
+1. Record blocker: `sprint.sh blocker "description"`
 2. Attempt one retry with adjusted approach
-3. If still failing, pause and document for user review
+3. If still failing after 3 attempts, STOP and escalate to user (3-strike rule)
+4. Document in sprint checkpoint
 
-## Completion
+## Branch Naming Convention
 
-When all tasks done:
-1. Update STATUS.md with final summary
-2. Run polish pass (typecheck, build, lint)
-3. Check Vercel deployment status
-4. Notify user via STATUS.md
-
-## User Notification
-
-Update STATUS.md after every task completion. User can check this file anytime to see progress.
-
-If notification webhook is configured (NOTIFICATION_WEBHOOK in .env), send completion ping:
-```bash
-curl -X POST "$NOTIFICATION_WEBHOOK" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "[status message]"}'
-```
+- Features: `feat/<phase-or-feature>`
+- Bug fixes: `fix/<description>`
+- Refactors: `refactor/<description>`
+- Ops improvements: `ops/<description>`

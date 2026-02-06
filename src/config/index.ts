@@ -34,7 +34,7 @@ function numEnv(key: string, defaultValue: number = 0): number {
 export const config = {
   // Anthropic
   anthropic: {
-    apiKey: requireEnv('ANTHROPIC_API_KEY'),
+    apiKey: optionalEnv('ANTHROPIC_API_KEY'),
   },
 
   // GitHub
@@ -55,6 +55,7 @@ export const config = {
   // Supabase
   supabase: {
     url: optionalEnv('SUPABASE_URL'),
+    anonKey: optionalEnv('SUPABASE_ANON_KEY'),
     serviceKey: optionalEnv('SUPABASE_SERVICE_KEY'),
   },
 

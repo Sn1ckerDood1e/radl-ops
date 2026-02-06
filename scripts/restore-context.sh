@@ -67,9 +67,17 @@ else
 fi
 echo ""
 
-# --- Recent Git Activity ---
-echo "## Recent Git Activity (radl)"
-cd "$RADL_DIR" 2>/dev/null && git log --oneline -5 2>/dev/null || echo "Unable to read git log"
+# --- Branch and Recent Git Activity ---
+echo "## Branch & Recent Git Activity (radl)"
+cd "$RADL_DIR" 2>/dev/null
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "  Current branch: $CURRENT_BRANCH"
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  echo "  WARNING: On main! Create feature branch before making changes."
+fi
+echo ""
+echo "Recent commits:"
+git log --oneline -5 2>/dev/null || echo "Unable to read git log"
 echo ""
 
 # --- Recent Checkpoints ---

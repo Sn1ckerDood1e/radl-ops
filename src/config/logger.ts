@@ -1,8 +1,15 @@
 /**
  * Simple logger for Radl Ops
+ *
+ * In MCP mode (RADL_OPS_MODE=mcp), ALL output goes to stderr.
+ * stdout is reserved for JSON-RPC protocol messages.
  */
 
 import type { LogLevel, LogEntry } from '../types/index.js';
+
+function isMcpMode(): boolean {
+  return process.env.RADL_OPS_MODE === 'mcp';
+}
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 0,
@@ -35,6 +42,12 @@ function log(level: LogLevel, message: string, context?: Record<string, unknown>
   };
 
   const formatted = formatMessage(entry);
+
+  // In MCP mode, ALL output must go to stderr (stdout = JSON-RPC)
+  if (isMcpMode()) {
+    process.stderr.write(formatted + '\n');
+    return;
+  }
 
   switch (level) {
     case 'error':

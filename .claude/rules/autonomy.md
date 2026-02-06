@@ -8,6 +8,7 @@
 - Updating documentation
 - Creating GitHub issues
 - Routine dependency updates (patch/minor)
+- Creating feature branches for any work
 
 ## Ask First
 
@@ -26,6 +27,29 @@
 - Modify CI/CD pipelines
 - Change environment variables in Vercel
 - Post to social media (draft only, human posts)
+
+## Branch Discipline (MANDATORY)
+
+- ALWAYS create a feature branch before starting work
+- Branch from `main`: `git checkout -b feat/<scope>`
+- NEVER commit directly to main
+- Push feature branches and create PRs for review
+- Branch names: `feat/`, `fix/`, `refactor/`, `ops/`, `docs/`
+
+## Sprint Tracking (MANDATORY)
+
+- ALWAYS start sprint tracking before beginning work: `sprint.sh start`
+- Log progress after each completed task: `sprint.sh progress`
+- Checkpoint every 30-45 minutes: `sprint.sh checkpoint`
+- Complete sprint when done: `sprint.sh complete`
+- Extract learnings after: `compound.sh extract`
+
+## Code Review (MANDATORY)
+
+After writing code, before committing:
+- Use **code-reviewer** agent for all non-trivial changes
+- Use **security-reviewer** agent for auth/API/input changes
+- Fix CRITICAL and HIGH issues before committing
 
 ## When to Push Back
 
