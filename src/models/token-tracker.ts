@@ -2,11 +2,16 @@
  * Token Tracker - Tracks API usage and costs per model
  *
  * Stores usage in append-only JSONL format for analytics.
+ * In MCP mode, uses in-memory only (no disk I/O).
  * Provides daily/weekly summaries for briefings.
  */
 
 import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+
+function isMcpMode(): boolean {
+  return process.env.RADL_OPS_MODE === 'mcp';
+}
 import type { ModelId, TaskType, TokenUsage, CostAnalytics } from '../types/index.js';
 import { calculateCost } from './router.js';
 import { logger } from '../config/logger.js';
@@ -31,6 +36,10 @@ let todayDate = new Date().toISOString().split('T')[0];
  * Initialize the usage tracking directory
  */
 export function initTokenTracker(): void {
+  if (isMcpMode()) {
+    logger.info('Token tracker initialized (in-memory mode)');
+    return;
+  }
   if (!existsSync(USAGE_DIR)) {
     mkdirSync(USAGE_DIR, { recursive: true });
   }
@@ -64,15 +73,17 @@ export function trackUsage(
     toolName,
   };
 
-  // Append to daily rotated file
-  try {
-    const line = JSON.stringify({
-      ...usage,
-      timestamp: usage.timestamp.toISOString(),
-    }) + '\n';
-    appendFileSync(getUsageFile(), line);
-  } catch (error) {
-    logger.error('Failed to write usage log', { error });
+  // Append to daily rotated file (skip in MCP mode)
+  if (!isMcpMode()) {
+    try {
+      const line = JSON.stringify({
+        ...usage,
+        timestamp: usage.timestamp.toISOString(),
+      }) + '\n';
+      appendFileSync(getUsageFile(), line);
+    } catch (error) {
+      logger.error('Failed to write usage log', { error });
+    }
   }
 
   // Update in-memory cache

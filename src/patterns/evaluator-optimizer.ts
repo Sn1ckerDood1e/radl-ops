@@ -14,12 +14,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ModelId, TaskType } from '../types/index.js';
 import { getRoute, calculateCost } from '../models/router.js';
 import { trackUsage } from '../models/token-tracker.js';
-import { config } from '../config/index.js';
+import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
-
-const anthropic = new Anthropic({
-  apiKey: config.anthropic.apiKey,
-});
 
 /**
  * Evaluation result from the critic
@@ -92,7 +88,7 @@ export async function runEvalOptLoop(
     // Step 1: Generate
     let genResponse: Anthropic.Message;
     try {
-      genResponse = await anthropic.messages.create({
+      genResponse = await getAnthropicClient().messages.create({
         model: generatorRoute.model,
         max_tokens: generatorRoute.maxTokens,
         messages: [{ role: 'user', content: currentPrompt }],
@@ -130,7 +126,7 @@ export async function runEvalOptLoop(
 
     let evalResponse: Anthropic.Message;
     try {
-      evalResponse = await anthropic.messages.create({
+      evalResponse = await getAnthropicClient().messages.create({
         model: evaluatorRoute.model,
         max_tokens: evaluatorRoute.maxTokens,
         messages: [{ role: 'user', content: evalPrompt }],

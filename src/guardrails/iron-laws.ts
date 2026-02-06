@@ -8,7 +8,6 @@
  */
 
 import { logger } from '../config/logger.js';
-import { audit } from '../audit/index.js';
 
 /**
  * An iron law that cannot be violated
@@ -185,16 +184,9 @@ export function checkIronLaws(context: LawCheckContext): LawCheckResult {
         severity: law.severity,
       });
 
-      // Audit the violation
-      audit('tool_blocked', {
+      logger.warn(`AUDIT: tool_blocked`, {
         tool: context.toolName ?? context.action,
-        channel: 'system',
         result: 'failure',
-        metadata: {
-          ironLaw: law.id,
-          violation,
-          severity: law.severity,
-        },
       });
 
       logger.warn('Iron law violation', {
