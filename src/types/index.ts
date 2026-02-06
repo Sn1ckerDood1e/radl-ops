@@ -11,6 +11,81 @@
 import { z } from 'zod';
 
 // ============================================
+// Model Routing (Opus 4.6 Optimizations)
+// ============================================
+
+/**
+ * Supported Claude model IDs with pricing per 1M tokens.
+ * Opus 4.6: Deep reasoning, complex architecture ($5/$25)
+ * Sonnet 4.5: Best coding model, orchestration ($3/$15)
+ * Haiku 4.5: Fast lightweight tasks, worker agents ($0.80/$4)
+ */
+export type ModelId =
+  | 'claude-opus-4-6'
+  | 'claude-sonnet-4-5-20250929'
+  | 'claude-haiku-4-5-20251001';
+
+/**
+ * Effort level controls reasoning depth.
+ * Maps to thinking budget - higher effort = more reasoning tokens.
+ */
+export type EffortLevel = 'low' | 'medium' | 'high';
+
+/**
+ * Model routing configuration for different task types
+ */
+export interface ModelRoute {
+  model: ModelId;
+  effort: EffortLevel;
+  maxTokens: number;
+  /** Cost per 1M input tokens (USD) */
+  inputCostPer1M: number;
+  /** Cost per 1M output tokens (USD) */
+  outputCostPer1M: number;
+}
+
+/**
+ * Task type determines which model and effort level to use
+ */
+export type TaskType =
+  | 'briefing'        // Routine summaries → haiku/low
+  | 'tool_execution'  // Tool calls → sonnet/medium
+  | 'conversation'    // General chat → sonnet/medium
+  | 'planning'        // Feature planning → sonnet/high
+  | 'review'          // Code/content review → sonnet/high
+  | 'architecture'    // System design → opus/high
+  | 'roadmap';        // Strategic thinking → opus/high
+
+/**
+ * Token usage tracking for a single API call
+ */
+export interface TokenUsage {
+  model: ModelId;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  costUsd: number;
+  timestamp: Date;
+  taskType: TaskType;
+  toolName?: string;
+}
+
+/**
+ * Aggregated cost analytics
+ */
+export interface CostAnalytics {
+  period: 'daily' | 'weekly' | 'monthly';
+  startDate: string;
+  endDate: string;
+  totalCostUsd: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  byModel: Record<string, { calls: number; costUsd: number; tokens: number }>;
+  byTaskType: Record<string, { calls: number; costUsd: number }>;
+}
+
+// ============================================
 // Permission System (Based on Security Research)
 // ============================================
 

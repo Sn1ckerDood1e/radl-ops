@@ -24,6 +24,9 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+audit-logs/
+usage-logs/
+logs/
 
 # Test coverage
 coverage/

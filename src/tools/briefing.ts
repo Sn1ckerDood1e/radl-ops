@@ -11,6 +11,7 @@ import { config } from '../config/index.js';
 import { toolRegistry } from './registry.js';
 import { logger } from '../config/logger.js';
 import { audit } from '../audit/index.js';
+import { getRoute, trackUsage, getCostSummaryForBriefing } from '../models/index.js';
 
 const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
@@ -99,8 +100,15 @@ const generateDailyBriefing: Tool = {
         }
       }
 
-      // Generate briefing with Claude
-      const prompt = `Generate a concise daily briefing for Radl (a rowing team management SaaS).
+      // Generator/Critic pattern: Haiku generates, Sonnet reviews
+      const generateRoute = getRoute('briefing');
+      const reviewRoute = getRoute('review');
+
+      // Include API cost summary in briefing data
+      const costSummary = getCostSummaryForBriefing();
+      data.api_costs = costSummary;
+
+      const generatePrompt = `Generate a concise daily briefing for Radl (a rowing team management SaaS).
 
 Data available:
 ${JSON.stringify(data, null, 2)}
@@ -113,17 +121,52 @@ Format the briefing as:
 3. **Today's Priorities** - Top 3-5 actionable items
 4. **Blockers/Risks** - Any issues that need attention
 5. **Wins** - Recent accomplishments to celebrate
+6. **API Costs** - Token usage and costs (from data above)
 
 Keep it brief and actionable. Use bullet points.`;
 
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: prompt }],
+      // Pass 1: Generate with Haiku (fast, cheap)
+      const draft = await anthropic.messages.create({
+        model: generateRoute.model,
+        max_tokens: generateRoute.maxTokens,
+        messages: [{ role: 'user', content: generatePrompt }],
       });
 
-      const content = response.content[0];
-      const briefingText = content.type === 'text' ? content.text : '';
+      trackUsage(
+        generateRoute.model,
+        draft.usage.input_tokens,
+        draft.usage.output_tokens,
+        'briefing',
+        'generate_daily_briefing'
+      );
+
+      const draftContent = draft.content[0];
+      const draftText = draftContent.type === 'text' ? draftContent.text : '';
+
+      // Pass 2: Review with Sonnet (quality check)
+      const reviewPrompt = `Review this daily briefing for accuracy, clarity, and actionability. Fix any issues and return the improved version. If it's already good, return it as-is with minimal changes.
+
+DRAFT BRIEFING:
+${draftText}
+
+Return ONLY the improved briefing text, no meta-commentary.`;
+
+      const reviewed = await anthropic.messages.create({
+        model: reviewRoute.model,
+        max_tokens: reviewRoute.maxTokens,
+        messages: [{ role: 'user', content: reviewPrompt }],
+      });
+
+      trackUsage(
+        reviewRoute.model,
+        reviewed.usage.input_tokens,
+        reviewed.usage.output_tokens,
+        'review',
+        'generate_daily_briefing'
+      );
+
+      const content = reviewed.content[0];
+      const briefingText = content.type === 'text' ? content.text : draftText;
 
       const briefing: Briefing = {
         id: `briefing_${Date.now().toString(36)}`,
@@ -201,8 +244,15 @@ const generateWeeklyBriefing: Tool = {
         data.github = statsResult.data;
       }
 
-      // Generate weekly briefing
-      const prompt = `Generate a comprehensive weekly briefing for Radl (a rowing team management SaaS).
+      // Generator/Critic pattern for weekly briefing
+      const generateRoute = getRoute('briefing');
+      const reviewRoute = getRoute('review');
+
+      // Include weekly cost analytics
+      const costSummary = getCostSummaryForBriefing();
+      data.api_costs = costSummary;
+
+      const generatePrompt = `Generate a comprehensive weekly briefing for Radl (a rowing team management SaaS).
 
 Week: ${data.week_start} to ${data.week_end}
 
@@ -216,17 +266,52 @@ Format the briefing as:
 4. **Challenges Faced** - Problems encountered and how they were addressed
 5. **Next Week's Goals** - Top 3-5 priorities for the coming week
 6. **Strategic Notes** - Any longer-term considerations
+7. **API Costs** - Weekly token usage and costs
 
 Be thorough but organized. Use headers and bullet points.`;
 
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      // Pass 1: Generate with Haiku
+      const draft = await anthropic.messages.create({
+        model: generateRoute.model,
         max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: generatePrompt }],
       });
 
-      const content = response.content[0];
-      const briefingText = content.type === 'text' ? content.text : '';
+      trackUsage(
+        generateRoute.model,
+        draft.usage.input_tokens,
+        draft.usage.output_tokens,
+        'briefing',
+        'generate_weekly_briefing'
+      );
+
+      const draftContent = draft.content[0];
+      const draftText = draftContent.type === 'text' ? draftContent.text : '';
+
+      // Pass 2: Review with Sonnet
+      const reviewPrompt = `Review this weekly briefing for accuracy, completeness, and strategic insight. Improve it and return the final version. If it's already good, return it with minimal changes.
+
+DRAFT BRIEFING:
+${draftText}
+
+Return ONLY the improved briefing text, no meta-commentary.`;
+
+      const reviewed = await anthropic.messages.create({
+        model: reviewRoute.model,
+        max_tokens: reviewRoute.maxTokens,
+        messages: [{ role: 'user', content: reviewPrompt }],
+      });
+
+      trackUsage(
+        reviewRoute.model,
+        reviewed.usage.input_tokens,
+        reviewed.usage.output_tokens,
+        'review',
+        'generate_weekly_briefing'
+      );
+
+      const content = reviewed.content[0];
+      const briefingText = content.type === 'text' ? content.text : draftText;
 
       const briefing: Briefing = {
         id: `briefing_${Date.now().toString(36)}`,
@@ -313,16 +398,27 @@ Generate 5-7 feature ideas with:
 
 Also suggest which features should be grouped together and a recommended implementation order.`;
 
+      // Roadmap uses Opus for deep strategic reasoning
+      const route = getRoute('roadmap');
+
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2048,
+        model: route.model,
+        max_tokens: route.maxTokens,
         messages: [{ role: 'user', content: prompt }],
       });
+
+      trackUsage(
+        route.model,
+        response.usage.input_tokens,
+        response.usage.output_tokens,
+        'roadmap',
+        'generate_roadmap_ideas'
+      );
 
       const content = response.content[0];
       const ideas = content.type === 'text' ? content.text : '';
 
-      logger.info('Roadmap ideas generated');
+      logger.info('Roadmap ideas generated', { model: route.model });
 
       return { success: true, data: { ideas } };
     } catch (error) {

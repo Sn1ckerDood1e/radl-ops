@@ -20,12 +20,14 @@ import type {
   ApprovalRequest,
   PermissionTier,
   ToolExecutionContext,
+  TaskType,
 } from '../types/index.js';
 import { toolRegistry } from '../tools/registry.js';
 import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
 import { audit, auditApprovalRequested, auditApprovalResponse } from '../audit/index.js';
 import { recall, remember, getRelevantContext } from '../memory/index.js';
+import { getRoute, detectTaskType, trackUsage } from '../models/index.js';
 
 const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
@@ -169,7 +171,9 @@ function createApprovalRequest(
 }
 
 /**
- * Process a message and generate a response
+ * Process a message and generate a response.
+ * Uses model routing to select the optimal model per task type.
+ * Tracks token usage for cost analytics.
  */
 export async function processMessage(
   message: string,
@@ -186,6 +190,17 @@ export async function processMessage(
     result: 'success',
   });
 
+  // Detect task type and get model route
+  const taskType: TaskType = (context.metadata?.taskType as TaskType) ?? detectTaskType(message);
+  const route = getRoute(taskType);
+
+  logger.info('Model route selected', {
+    taskType,
+    model: route.model,
+    effort: route.effort,
+    maxTokens: route.maxTokens,
+  });
+
   // Get or create conversation history
   let history = conversations.get(context.conversationId) || [];
 
@@ -195,10 +210,10 @@ export async function processMessage(
   // Build system prompt with context
   const systemPrompt = buildSystemPrompt(context);
 
-  // Call Claude
+  // Call Claude with routed model
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
+    model: route.model,
+    max_tokens: route.maxTokens,
     system: systemPrompt,
     tools: toolRegistry.formatForClaude(),
     messages: history.map(m => ({
@@ -206,6 +221,17 @@ export async function processMessage(
       content: m.content,
     })),
   });
+
+  // Track token usage
+  trackUsage(
+    route.model,
+    response.usage.input_tokens,
+    response.usage.output_tokens,
+    taskType,
+    undefined,
+    (response.usage as unknown as Record<string, number>).cache_read_input_tokens,
+    (response.usage as unknown as Record<string, number>).cache_creation_input_tokens
+  );
 
   // Process response
   const toolCalls: ToolCall[] = [];
@@ -276,10 +302,12 @@ export async function processMessage(
     // Add tool results and get final response
     history.push({ role: 'user', content: toolResults });
 
-    // Get follow-up response
+    // Follow-up uses tool_execution route (may differ from initial)
+    const followUpRoute = getRoute('tool_execution');
+
     const followUp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
+      model: followUpRoute.model,
+      max_tokens: followUpRoute.maxTokens,
       system: systemPrompt,
       tools: toolRegistry.formatForClaude(),
       messages: history.map(m => ({
@@ -287,6 +315,17 @@ export async function processMessage(
         content: m.content,
       })),
     });
+
+    // Track follow-up token usage
+    trackUsage(
+      followUpRoute.model,
+      followUp.usage.input_tokens,
+      followUp.usage.output_tokens,
+      'tool_execution',
+      toolCalls.map(c => c.name).join(','),
+      (followUp.usage as unknown as Record<string, number>).cache_read_input_tokens,
+      (followUp.usage as unknown as Record<string, number>).cache_creation_input_tokens
+    );
 
     // Extract text from follow-up
     for (const block of followUp.content) {
@@ -307,9 +346,6 @@ export async function processMessage(
     history = history.slice(-40);
   }
   conversations.set(context.conversationId, history);
-
-  // Consider saving important information to memory
-  // (This could be enhanced with AI-based importance detection)
 
   return {
     message: textResponse,

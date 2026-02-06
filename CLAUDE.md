@@ -68,6 +68,10 @@ cat /home/hb/radl/.planning/STATE.md
 # Sprint analytics
 /home/hb/radl-ops/scripts/sprint.sh analytics     # Velocity trends & predictions
 
+# Session initialization (loads context, creates session files)
+/home/hb/radl-ops/scripts/init-session.sh          # BUILD mode (default)
+/home/hb/radl-ops/scripts/init-session.sh maintain  # MAINTAIN mode
+
 # Context restoration (after session reset)
 /home/hb/radl-ops/scripts/restore-context.sh
 
@@ -105,10 +109,22 @@ cat /home/hb/radl/.planning/STATE.md
 
 **Data location:** `/home/hb/radl/.planning/sprints/`
 
+## Model Routing (v0.3)
+
+Radl Ops routes API calls to the optimal model per task type:
+- **Haiku**: Briefings, routine summaries (fast, cheap)
+- **Sonnet**: Conversations, tool execution, code review (balanced)
+- **Opus**: Architecture decisions, roadmap planning (deep reasoning)
+
+Briefings use **generator/critic** pattern: Haiku drafts, Sonnet reviews.
+All API calls are tracked in `usage-logs/token-usage.jsonl`.
+
+CLI commands: `/costs` (today's spend), `/routes` (routing config)
+
 ## Briefing Delivery
 
-- **Daily**: Mon-Fri 7:00 AM — GitHub, Vercel, Supabase, Sentry status + workout
-- **Weekly**: Saturday 7:00 AM — Progress summary, next week goals, training preview
+- **Daily**: Mon-Fri 7:00 AM — GitHub, Vercel, Supabase, Sentry status + API costs
+- **Weekly**: Saturday 7:00 AM — Progress summary, next week goals, API cost trends
 
 ## Automated Monitoring
 

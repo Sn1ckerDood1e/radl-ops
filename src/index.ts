@@ -22,6 +22,7 @@ import { startScheduler, registerDefaultTasks } from './scheduler/index.js';
 import { initMemory, cleanupExpired, saveMarkdownExport } from './memory/index.js';
 import { cleanupOldLogs } from './audit/index.js';
 import { toolRegistry } from './tools/registry.js';
+import { initTokenTracker, getAllRoutes, cleanupOldUsageLogs } from './models/index.js';
 
 type RunMode = 'all' | 'cli' | 'slack' | 'scheduler';
 
@@ -31,7 +32,7 @@ async function main(): Promise<void> {
   logger.info('Starting Radl Ops', {
     mode,
     env: config.app.env,
-    version: '0.2.0', // Updated with security enhancements
+    version: '0.3.0', // Model routing, token tracking, generator/critic
   });
 
   // Initialize core systems
@@ -48,6 +49,9 @@ async function main(): Promise<void> {
   // Initialize memory system
   initMemory();
 
+  // Initialize token tracker for cost analytics
+  initTokenTracker();
+
   // Register all tools
   registerAllTools();
 
@@ -61,15 +65,21 @@ async function main(): Promise<void> {
   // Run cleanup tasks
   cleanupExpired(); // Clean expired memories
   cleanupOldLogs(); // Clean old audit logs
+  cleanupOldUsageLogs(); // Clean old usage logs (90-day retention)
 
-  // Log system status
+  // Log system status with model routing info
   const tools = toolRegistry.getToolInfo();
+  const routes = getAllRoutes();
   logger.info('System initialized', {
     totalTools: tools.length,
     toolsByCategory: tools.reduce((acc, t) => {
       acc[t.category] = (acc[t.category] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
+    modelRouting: Object.entries(routes).reduce((acc, [task, route]) => {
+      acc[task] = `${route.model.split('-')[1]}/${route.effort}`;
+      return acc;
+    }, {} as Record<string, string>),
   });
 
   switch (mode) {

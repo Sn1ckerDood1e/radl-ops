@@ -7,6 +7,7 @@ import { processMessage, clearConversation, getPendingApprovals, approveAction, 
 import { runTaskNow, getTasks } from '../scheduler/index.js';
 import { toolRegistry } from '../tools/registry.js';
 import type { AgentContext } from '../types/index.js';
+import { getTodaySummary, getAllRoutes } from '../models/index.js';
 
 const WELCOME_MESSAGE = `
 ╔══════════════════════════════════════════════════════════════╗
@@ -22,6 +23,8 @@ Commands:
   /pending    - Show pending approvals
   /approve    - Approve the latest pending action
   /reject     - Reject the latest pending action
+  /costs      - Show today's API costs and token usage
+  /routes     - Show model routing configuration
   /clear      - Clear conversation history
   /exit       - Exit the CLI
 
@@ -110,6 +113,40 @@ async function handleCommand(input: string): Promise<string | null> {
         return '❌ Action rejected.';
       }
       return `Error: ${rejectResult.error}`;
+
+    case '/costs': {
+      const summary = getTodaySummary();
+      if (summary.totalCostUsd === 0) {
+        return 'No API usage recorded today.';
+      }
+      const modelLines = Object.entries(summary.byModel).map(([model, data]) => {
+        const name = model.split('-').slice(1, 2)[0];
+        return `  ${name}: ${data.calls} calls, ${data.tokens.toLocaleString()} tokens, $${data.costUsd.toFixed(4)}`;
+      });
+      const taskLines = Object.entries(summary.byTaskType).map(([task, data]) => {
+        return `  ${task}: ${data.calls} calls, $${data.costUsd.toFixed(4)}`;
+      });
+      return [
+        `API Costs Today (${summary.startDate})`,
+        `Total: $${summary.totalCostUsd.toFixed(4)}`,
+        `Tokens: ${(summary.totalInputTokens + summary.totalOutputTokens).toLocaleString()}`,
+        '',
+        'By Model:',
+        ...modelLines,
+        '',
+        'By Task:',
+        ...taskLines,
+      ].join('\n');
+    }
+
+    case '/routes': {
+      const routes = getAllRoutes();
+      const routeLines = Object.entries(routes).map(([task, route]) => {
+        const modelName = route.model.split('-').slice(1, 2)[0];
+        return `  ${task}: ${modelName} (effort: ${route.effort}, max: ${route.maxTokens})`;
+      });
+      return ['Model Routing:', ...routeLines].join('\n');
+    }
 
     case '/clear':
       clearConversation(conversationId);
