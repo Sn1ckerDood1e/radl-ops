@@ -3,14 +3,18 @@
  *
  * Wraps the sprint.sh shell script as MCP tools for conversational
  * sprint management within Claude Code sessions.
+ *
+ * Integrates iron law checks to enforce workflow constraints.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { logger } from '../../config/logger.js';
+import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 
 const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
+const RADL_DIR = '/home/hb/radl';
 
 function runSprint(args: string): string {
   try {
@@ -26,29 +30,64 @@ function runSprint(args: string): string {
   }
 }
 
+function getCurrentBranch(): string {
+  try {
+    return execSync('git branch --show-current', {
+      encoding: 'utf-8',
+      cwd: RADL_DIR,
+      timeout: 5000,
+    }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function registerSprintTools(server: McpServer): void {
   server.tool(
     'sprint_status',
-    'Get current sprint status including phase, tasks completed, and blockers',
+    'Get current sprint status including phase, tasks completed, blockers, and git branch',
     {},
     async () => {
+      const branch = getCurrentBranch();
+      const branchWarning = (branch === 'main' || branch === 'master')
+        ? `\nWARNING: On '${branch}' branch! Create a feature branch before making changes.\n`
+        : '';
+
       const output = runSprint('status');
-      return { content: [{ type: 'text' as const, text: output }] };
+      return { content: [{ type: 'text' as const, text: `Branch: ${branch}${branchWarning}\n${output}` }] };
     }
   );
 
   server.tool(
     'sprint_start',
-    'Start a new sprint with phase, title, and time estimate. Sends Slack notification.',
+    'Start a new sprint. Checks iron laws (branch must not be main). Sends Slack notification.',
     {
       phase: z.string().min(1).max(50).describe('Sprint phase identifier (e.g., "Phase 54.1")'),
       title: z.string().min(1).max(100).describe('Sprint title (e.g., "MCP Server Migration")'),
       estimate: z.string().max(50).optional().describe('Time estimate (e.g., "3 hours")'),
     },
     async ({ phase, title, estimate }) => {
+      // Iron law check: verify we're on a feature branch
+      const branch = getCurrentBranch();
+      const lawCheck = checkIronLaws({
+        action: 'git_push',
+        toolName: 'sprint_start',
+        gitBranch: branch,
+      });
+
+      if (!lawCheck.passed) {
+        const violations = lawCheck.violations.map(v => `  - ${v.description}: ${v.message}`).join('\n');
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `BLOCKED by iron law:\n${violations}\n\nCreate a feature branch first:\n  cd ${RADL_DIR} && git checkout -b feat/${phase.toLowerCase().replace(/\s+/g, '-')}`,
+          }],
+        };
+      }
+
       const est = estimate ? ` "${estimate}"` : '';
       const output = runSprint(`start "${phase}" "${title}"${est}`);
-      return { content: [{ type: 'text' as const, text: output }] };
+      return { content: [{ type: 'text' as const, text: `Branch: ${branch}\n${output}` }] };
     }
   );
 
@@ -76,6 +115,28 @@ export function registerSprintTools(server: McpServer): void {
     async ({ commit, actual_time }) => {
       const output = runSprint(`complete "${commit}" "${actual_time}"`);
       return { content: [{ type: 'text' as const, text: output }] };
+    }
+  );
+
+  // Expose iron laws as a queryable tool
+  server.tool(
+    'iron_laws',
+    'List all iron laws (non-negotiable constraints). Use this to check what rules must never be violated.',
+    {},
+    async () => {
+      const laws = getIronLaws();
+      const branch = getCurrentBranch();
+      const lines = [
+        'Iron Laws (NEVER violate):',
+        '',
+        ...laws.map((law, i) => `  ${i + 1}. [${law.severity.toUpperCase()}] ${law.description}`),
+        '',
+        `Current branch: ${branch}`,
+        (branch === 'main' || branch === 'master')
+          ? 'WARNING: On protected branch! Create a feature branch.'
+          : 'OK: On feature branch.',
+      ];
+      return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
     }
   );
 }

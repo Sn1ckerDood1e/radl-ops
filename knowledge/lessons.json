@@ -5,6 +5,60 @@
       "situation": "jq not available on GitHub Actions runners",
       "learning": "Use Python for JSON parsing in shell scripts for cross-platform compatibility",
       "date": "2026-02-05T13:20:34.898727"
+    },
+    {
+      "id": 2,
+      "situation": "Pushed directly to main despite iron law #1",
+      "learning": "Documentation alone doesn't enforce rules. Mechanical enforcement (git hooks, MCP checks) is required. Added pre-push hook after this incident.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 3,
+      "situation": "Sprint tooling (sprint.sh) was never used during Phase 54 and 55",
+      "learning": "Opt-in tools get forgotten under time pressure. Add SessionStart hooks to remind about sprint tracking at the start of every session.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 4,
+      "situation": "STATE.md was 27+ hours stale when checked",
+      "learning": "Session-end tasks (STATE.md update, compound extract) need Stop hooks to remind the agent. Without reminders, wrap-up tasks are always skipped.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 5,
+      "situation": "Light mode had 1,753+ hardcoded dark colors, completely broken",
+      "learning": "When a fix requires touching hundreds of files, it's better to disable the broken feature with a clear 'Coming Soon' label than attempt a massive migration mid-sprint.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 6,
+      "situation": "CSRF headers missing in 28 client files causing silent API failures",
+      "learning": "When adding a cross-cutting concern (CSRF, auth), audit ALL existing files immediately rather than assuming new files will follow the pattern.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 7,
+      "situation": "Context window ran out mid-session during Phase 55",
+      "learning": "Use /strategic-compact at ~75% context. Checkpoint sprint state before compaction. Session burned out because compaction wasn't proactive.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 8,
+      "situation": "Sprint estimates consistently overestimate by 50%",
+      "learning": "Multiply sprint estimates by 0.5 for realistic time. Phase 53.1: estimated 3-4h, actual 1.5h. Account for this in planning.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 9,
+      "situation": "Iron laws existed in code (iron-laws.ts) but checkIronLaws() was never called",
+      "learning": "Dead code with good intentions is still dead code. Wire enforcement into actual execution paths (MCP tools, hooks) or it provides zero value.",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 10,
+      "situation": "Announcement card practice link was broken (wrong URL pattern)",
+      "learning": "When refactoring components, test all link/navigation paths. Broken internal links are invisible until a user clicks them.",
+      "date": "2026-02-06T19:30:00.000000"
     }
   ]
 }

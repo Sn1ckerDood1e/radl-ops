@@ -1,1 +1,49 @@
-{"decisions": []}
+{
+  "decisions": [
+    {
+      "id": 1,
+      "title": "Disable light mode instead of fixing",
+      "context": "Light mode had 1,753+ hardcoded dark colors across the codebase",
+      "alternatives": "1) Fix all colors with CSS variables (multi-day effort), 2) Disable light mode with Coming Soon",
+      "rationale": "Fixing 1,753 color references mid-sprint is not viable. Disabling with Coming Soon label is honest and unblocks progress. CSS variable migration can be a dedicated sprint later.",
+      "phase": "Phase 55",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 2,
+      "title": "Git pre-push hook over documentation-only enforcement",
+      "context": "Iron law #1 (no push to main) was violated despite being documented in CLAUDE.md",
+      "alternatives": "1) Stronger documentation, 2) Git pre-push hook, 3) Branch protection rules on GitHub",
+      "rationale": "Documentation was ignored under time pressure. Git hook mechanically prevents the action. GitHub branch protection is also good but requires admin setup. Hook is immediate and local.",
+      "phase": "Radl Ops",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 3,
+      "title": "Agent Teams over custom multi-agent framework",
+      "context": "Needed parallel code review and multi-module feature development capability",
+      "alternatives": "1) Use built-in Agent Teams (Opus 4.6), 2) Build custom multi-agent orchestration in radl-ops",
+      "rationale": "Agent Teams is native to Claude Code with shared task lists, messaging, and display modes. Building custom would duplicate existing functionality. The env var activation is simple and the recipes cover our use cases.",
+      "phase": "Radl Ops",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 4,
+      "title": "SessionStart/Stop hooks for workflow enforcement",
+      "context": "Sprint tracking, STATE.md updates, and compound learning extraction were consistently skipped",
+      "alternatives": "1) Better documentation, 2) Claude Code hooks, 3) MCP tool that auto-runs on session start",
+      "rationale": "Claude Code hooks run automatically at session boundaries — exactly when the reminders are needed. No agent memory required. The hooks inject workflow state (branch, sprint, patterns) directly into context.",
+      "phase": "Radl Ops",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 5,
+      "title": "Wire iron laws into MCP tools, not just code module",
+      "context": "checkIronLaws() existed as a function but was never called from any execution path",
+      "alternatives": "1) Call from agent core, 2) Call from MCP tools, 3) Call from hooks",
+      "rationale": "MCP tools are the primary execution path for sprint operations. sprint_start checking the branch via iron laws means every sprint begins with a safety check. The iron_laws tool also lets the agent query constraints on demand.",
+      "phase": "Radl Ops",
+      "date": "2026-02-06T19:30:00.000000"
+    }
+  ]
+}

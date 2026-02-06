@@ -23,6 +23,12 @@
 - [ ] Error trends — spikes?
 - [ ] Unresolved high-priority issues
 
+### Session Hygiene
+- [ ] Feature branch created (not working on main)?
+- [ ] Sprint tracking active?
+- [ ] STATE.md updated at session end?
+- [ ] Compound learning extracted after sprint?
+
 ## What Constitutes "Worth Flagging"
 
 **Immediate attention (flag in briefing):**

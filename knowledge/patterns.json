@@ -3,16 +3,72 @@
     {
       "id": 1,
       "name": "CSRF Protection",
-      "description": "Always include X-CSRF-Token header in authenticated API calls",
-      "example": "fetch(url, { headers: { 'X-CSRF-Token': token } })",
+      "description": "Always include X-CSRF-Token header in authenticated API calls using getCsrfHeaders()",
+      "example": "import { getCsrfHeaders } from '@/lib/csrf-client'; fetch(url, { headers: getCsrfHeaders() })",
       "date": "2026-02-05T13:20:32.508975"
     },
     {
       "id": 2,
       "name": "Toast Notifications",
-      "description": "Use toast for user feedback on actions",
-      "example": "toast.success('Saved\\!') or toast.error('Failed')",
+      "description": "Use sonner toast for user feedback on mutations (save, delete, update)",
+      "example": "import { toast } from 'sonner'; toast.success('Saved!') or toast.error('Failed')",
       "date": "2026-02-05T13:20:33.804428"
+    },
+    {
+      "id": 3,
+      "name": "Feature Branch First",
+      "description": "Always create feature branch before any code changes. Never commit to main.",
+      "example": "git checkout -b feat/<phase-slug> before starting work",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 4,
+      "name": "Server Component Data Fetch",
+      "description": "Server components fetch data with Prisma, serialize to JSON, pass to client components as props",
+      "example": "const data = await prisma.equipment.findMany({ where: { teamId } }); return <ClientComp data={JSON.parse(JSON.stringify(data))} />",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 5,
+      "name": "Team-Scoped Queries",
+      "description": "All Prisma queries must filter by teamId from auth claims. Never query without tenant scope.",
+      "example": "prisma.equipment.findMany({ where: { teamId: claims.team_id } })",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 6,
+      "name": "Zod Validation at API Boundary",
+      "description": "Validate all API request bodies with Zod schemas. Return 400 with safeParse error details.",
+      "example": "const result = schema.safeParse(body); if (!result.success) return NextResponse.json({ error: 'Validation failed', details: result.error.flatten() }, { status: 400 })",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 7,
+      "name": "Auth with getUser not getSession",
+      "description": "Always use supabase.auth.getUser() for server-side auth verification, never getSession(). getSession reads from cookies which can be tampered.",
+      "example": "const { data: { user } } = await supabase.auth.getUser()",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 8,
+      "name": "CSS Variables for Theming",
+      "description": "Use CSS variables (var(--surface-1), var(--border-subtle)) for theme-aware colors instead of hardcoded Tailwind dark: classes",
+      "example": "className=\"bg-[var(--surface-1)] border-[var(--border-subtle)]\"",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 9,
+      "name": "useMemo for Filtered Lists",
+      "description": "When adding search/filter to a list, use useMemo to compute filtered results from the full array",
+      "example": "const filtered = useMemo(() => items.filter(i => i.name.toLowerCase().includes(query)), [items, query])",
+      "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 10,
+      "name": "Conventional Commits",
+      "description": "Use conventional commit format: feat/fix/refactor/docs/test/chore: description",
+      "example": "git commit -m 'feat(equipment): add search and filtering to equipment list'",
+      "date": "2026-02-06T19:30:00.000000"
     }
   ]
 }

@@ -93,42 +93,59 @@ echo ""
 # ============================================
 # 4. Knowledge Base Summary
 # ============================================
-echo "## Knowledge Base"
+echo "## Knowledge Base (Apply These!)"
 python3 << 'PYEOF'
 import json
 from pathlib import Path
 
 kb_dir = Path('/home/hb/radl-ops/knowledge')
 
-# Decisions
-decisions_file = kb_dir / 'decisions.json'
-if decisions_file.exists():
-    decisions = json.load(open(decisions_file))['decisions']
-    print(f"  Decisions: {len(decisions)} logged")
-    for d in decisions[-3:]:
-        print(f"    - {d.get('title', '?')}")
-else:
-    print("  Decisions: 0")
-
-# Patterns
+# Patterns - show ALL, these should be applied
 patterns_file = kb_dir / 'patterns.json'
 if patterns_file.exists():
     patterns = json.load(open(patterns_file))['patterns']
-    print(f"  Patterns: {len(patterns)} logged")
-    for p in patterns:
-        print(f"    - {p.get('name', '?')}: {p.get('description', '')[:40]}")
+    if patterns:
+        print(f"  PATTERNS ({len(patterns)}) — apply these in code:")
+        for p in patterns:
+            print(f"    * {p.get('name', '?')}: {p.get('description', '')}")
+            if p.get('example'):
+                print(f"      Example: {p.get('example', '')[:80]}")
+    else:
+        print("  No patterns yet")
 else:
-    print("  Patterns: 0")
+    print("  No patterns yet")
 
-# Lessons
+print()
+
+# Lessons - show ALL, these prevent repeat mistakes
 lessons_file = kb_dir / 'lessons.json'
 if lessons_file.exists():
     lessons = json.load(open(lessons_file))['lessons']
-    print(f"  Lessons: {len(lessons)} logged")
-    for l in lessons[-3:]:
-        print(f"    - {l.get('learning', '?')[:50]}")
+    if lessons:
+        print(f"  LESSONS ({len(lessons)}) — avoid these mistakes:")
+        for l in lessons:
+            print(f"    * {l.get('learning', '?')}")
+    else:
+        print("  No lessons yet")
 else:
-    print("  Lessons: 0")
+    print("  No lessons yet")
+
+print()
+
+# Decisions - show recent 5
+decisions_file = kb_dir / 'decisions.json'
+if decisions_file.exists():
+    decisions = json.load(open(decisions_file))['decisions']
+    if decisions:
+        print(f"  DECISIONS ({len(decisions)} total, showing last 5):")
+        for d in decisions[-5:]:
+            print(f"    * [{d.get('phase', '?')}] {d.get('title', '?')}")
+            if d.get('rationale'):
+                print(f"      Why: {d.get('rationale', '')[:80]}")
+    else:
+        print("  No decisions yet")
+else:
+    print("  No decisions yet")
 PYEOF
 echo ""
 
@@ -224,6 +241,21 @@ elif [ "$SESSION_MODE" = "maintain" ]; then
   echo "  3. Fix priority issues"
   echo "  4. Verify fixes"
   echo "  5. Release if needed"
+fi
+echo ""
+
+# ============================================
+# 9. Branch Check (CRITICAL)
+# ============================================
+echo "## Branch Status"
+cd "$RADL_DIR" 2>/dev/null
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "  Current branch: $CURRENT_BRANCH"
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  echo "  *** WARNING: On main branch! Create a feature branch before making changes ***"
+  echo "  Run: git checkout -b feat/<phase-slug>"
+else
+  echo "  OK - On feature branch"
 fi
 echo ""
 

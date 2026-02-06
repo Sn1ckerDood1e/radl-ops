@@ -16,12 +16,13 @@ import { registerSocialTools } from './tools/social.js';
 import { registerMonitoringTools } from './tools/monitoring.js';
 import { registerSprintTools } from './tools/sprint.js';
 import { registerCostTools } from './tools/costs.js';
+import { registerKnowledgeTools } from './tools/knowledge.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
 
 const server = new McpServer({
   name: 'radl-ops',
-  version: '1.0.0',
+  version: '1.1.0',
 });
 
 registerBriefingTools(server);
@@ -29,6 +30,7 @@ registerSocialTools(server);
 registerMonitoringTools(server);
 registerSprintTools(server);
 registerCostTools(server);
+registerKnowledgeTools(server);
 
 initTokenTracker();
 
