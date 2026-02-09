@@ -17,6 +17,7 @@ import { registerMonitoringTools } from './tools/monitoring.js';
 import { registerSprintTools } from './tools/sprint.js';
 import { registerCostTools } from './tools/costs.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
+import { registerVerifyTools } from './tools/verify.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
 
@@ -31,6 +32,7 @@ registerMonitoringTools(server);
 registerSprintTools(server);
 registerCostTools(server);
 registerKnowledgeTools(server);
+registerVerifyTools(server);
 
 initTokenTracker();
 

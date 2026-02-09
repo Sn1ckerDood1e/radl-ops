@@ -142,6 +142,11 @@ for i, insight in enumerate(insights, 1):
     print(f"  {i}. [{insight['category']}] {insight['content'][:80]}")
 
 PYEOF
+
+    # Auto-merge into knowledge base
+    echo ""
+    echo "Merging into knowledge base..."
+    "$0" merge
     ;;
 
   summarize)
@@ -259,11 +264,89 @@ print(f"Total insights this week: {total_insights}")
 PYEOF
     ;;
 
+  merge)
+    echo "=== Compound Engineering: Merge ==="
+    echo ""
+
+    python3 << 'PYEOF'
+import json
+from pathlib import Path
+from datetime import datetime
+
+knowledge_dir = Path('/home/hb/radl-ops/knowledge')
+compound_dir = knowledge_dir / 'compounds'
+
+if not compound_dir.exists():
+    print("No compound data found.")
+    exit(0)
+
+# Load existing knowledge
+lessons_file = knowledge_dir / 'lessons.json'
+lessons_data = json.loads(lessons_file.read_text()) if lessons_file.exists() else {'lessons': []}
+next_lesson_id = max((l['id'] for l in lessons_data['lessons']), default=0) + 1
+
+merged_count = 0
+new_lessons = 0
+
+for compound_file in sorted(compound_dir.glob('compound-*.json')):
+    try:
+        data = json.load(open(compound_file))
+    except Exception:
+        continue
+
+    # Skip already-merged files
+    if data.get('merged', False):
+        continue
+
+    insights = data.get('insights', [])
+    phase = data.get('sprintPhase', '?')
+
+    for insight in insights:
+        content = insight.get('content', '')
+        category = insight.get('category', 'other')
+
+        # Check for duplicates (by content similarity)
+        is_duplicate = any(
+            content[:50] in l.get('learning', '') or l.get('learning', '')[:50] in content
+            for l in lessons_data['lessons']
+        )
+        if is_duplicate:
+            continue
+
+        lessons_data['lessons'].append({
+            'id': next_lesson_id,
+            'situation': f"[{category}] {phase}",
+            'learning': content,
+            'date': datetime.now().isoformat(),
+        })
+        next_lesson_id += 1
+        new_lessons += 1
+
+    # Mark compound as merged
+    data['merged'] = True
+    data['mergedAt'] = datetime.now().isoformat()
+    with open(compound_file, 'w') as f:
+        json.dump(data, f, indent=2)
+    merged_count += 1
+
+# Write updated lessons
+if new_lessons > 0:
+    with open(lessons_file, 'w') as f:
+        json.dump(lessons_data, f, indent=2)
+
+print(f"Compound files processed: {merged_count}")
+print(f"New lessons added: {new_lessons}")
+print(f"Total lessons now: {len(lessons_data['lessons'])}")
+
+PYEOF
+    ;;
+
   *)
-    echo "Usage: compound.sh <extract|summarize|review>"
+    echo "Usage: compound.sh <extract|summarize|review|merge>"
     echo ""
     echo "Commands:"
-    echo "  extract    - Extract lessons from latest completed sprint"
+    echo "  extract    - Extract lessons from latest sprint + auto-merge"
+    echo "  merge      - Merge unmerged compound files into knowledge base"
     echo "  summarize  - Summarize all compound insights"
     echo "  review     - Review this week's compounds"
     exit 1
