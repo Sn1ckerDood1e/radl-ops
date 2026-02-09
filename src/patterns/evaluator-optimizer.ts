@@ -11,19 +11,11 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { appendFileSync } from 'node:fs';
 import type { ModelId, TaskType } from '../types/index.js';
 import { getRoute, calculateCost } from '../models/router.js';
 import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
-
-function debugLog(msg: string): void {
-  try {
-    appendFileSync('/home/hb/radl-ops/debug-evalopt.log',
-      `[${new Date().toISOString()}] ${msg}\n`);
-  } catch { /* ignore */ }
-}
 
 /**
  * Evaluation result from the critic
@@ -93,12 +85,8 @@ export async function runEvalOptLoop(
 
   const errors: string[] = [];
 
-  debugLog(`Starting eval-opt: generator=${generatorRoute.model}, evaluator=${evaluatorRoute.model}, threshold=${qualityThreshold}, maxIter=${maxIterations}`);
-  debugLog(`API key present: ${!!process.env.ANTHROPIC_API_KEY}, prefix: ${process.env.ANTHROPIC_API_KEY?.substring(0, 10) || 'NONE'}`);
-
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     logger.info('Eval-opt iteration', { iteration, maxIterations });
-    debugLog(`Iteration ${iteration}: calling generator (${generatorRoute.model})`);
 
     // Step 1: Generate
     let genResponse: Anthropic.Message;
@@ -108,10 +96,8 @@ export async function runEvalOptLoop(
         max_tokens: generatorRoute.maxTokens,
         messages: [{ role: 'user', content: currentPrompt }],
       });
-      debugLog(`Generator success: ${genResponse.usage.output_tokens} output tokens`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
-      debugLog(`Generator FAILED: ${msg}`);
       logger.error('Generator API call failed', { iteration, error: msg });
       errors.push(`Generator failed (iteration ${iteration}): ${msg}`);
       break;
