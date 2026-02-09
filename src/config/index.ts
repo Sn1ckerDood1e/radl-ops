@@ -28,7 +28,8 @@ function boolEnv(key: string, defaultValue: boolean = false): boolean {
 function numEnv(key: string, defaultValue: number = 0): number {
   const value = process.env[key];
   if (!value) return defaultValue;
-  return parseInt(value, 10);
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
 }
 
 export const config = {

@@ -9,16 +9,16 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 
 const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
 const RADL_DIR = '/home/hb/radl';
 
-function runSprint(args: string): string {
+function runSprint(args: string[]): string {
   try {
-    return execSync(`${SPRINT_SCRIPT} ${args}`, {
+    return execFileSync(SPRINT_SCRIPT, args, {
       encoding: 'utf-8',
       timeout: 30000,
       env: { ...process.env, PATH: process.env.PATH },
@@ -53,7 +53,7 @@ export function registerSprintTools(server: McpServer): void {
         ? `\nWARNING: On '${branch}' branch! Create a feature branch before making changes.\n`
         : '';
 
-      const output = runSprint('status');
+      const output = runSprint(['status']);
       return { content: [{ type: 'text' as const, text: `Branch: ${branch}${branchWarning}\n${output}` }] };
     }
   );
@@ -85,8 +85,9 @@ export function registerSprintTools(server: McpServer): void {
         };
       }
 
-      const est = estimate ? ` "${estimate}"` : '';
-      const output = runSprint(`start "${phase}" "${title}"${est}`);
+      const args = ['start', phase, title];
+      if (estimate) args.push(estimate);
+      const output = runSprint(args);
       return { content: [{ type: 'text' as const, text: `Branch: ${branch}\n${output}` }] };
     }
   );
@@ -99,8 +100,9 @@ export function registerSprintTools(server: McpServer): void {
       notify: z.boolean().optional().default(false).describe('Send Slack notification'),
     },
     async ({ message, notify }) => {
-      const flag = notify ? ' --notify' : '';
-      const output = runSprint(`progress "${message}"${flag}`);
+      const args = ['progress', message];
+      if (notify) args.push('--notify');
+      const output = runSprint(args);
       return { content: [{ type: 'text' as const, text: output }] };
     }
   );
@@ -113,7 +115,7 @@ export function registerSprintTools(server: McpServer): void {
       actual_time: z.string().min(1).max(50).describe('Actual time taken (e.g., "1.5 hours")'),
     },
     async ({ commit, actual_time }) => {
-      const output = runSprint(`complete "${commit}" "${actual_time}"`);
+      const output = runSprint(['complete', commit, actual_time]);
       return { content: [{ type: 'text' as const, text: output }] };
     }
   );
