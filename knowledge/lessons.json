@@ -83,6 +83,12 @@
       "situation": "Agent team parallel review completed successfully on first try",
       "learning": "Agent teams work well for parallel read-only analysis (code review, security review, architecture review). Use Sonnet, run_in_background=true, and fix issues while reviewers work. Keep to 1 focused task per teammate.",
       "date": "2026-02-09T15:50:00.000000"
+    },
+    {
+      "id": 15,
+      "situation": "Built agent teams capability but only used it once during the sprint that validated it",
+      "learning": "Default to parallel execution. Before starting any task group, ask: are these independent? If yes, spawn teammates. The lead should coordinate and debug, not do grunt work. Lesson #3 (opt-in tools forgotten) applies to the agent itself, not just humans.",
+      "date": "2026-02-09T16:00:00.000000"
     }
   ]
 }
