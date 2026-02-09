@@ -9,6 +9,9 @@
 
 process.env.RADL_OPS_MODE = 'mcp';
 
+import { config as dotenvConfig } from 'dotenv';
+dotenvConfig();
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { registerBriefingTools } from './tools/briefing.js';
