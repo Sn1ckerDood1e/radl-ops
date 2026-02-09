@@ -80,8 +80,11 @@ Keep it brief and actionable. Use bullet points.`;
         costUsd: result.totalCostUsd,
       });
 
+      const errorInfo = result.errors.length > 0
+        ? `\n\n**ERRORS:**\n${result.errors.map(e => `- ${e}`).join('\n')}`
+        : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
-      return { content: [{ type: 'text' as const, text: result.finalOutput + meta }] };
+      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
     }
   );
 
@@ -131,8 +134,11 @@ Be thorough but organized. Use headers and bullet points.`;
         converged: result.converged,
       });
 
+      const errorInfo = result.errors.length > 0
+        ? `\n\n**ERRORS:**\n${result.errors.map(e => `- ${e}`).join('\n')}`
+        : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
-      return { content: [{ type: 'text' as const, text: result.finalOutput + meta }] };
+      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
     }
   );
 
@@ -167,18 +173,24 @@ Generate 5-7 feature ideas ranked by impact. For each:
 
 Prioritize by impact/effort ratio. Be specific to rowing, not generic SaaS advice.`;
 
-      const response = await client.messages.create({
-        model: route.model,
-        max_tokens: route.maxTokens,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      try {
+        const response = await client.messages.create({
+          model: route.model,
+          max_tokens: route.maxTokens,
+          messages: [{ role: 'user', content: prompt }],
+        });
 
-      const text = response.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-        .map(b => b.text)
-        .join('\n');
+        const text = response.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map(b => b.text)
+          .join('\n');
 
-      return { content: [{ type: 'text' as const, text }] };
+        return { content: [{ type: 'text' as const, text }] };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('Roadmap ideas API call failed', { error: msg });
+        return { content: [{ type: 'text' as const, text: `**ERROR:** Roadmap ideas generation failed: ${msg}` }] };
+      }
     }
   );
 }

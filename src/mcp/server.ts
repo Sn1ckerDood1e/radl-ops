@@ -9,8 +9,14 @@
 
 process.env.RADL_OPS_MODE = 'mcp';
 
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config as dotenvConfig } from 'dotenv';
-dotenvConfig();
+
+// Explicit path to .env — don't rely on CWD which may differ in MCP subprocess
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const envPath = resolve(__dirname, '../../.env');
+dotenvConfig({ path: envPath });
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';

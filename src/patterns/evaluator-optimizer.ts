@@ -54,6 +54,7 @@ export interface EvalOptResult {
   totalCostUsd: number;
   evaluations: EvalResult[];
   converged: boolean;
+  errors: string[];
 }
 
 /**
@@ -82,6 +83,8 @@ export async function runEvalOptLoop(
   let currentOutput = '';
   let currentPrompt = generatorPrompt;
 
+  const errors: string[] = [];
+
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     logger.info('Eval-opt iteration', { iteration, maxIterations });
 
@@ -94,10 +97,9 @@ export async function runEvalOptLoop(
         messages: [{ role: 'user', content: currentPrompt }],
       });
     } catch (error) {
-      logger.error('Generator API call failed', {
-        iteration,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Generator API call failed', { iteration, error: msg });
+      errors.push(`Generator failed (iteration ${iteration}): ${msg}`);
       break;
     }
 
@@ -132,10 +134,9 @@ export async function runEvalOptLoop(
         messages: [{ role: 'user', content: evalPrompt }],
       });
     } catch (error) {
-      logger.error('Evaluator API call failed', {
-        iteration,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Evaluator API call failed', { iteration, error: msg });
+      errors.push(`Evaluator failed (iteration ${iteration}): ${msg}`);
       break;
     }
 
@@ -178,6 +179,7 @@ export async function runEvalOptLoop(
         totalCostUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
         evaluations,
         converged: true,
+        errors,
       };
     }
 
@@ -201,6 +203,7 @@ export async function runEvalOptLoop(
     totalCostUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
     evaluations,
     converged: false,
+    errors,
   };
 }
 

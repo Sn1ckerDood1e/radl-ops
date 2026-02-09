@@ -59,6 +59,36 @@
       "situation": "Announcement card practice link was broken (wrong URL pattern)",
       "learning": "When refactoring components, test all link/navigation paths. Broken internal links are invisible until a user clicks them.",
       "date": "2026-02-06T19:30:00.000000"
+    },
+    {
+      "id": 11,
+      "situation": "Eval-opt briefing tool returned empty content with 0/10 score and $0 cost — API errors swallowed silently",
+      "learning": "Never catch-and-break without surfacing the error. Collect errors in the result object and include them in tool responses. Silent failures are the hardest bugs to diagnose.",
+      "date": "2026-02-09T15:45:00.000000"
+    },
+    {
+      "id": 12,
+      "situation": "MCP server loaded stale dist/ artifacts from pre-MCP era, causing octokit import error",
+      "learning": "After major refactors that delete source files, always clean dist/ before rebuilding. Old compiled artifacts persist even when source is deleted. Add 'prebuild: rm -rf dist' to package.json scripts.",
+      "date": "2026-02-09T15:40:00.000000"
+    },
+    {
+      "id": 13,
+      "situation": "MCP server's dotenv loaded .env based on CWD which may differ in subprocess context",
+      "learning": "Always use explicit __dirname-relative paths for config file loading in MCP servers. Never rely on process.cwd() in a subprocess — the parent process controls the working directory.",
+      "date": "2026-02-09T15:45:00.000000"
+    },
+    {
+      "id": 14,
+      "situation": "Agent team parallel review completed successfully on first try",
+      "learning": "Agent teams work well for parallel read-only analysis (code review, security review, architecture review). Use Sonnet, run_in_background=true, and fix issues while reviewers work. Keep to 1 focused task per teammate.",
+      "date": "2026-02-09T15:50:00.000000"
+    },
+    {
+      "id": 15,
+      "situation": "Built agent teams capability but only used it once during the sprint that validated it",
+      "learning": "Default to parallel execution. Before starting any task group, ask: are these independent? If yes, spawn teammates. The lead should coordinate and debug, not do grunt work. Lesson #3 (opt-in tools forgotten) applies to the agent itself, not just humans.",
+      "date": "2026-02-09T16:00:00.000000"
     }
   ]
 }

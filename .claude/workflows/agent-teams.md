@@ -1,6 +1,6 @@
 # Agent Teams for Radl Ops
 
-Agent Teams (Opus 4.6) allows multiple Claude Code instances to work in parallel
+Agent Teams allows multiple Claude Code instances to work in parallel
 with shared task lists and inter-agent messaging.
 
 ## How It Works
@@ -25,18 +25,41 @@ communicate with each other, not just report back to the caller.
 | Debugging with multiple hypotheses | Agent Team |
 | Simple bug fix | Single session |
 
-## Team Recipes for Radl
+## Validated Team Recipes
 
-### 1. Sprint Review Team
+### 1. Parallel Codebase Review (TESTED Feb 9, 2026)
 
-For reviewing work at the end of a sprint:
+Spawns 3 reviewers in parallel. Each reviews the full codebase from a different
+angle. Lead can fix issues while reviewers work.
+
+**Practical steps:**
+1. `TeamCreate` with a descriptive name (e.g., `ops-review`)
+2. Create task per reviewer in team task list
+3. Spawn 3 teammates using `Task` tool with `team_name` and `run_in_background: true`
+4. Work on other things while reviewers run (~5-8 min for small codebases)
+5. Read findings from team messages as they arrive
+6. Fix HIGH/CRITICAL issues immediately
+7. `SendMessage` shutdown requests to all teammates
+8. `TeamDelete` to clean up
+
+**Agent types to use:**
+- `security-reviewer` — OWASP, secrets, injection, auth
+- `code-reviewer` — dead code, types, naming, test gaps
+- `architect` — module organization, coupling, extensibility
+
+**Model:** Sonnet for all reviewers (good balance of quality and cost)
+
+**Findings format:** CRITICAL / HIGH / MEDIUM / LOW with file:line references
 
 ```
-Create an agent team to review the changes in this sprint. Spawn three reviewers:
-- Security reviewer: check all API routes, auth, and input validation
-- Code quality reviewer: check patterns, naming, file organization, and TypeScript types
-- Test coverage reviewer: verify test coverage, identify untested code paths
-Have them each review the diff from main and report findings. Use Sonnet for each.
+TeamCreate: "my-review"
+TaskCreate x3 (one per reviewer)
+Task(subagent_type="security-reviewer", team_name="my-review", run_in_background=true)
+Task(subagent_type="code-reviewer", team_name="my-review", run_in_background=true)
+Task(subagent_type="architect", team_name="my-review", run_in_background=true)
+# ... fix issues while waiting ...
+SendMessage(shutdown_request) x3
+TeamDelete
 ```
 
 ### 2. Feature Implementation Team
@@ -77,17 +100,31 @@ Create an agent team to research [topic]. Spawn teammates:
 Have them share findings and produce a recommendation.
 ```
 
-### 5. Parallel Code Review (PR)
+## Lessons Learned (Feb 9, 2026)
 
-For reviewing pull requests:
+1. **Task list context switches** — When you create a team, task operations target
+   the team's task list. After `TeamDelete`, context returns to the main list.
+   Be aware of which task list you're operating on.
 
-```
-Create an agent team to review PR #[number]. Spawn three reviewers:
-- Security implications (auth, input validation, secrets)
-- Performance impact (queries, rendering, bundle size)
-- Test coverage and correctness
-Have them each review and report findings.
-```
+2. **run_in_background is essential** — Without it, spawning 3 teammates blocks
+   the lead. With `run_in_background: true`, the lead can do other work while
+   teammates run.
+
+3. **Sonnet is sufficient for reviews** — No need for Opus on review tasks.
+   Sonnet finds the same issues at lower cost.
+
+4. **Teammates complete fast** — A full codebase review (~20 files) takes 3-5 min
+   per reviewer. Don't over-estimate the wait time.
+
+5. **Fix issues while waiting** — The best workflow is: spawn reviewers, then
+   start fixing known issues. When reviewer messages arrive, triage and fix
+   the new findings.
+
+6. **Shutdown explicitly** — Always send shutdown requests before TeamDelete.
+   Teammates don't auto-terminate when their task completes.
+
+7. **Reviews work best, implementation needs more testing** — Parallel review is
+   the proven use case. Parallel implementation carries risk of file conflicts.
 
 ## Display Mode
 
@@ -104,20 +141,19 @@ Controls:
 
 1. **Give teammates enough context** — They get CLAUDE.md but not conversation history
 2. **Avoid file conflicts** — Each teammate should own different files
-3. **Size tasks appropriately** — 5-6 tasks per teammate is optimal
+3. **Size tasks appropriately** — 1 focused task per teammate for reviews
 4. **Use plan approval for risky work** — Require review before implementation
-5. **Use delegate mode** — Keeps the lead focused on coordination
-6. **Start with research/review** — Lower risk than parallel implementation
-7. **Monitor and steer** — Check in on progress, redirect if needed
+5. **Start with research/review** — Lower risk than parallel implementation
+6. **Use background mode** — Always `run_in_background: true` for teammates
 
 ## Integration with Sprint Workflow
 
-1. Start sprint: `sprint.sh start`
-2. Create agent team for the sprint's tasks
-3. Lead coordinates, teammates implement
-4. Each teammate commits to the feature branch
-5. Lead synthesizes and runs final checks
-6. Complete sprint: `sprint.sh complete`
+1. Start sprint: `sprint_start`
+2. Create agent team for review tasks
+3. Lead implements while reviewers work
+4. Triage and fix reviewer findings
+5. Shutdown team, delete
+6. Complete sprint: `sprint_complete`
 
 ## Token Cost Awareness
 
@@ -126,3 +162,4 @@ Agent Teams use significantly more tokens than single sessions:
 - Messaging between agents adds overhead
 - Use for tasks where parallel exploration adds real value
 - For simple sequential work, stick to single session + sub-agents
+- Sonnet teammates are ~3x cheaper than Opus teammates

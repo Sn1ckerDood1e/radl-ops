@@ -6,7 +6,7 @@
  * Provides daily/weekly summaries for briefings.
  */
 
-import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { appendFileSync, readFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
 import type { ModelId, TaskType, TokenUsage, CostAnalytics } from '../types/index.js';
@@ -268,8 +268,7 @@ export function cleanupOldUsageLogs(retentionDays: number = 90): void {
   const cutoffStr = cutoff.toISOString().split('T')[0];
 
   try {
-    const { readdirSync, unlinkSync } = require('fs');
-    const files = readdirSync(USAGE_DIR) as string[];
+    const files = readdirSync(USAGE_DIR, { encoding: 'utf-8' });
 
     for (const file of files) {
       if (!file.startsWith('usage-') || !file.endsWith('.jsonl')) continue;
