@@ -11,11 +11,19 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { appendFileSync } from 'node:fs';
 import type { ModelId, TaskType } from '../types/index.js';
 import { getRoute, calculateCost } from '../models/router.js';
 import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
+
+function debugLog(msg: string): void {
+  try {
+    appendFileSync('/home/hb/radl-ops/debug-evalopt.log',
+      `[${new Date().toISOString()}] ${msg}\n`);
+  } catch { /* ignore */ }
+}
 
 /**
  * Evaluation result from the critic
@@ -54,6 +62,7 @@ export interface EvalOptResult {
   totalCostUsd: number;
   evaluations: EvalResult[];
   converged: boolean;
+  errors: string[];
 }
 
 /**
@@ -82,8 +91,14 @@ export async function runEvalOptLoop(
   let currentOutput = '';
   let currentPrompt = generatorPrompt;
 
+  const errors: string[] = [];
+
+  debugLog(`Starting eval-opt: generator=${generatorRoute.model}, evaluator=${evaluatorRoute.model}, threshold=${qualityThreshold}, maxIter=${maxIterations}`);
+  debugLog(`API key present: ${!!process.env.ANTHROPIC_API_KEY}, prefix: ${process.env.ANTHROPIC_API_KEY?.substring(0, 10) || 'NONE'}`);
+
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     logger.info('Eval-opt iteration', { iteration, maxIterations });
+    debugLog(`Iteration ${iteration}: calling generator (${generatorRoute.model})`);
 
     // Step 1: Generate
     let genResponse: Anthropic.Message;
@@ -93,11 +108,12 @@ export async function runEvalOptLoop(
         max_tokens: generatorRoute.maxTokens,
         messages: [{ role: 'user', content: currentPrompt }],
       });
+      debugLog(`Generator success: ${genResponse.usage.output_tokens} output tokens`);
     } catch (error) {
-      logger.error('Generator API call failed', {
-        iteration,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      debugLog(`Generator FAILED: ${msg}`);
+      logger.error('Generator API call failed', { iteration, error: msg });
+      errors.push(`Generator failed (iteration ${iteration}): ${msg}`);
       break;
     }
 
@@ -132,10 +148,9 @@ export async function runEvalOptLoop(
         messages: [{ role: 'user', content: evalPrompt }],
       });
     } catch (error) {
-      logger.error('Evaluator API call failed', {
-        iteration,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Evaluator API call failed', { iteration, error: msg });
+      errors.push(`Evaluator failed (iteration ${iteration}): ${msg}`);
       break;
     }
 
@@ -178,6 +193,7 @@ export async function runEvalOptLoop(
         totalCostUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
         evaluations,
         converged: true,
+        errors,
       };
     }
 
@@ -201,6 +217,7 @@ export async function runEvalOptLoop(
     totalCostUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
     evaluations,
     converged: false,
+    errors,
   };
 }
 

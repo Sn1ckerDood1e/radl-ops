@@ -80,8 +80,11 @@ Keep it brief and actionable. Use bullet points.`;
         costUsd: result.totalCostUsd,
       });
 
+      const errorInfo = result.errors.length > 0
+        ? `\n\n**ERRORS:**\n${result.errors.map(e => `- ${e}`).join('\n')}`
+        : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
-      return { content: [{ type: 'text' as const, text: result.finalOutput + meta }] };
+      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
     }
   );
 
@@ -131,8 +134,11 @@ Be thorough but organized. Use headers and bullet points.`;
         converged: result.converged,
       });
 
+      const errorInfo = result.errors.length > 0
+        ? `\n\n**ERRORS:**\n${result.errors.map(e => `- ${e}`).join('\n')}`
+        : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
-      return { content: [{ type: 'text' as const, text: result.finalOutput + meta }] };
+      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
     }
   );
 
