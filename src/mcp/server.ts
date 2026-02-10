@@ -27,12 +27,14 @@ import { registerSprintTools } from './tools/sprint.js';
 import { registerCostTools } from './tools/costs.js';
 import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerVerifyTools } from './tools/verify.js';
+import { registerTeamTools } from './tools/teams.js';
+import { registerEvalOptTools } from './tools/eval-opt.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
 
 const server = new McpServer({
   name: 'radl-ops',
-  version: '1.1.0',
+  version: '1.2.0',
 });
 
 registerBriefingTools(server);
@@ -42,6 +44,8 @@ registerSprintTools(server);
 registerCostTools(server);
 registerKnowledgeTools(server);
 registerVerifyTools(server);
+registerTeamTools(server);
+registerEvalOptTools(server);
 
 initTokenTracker();
 

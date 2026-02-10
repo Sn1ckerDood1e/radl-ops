@@ -80,3 +80,21 @@ export interface LogEntry {
   message: string;
   context?: Record<string, unknown>;
 }
+
+// ============================================
+// Team Recipes
+// ============================================
+
+export interface TeamRecipe {
+  teamName: string;
+  teammates: Array<{
+    name: string;
+    subagentType: string;
+    model: 'haiku' | 'sonnet' | 'opus';
+    taskDescription: string;
+    fileOwnership?: string[];
+  }>;
+  setupSteps: string[];
+  cleanupSteps: string[];
+  tips: string[];
+}

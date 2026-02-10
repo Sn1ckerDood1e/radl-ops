@@ -24,6 +24,8 @@ Available as `mcp__radl_ops__*` in Claude Code:
 | `cost_report` | API costs from radl-ops internal Claude calls |
 | `knowledge_query` | Query compound learnings (patterns, lessons, decisions) |
 | `iron_laws` | List all iron laws and current branch status |
+| `team_recipe` | Get structured agent team recipe (review, feature, debug, research) |
+| `eval_opt_generate` | Generate content with eval-opt quality loop (any prompt + criteria) |
 
 ## Architecture
 
@@ -33,6 +35,8 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
                                     ├── sprint tools (wrap sprint.sh)
+                                    ├── team recipes (structured agent team configs)
+                                    ├── eval-opt (generic generate→evaluate→refine loop)
                                     └── cost reporting (in-memory token tracking)
 ```
 
