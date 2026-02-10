@@ -25,6 +25,12 @@ communicate with each other, not just report back to the caller.
 | Debugging with multiple hypotheses | Agent Team |
 | Simple bug fix | Single session |
 
+## MCP Tool: `team_recipe`
+
+Recipes are available programmatically via `mcp__radl-ops__team_recipe`. Pass a recipe type
+(`review`, `feature`, `debug`, `research`) and optional `context`, `files`, and `model` params.
+Returns structured JSON with teammates, setup steps, cleanup steps, and tips.
+
 ## Validated Team Recipes
 
 ### 1. Parallel Codebase Review (TESTED Feb 9, 2026)

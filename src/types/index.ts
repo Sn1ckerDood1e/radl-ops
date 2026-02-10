@@ -58,6 +58,17 @@ export interface CostAnalytics {
 }
 
 // ============================================
+// Cost Alerting
+// ============================================
+
+export interface CostAlert {
+  level: 'ok' | 'warn' | 'critical';
+  dailyCost: number;
+  threshold: number;
+  message: string;
+}
+
+// ============================================
 // Logging
 // ============================================
 
@@ -68,4 +79,22 @@ export interface LogEntry {
   level: LogLevel;
   message: string;
   context?: Record<string, unknown>;
+}
+
+// ============================================
+// Team Recipes
+// ============================================
+
+export interface TeamRecipe {
+  teamName: string;
+  teammates: Array<{
+    name: string;
+    subagentType: string;
+    model: 'haiku' | 'sonnet' | 'opus';
+    taskDescription: string;
+    fileOwnership?: string[];
+  }>;
+  setupSteps: string[];
+  cleanupSteps: string[];
+  tips: string[];
 }

@@ -12,6 +12,7 @@ import { getAnthropicClient } from '../../config/anthropic.js';
 import { getRoute } from '../../models/router.js';
 import { trackUsage } from '../../models/token-tracker.js';
 import { logger } from '../../config/logger.js';
+import { withErrorTracking } from '../with-error-tracking.js';
 
 const RADL_CONTEXT = `Radl is a rowing team management SaaS (radl.app).
 Core value: Coaches plan practices with lineups; athletes know where to be.
@@ -54,7 +55,7 @@ export function registerSocialTools(server: McpServer): void {
       focus: z.string().max(200).optional()
         .describe('Topic focus (e.g., "launch announcement", "rowing tips")'),
     },
-    async ({ count, focus }) => {
+    withErrorTracking('social_ideas', async ({ count, focus }) => {
       const prompt = `${RADL_CONTEXT}
 
 Generate ${count} social media content ideas for Radl.
@@ -71,7 +72,7 @@ Be specific to rowing, not generic startup advice.`;
       const text = await callSonnet(prompt);
       logger.info('MCP social ideas generated', { count });
       return { content: [{ type: 'text' as const, text }] };
-    }
+    })
   );
 
   server.tool(
@@ -85,7 +86,7 @@ Be specific to rowing, not generic startup advice.`;
       tone: z.enum(['professional', 'casual', 'educational', 'exciting']).optional().default('professional')
         .describe('Desired tone'),
     },
-    async ({ platform, topic, tone }) => {
+    withErrorTracking('social_draft', async ({ platform, topic, tone }) => {
       const constraints = platform === 'twitter'
         ? 'Max 280 characters. Punchy. Include 1-2 relevant hashtags.'
         : platform === 'linkedin'
@@ -109,7 +110,7 @@ Return the ready-to-post draft(s).`;
       const text = await callSonnet(prompt);
       logger.info('MCP social draft created', { platform, topic });
       return { content: [{ type: 'text' as const, text }] };
-    }
+    })
   );
 
   server.tool(
@@ -119,7 +120,7 @@ Return the ready-to-post draft(s).`;
       themes: z.array(z.string().max(100)).max(5).optional()
         .describe('Content themes for the week'),
     },
-    async ({ themes }) => {
+    withErrorTracking('social_calendar', async ({ themes }) => {
       const prompt = `${RADL_CONTEXT}
 
 Create a Mon-Fri social media content calendar for Radl.
@@ -137,6 +138,6 @@ Keep each draft authentic and rowing-specific.`;
       const text = await callSonnet(prompt);
       logger.info('MCP social calendar generated');
       return { content: [{ type: 'text' as const, text }] };
-    }
+    })
   );
 }

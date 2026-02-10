@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
+import { withErrorTracking } from '../with-error-tracking.js';
 
 const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
 const RADL_DIR = '/home/hb/radl';
@@ -47,7 +48,7 @@ export function registerSprintTools(server: McpServer): void {
     'sprint_status',
     'Get current sprint status including phase, tasks completed, blockers, and git branch',
     {},
-    async () => {
+    withErrorTracking('sprint_status', async () => {
       const branch = getCurrentBranch();
       const branchWarning = (branch === 'main' || branch === 'master')
         ? `\nWARNING: On '${branch}' branch! Create a feature branch before making changes.\n`
@@ -55,7 +56,7 @@ export function registerSprintTools(server: McpServer): void {
 
       const output = runSprint(['status']);
       return { content: [{ type: 'text' as const, text: `Branch: ${branch}${branchWarning}\n${output}` }] };
-    }
+    })
   );
 
   server.tool(
@@ -66,7 +67,7 @@ export function registerSprintTools(server: McpServer): void {
       title: z.string().min(1).max(100).describe('Sprint title (e.g., "MCP Server Migration")'),
       estimate: z.string().max(50).optional().describe('Time estimate (e.g., "3 hours")'),
     },
-    async ({ phase, title, estimate }) => {
+    withErrorTracking('sprint_start', async ({ phase, title, estimate }) => {
       // Iron law check: verify we're on a feature branch
       const branch = getCurrentBranch();
       const lawCheck = checkIronLaws({
@@ -89,7 +90,7 @@ export function registerSprintTools(server: McpServer): void {
       if (estimate) args.push(estimate);
       const output = runSprint(args);
       return { content: [{ type: 'text' as const, text: `Branch: ${branch}\n${output}` }] };
-    }
+    })
   );
 
   server.tool(
@@ -99,12 +100,12 @@ export function registerSprintTools(server: McpServer): void {
       message: z.string().min(1).max(500).describe('Description of completed task'),
       notify: z.boolean().optional().default(false).describe('Send Slack notification'),
     },
-    async ({ message, notify }) => {
+    withErrorTracking('sprint_progress', async ({ message, notify }) => {
       const args = ['progress', message];
       if (notify) args.push('--notify');
       const output = runSprint(args);
       return { content: [{ type: 'text' as const, text: output }] };
-    }
+    })
   );
 
   server.tool(
@@ -114,10 +115,10 @@ export function registerSprintTools(server: McpServer): void {
       commit: z.string().min(1).max(100).describe('Commit hash of the final commit'),
       actual_time: z.string().min(1).max(50).describe('Actual time taken (e.g., "1.5 hours")'),
     },
-    async ({ commit, actual_time }) => {
+    withErrorTracking('sprint_complete', async ({ commit, actual_time }) => {
       const output = runSprint(['complete', commit, actual_time]);
       return { content: [{ type: 'text' as const, text: output }] };
-    }
+    })
   );
 
   // Expose iron laws as a queryable tool
@@ -125,7 +126,7 @@ export function registerSprintTools(server: McpServer): void {
     'iron_laws',
     'List all iron laws (non-negotiable constraints). Use this to check what rules must never be violated.',
     {},
-    async () => {
+    withErrorTracking('iron_laws', async () => {
       const laws = getIronLaws();
       const branch = getCurrentBranch();
       const lines = [
@@ -139,6 +140,6 @@ export function registerSprintTools(server: McpServer): void {
           : 'OK: On feature branch.',
       ];
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
-    }
+    })
   );
 }

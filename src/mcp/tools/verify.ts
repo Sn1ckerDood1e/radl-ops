@@ -9,6 +9,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execSync } from 'child_process';
 import { logger } from '../../config/logger.js';
+import { withErrorTracking } from '../with-error-tracking.js';
 
 const RADL_DIR = '/home/hb/radl';
 
@@ -49,7 +50,7 @@ export function registerVerifyTools(server: McpServer): void {
       checks: z.array(z.enum(['typecheck', 'build', 'test'])).optional()
         .describe('Which checks to run (defaults to typecheck + build)'),
     },
-    async ({ checks }) => {
+    withErrorTracking('verify', async ({ checks }) => {
       const toRun = checks ?? ['typecheck', 'build'];
       const results: CheckResult[] = [];
 
@@ -92,6 +93,6 @@ export function registerVerifyTools(server: McpServer): void {
       });
 
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
-    }
+    })
   );
 }

@@ -24,6 +24,8 @@ Available as `mcp__radl_ops__*` in Claude Code:
 | `cost_report` | API costs from radl-ops internal Claude calls |
 | `knowledge_query` | Query compound learnings (patterns, lessons, decisions) |
 | `iron_laws` | List all iron laws and current branch status |
+| `team_recipe` | Get structured agent team recipe (review, feature, debug, research) |
+| `eval_opt_generate` | Generate content with eval-opt quality loop (any prompt + criteria) |
 
 ## Architecture
 
@@ -33,6 +35,8 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
                                     ├── sprint tools (wrap sprint.sh)
+                                    ├── team recipes (structured agent team configs)
+                                    ├── eval-opt (generic generate→evaluate→refine loop)
                                     └── cost reporting (in-memory token tracking)
 ```
 
@@ -93,6 +97,16 @@ npm run typecheck
 # Compound learning (after sprints)
 /home/hb/radl-ops/scripts/compound.sh extract
 ```
+
+## Automated Tasks (Cron)
+
+Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
+
+| Schedule | Script | Purpose |
+|----------|--------|---------|
+| @reboot | briefing-on-wake.sh | Daily/weekly briefing on WSL start |
+| 0 0 * * * | cleanup-logs.sh | Delete usage logs older than 90 days |
+| 0 18 * * * | cost-alert.sh | Slack alert if daily spend exceeds threshold |
 
 ## Model Routing (internal)
 
