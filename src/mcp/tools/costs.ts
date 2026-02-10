@@ -7,7 +7,8 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getTodaySummary, getCostSummaryForBriefing } from '../../models/token-tracker.js';
+import { getTodaySummary, getCostSummaryForBriefing, checkCostThreshold } from '../../models/token-tracker.js';
+import { withErrorTracking } from '../with-error-tracking.js';
 
 export function registerCostTools(server: McpServer): void {
   server.tool(
@@ -17,19 +18,24 @@ export function registerCostTools(server: McpServer): void {
       format: z.enum(['summary', 'detailed']).optional().default('summary')
         .describe('Output format: summary (text) or detailed (JSON breakdown)'),
     },
-    async ({ format }) => {
+    withErrorTracking('cost_report', async ({ format }) => {
+      const alert = checkCostThreshold();
+      const alertLine = alert.level !== 'ok'
+        ? `\n\n**${alert.level.toUpperCase()}**: ${alert.message}`
+        : '';
+
       if (format === 'summary') {
         const text = getCostSummaryForBriefing();
-        return { content: [{ type: 'text' as const, text }] };
+        return { content: [{ type: 'text' as const, text: text + alertLine }] };
       }
 
       const analytics = getTodaySummary();
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify(analytics, null, 2),
+          text: JSON.stringify({ ...analytics, alert }, null, 2),
         }],
       };
-    }
+    })
   );
 }

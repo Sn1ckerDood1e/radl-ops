@@ -58,6 +58,17 @@ export interface CostAnalytics {
 }
 
 // ============================================
+// Cost Alerting
+// ============================================
+
+export interface CostAlert {
+  level: 'ok' | 'warn' | 'critical';
+  dailyCost: number;
+  threshold: number;
+  message: string;
+}
+
+// ============================================
 // Logging
 // ============================================
 

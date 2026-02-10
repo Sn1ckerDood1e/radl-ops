@@ -8,6 +8,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { config } from '../../config/index.js';
 import { logger } from '../../config/logger.js';
+import { withErrorTracking } from '../with-error-tracking.js';
 
 interface HealthResult {
   status: 'healthy' | 'degraded' | 'down';
@@ -109,7 +110,7 @@ export function registerMonitoringTools(server: McpServer): void {
     'health_check',
     'Check health status of Vercel, Supabase, and GitHub for Radl. One call checks all services.',
     { services: z.array(z.enum(['vercel', 'supabase', 'github'])).optional().describe('Services to check (defaults to all)') },
-    async ({ services }) => {
+    withErrorTracking('health_check', async ({ services }) => {
       const toCheck = services ?? ['vercel', 'supabase', 'github'];
       const results: Record<string, HealthResult> = {};
 
@@ -135,6 +136,6 @@ export function registerMonitoringTools(server: McpServer): void {
       }
 
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
-    }
+    })
   );
 }

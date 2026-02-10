@@ -9,7 +9,7 @@
 import { appendFileSync, readFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 
-import type { ModelId, TaskType, TokenUsage, CostAnalytics } from '../types/index.js';
+import type { ModelId, TaskType, TokenUsage, CostAnalytics, CostAlert } from '../types/index.js';
 import { calculateCost } from './router.js';
 import { logger } from '../config/logger.js';
 
@@ -281,4 +281,39 @@ export function cleanupOldUsageLogs(retentionDays: number = 90): void {
   } catch (error) {
     logger.error('Failed to cleanup usage logs', { error });
   }
+}
+
+/**
+ * Check daily cost against thresholds for alerting.
+ * Returns alert level (ok/warn/critical) with descriptive message.
+ */
+export function checkCostThreshold(
+  warnThreshold: number = 5,
+  criticalThreshold: number = 15
+): CostAlert {
+  const summary = getTodaySummary();
+  const cost = summary.totalCostUsd;
+
+  if (cost >= criticalThreshold) {
+    return {
+      level: 'critical',
+      dailyCost: cost,
+      threshold: criticalThreshold,
+      message: `CRITICAL: Daily API spend $${cost.toFixed(2)} exceeds $${criticalThreshold}`,
+    };
+  }
+  if (cost >= warnThreshold) {
+    return {
+      level: 'warn',
+      dailyCost: cost,
+      threshold: warnThreshold,
+      message: `WARNING: Daily API spend $${cost.toFixed(2)} exceeds $${warnThreshold}`,
+    };
+  }
+  return {
+    level: 'ok',
+    dailyCost: cost,
+    threshold: warnThreshold,
+    message: `OK: Daily API spend $${cost.toFixed(2)}`,
+  };
 }

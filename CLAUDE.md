@@ -94,6 +94,16 @@ npm run typecheck
 /home/hb/radl-ops/scripts/compound.sh extract
 ```
 
+## Automated Tasks (Cron)
+
+Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
+
+| Schedule | Script | Purpose |
+|----------|--------|---------|
+| @reboot | briefing-on-wake.sh | Daily/weekly briefing on WSL start |
+| 0 0 * * * | cleanup-logs.sh | Delete usage logs older than 90 days |
+| 0 18 * * * | cost-alert.sh | Slack alert if daily spend exceeds threshold |
+
 ## Model Routing (internal)
 
 - **Haiku**: Briefing drafts (cheap, fast generator)

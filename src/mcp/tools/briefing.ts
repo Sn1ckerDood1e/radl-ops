@@ -16,6 +16,7 @@ import { getAnthropicClient } from '../../config/anthropic.js';
 import { getRoute } from '../../models/router.js';
 import { getCostSummaryForBriefing } from '../../models/token-tracker.js';
 import { logger } from '../../config/logger.js';
+import { withErrorTracking } from '../with-error-tracking.js';
 
 const DAILY_BRIEFING_CRITERIA = [
   'Completeness: Covers summary, metrics, priorities, blockers, wins, and API costs',
@@ -43,7 +44,7 @@ export function registerBriefingTools(server: McpServer): void {
       custom_focus: z.string().max(500).optional()
         .describe('Custom area to focus on in the briefing'),
     },
-    async ({ github_context, custom_focus }) => {
+    withErrorTracking('daily_briefing', async ({ github_context, custom_focus }) => {
       const costSummary = getCostSummaryForBriefing();
       const date = new Date().toISOString().split('T')[0];
 
@@ -85,7 +86,7 @@ Keep it brief and actionable. Use bullet points.`;
         : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
       return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
-    }
+    })
   );
 
   server.tool(
@@ -97,7 +98,7 @@ Keep it brief and actionable. Use bullet points.`;
       week_start: z.string().optional()
         .describe('Start date of the week (YYYY-MM-DD, defaults to 7 days ago)'),
     },
-    async ({ github_context, week_start }) => {
+    withErrorTracking('weekly_briefing', async ({ github_context, week_start }) => {
       const start = week_start ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const end = new Date().toISOString().split('T')[0];
       const costSummary = getCostSummaryForBriefing();
@@ -139,7 +140,7 @@ Be thorough but organized. Use headers and bullet points.`;
         : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
       return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
-    }
+    })
   );
 
   server.tool(
@@ -151,7 +152,7 @@ Be thorough but organized. Use headers and bullet points.`;
       constraint: z.string().max(200).optional()
         .describe('Constraints to consider (e.g., "solo developer", "launch in 2 months")'),
     },
-    async ({ focus_area, constraint }) => {
+    withErrorTracking('roadmap_ideas', async ({ focus_area, constraint }) => {
       const route = getRoute('roadmap');
       const client = getAnthropicClient();
 
@@ -191,6 +192,6 @@ Prioritize by impact/effort ratio. Be specific to rowing, not generic SaaS advic
         logger.error('Roadmap ideas API call failed', { error: msg });
         return { content: [{ type: 'text' as const, text: `**ERROR:** Roadmap ideas generation failed: ${msg}` }] };
       }
-    }
+    })
   );
 }
