@@ -106,6 +106,30 @@ Create an agent team to research [topic]. Spawn teammates:
 Have them share findings and produce a recommendation.
 ```
 
+### 5. Incremental Review (Mid-Sprint Spot-Check)
+
+Lightweight alternative to a full review team. Uses 2 background sub-agents (not a full
+agent team) to catch bugs between tasks before they propagate.
+
+**When to use:** After completing a task that introduces a NEW pattern (new API helper,
+new data access approach, new integration). Skip for tasks following existing patterns.
+
+```
+# After committing a task with new patterns:
+Task(subagent_type="code-reviewer", run_in_background=true, model="sonnet",
+     prompt="Review [changed files] for pattern correctness, API misuse, missing guards")
+Task(subagent_type="security-reviewer", run_in_background=true, model="sonnet",
+     prompt="Spot-check [changed files] for auth bypass, data leaks, injection")
+# Continue to next task while they run (~2-3 min)
+# Fix HIGH issues before starting subsequent tasks
+```
+
+**Why this matters:** In Phase 59, a `listUsers()` bug was introduced in Task 2
+and copied into Task 3 before review caught it. An incremental review after Task 2
+would have caught it before Task 3 replicated the pattern.
+
+Also available via MCP: `team_recipe(recipe: "incremental-review", context: "...", files: "...")`
+
 ## Lessons Learned (Feb 9, 2026)
 
 1. **Task list context switches** — When you create a team, task operations target
