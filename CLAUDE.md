@@ -6,27 +6,40 @@ Claude Code IS the agent. radl-ops is a tool provider via MCP.
 
 ## MCP Tools
 
-Available as `mcp__radl_ops__*` in Claude Code:
+Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups with on-demand loading.
 
-| Tool | Description |
-|------|-------------|
-| `daily_briefing` | Daily briefing via eval-opt quality loop (Haiku generates, Sonnet evaluates) |
-| `weekly_briefing` | Weekly briefing via eval-opt quality loop |
-| `roadmap_ideas` | Brainstorm features via Opus |
-| `social_ideas` | Content ideas with Radl brand context |
-| `social_draft` | Draft posts for Twitter/LinkedIn |
-| `social_calendar` | Weekly content calendar |
-| `health_check` | Aggregated Vercel/Supabase/GitHub status |
-| `sprint_status` | Current sprint state |
-| `sprint_start` | Start a new sprint (Slack notification) |
-| `sprint_progress` | Record task completion |
-| `sprint_complete` | Complete sprint, trigger compound learning |
-| `cost_report` | API costs from radl-ops internal Claude calls |
-| `knowledge_query` | Query compound learnings (patterns, lessons, decisions) |
-| `iron_laws` | List all iron laws and current branch status |
-| `team_recipe` | Get structured agent team recipe (review, feature, debug, research) |
-| `eval_opt_generate` | Generate content with eval-opt quality loop (any prompt + criteria) |
-| `compound_extract` | AI-powered compound learning extraction via Bloom pipeline |
+### Tool Groups (Dynamic Loading)
+
+| Group | Default | Tools |
+|-------|---------|-------|
+| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe |
+| **content** | Disabled | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
+| **advanced** | Disabled | eval_opt_generate, compound_extract |
+
+To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content", action: "enable" })`
+
+### All Tools
+
+| Tool | Group | Description |
+|------|-------|-------------|
+| `enable_tools` | meta | Enable/disable tool groups on demand |
+| `daily_briefing` | content | Daily briefing via eval-opt quality loop (Haiku generates, Sonnet evaluates) |
+| `weekly_briefing` | content | Weekly briefing via eval-opt quality loop |
+| `roadmap_ideas` | content | Brainstorm features via Opus |
+| `social_ideas` | content | Content ideas with Radl brand context |
+| `social_draft` | content | Draft posts for Twitter/LinkedIn |
+| `social_calendar` | content | Weekly content calendar |
+| `health_check` | core | Aggregated Vercel/Supabase/GitHub status |
+| `sprint_status` | core | Current sprint state |
+| `sprint_start` | core | Start a new sprint (Slack notification) |
+| `sprint_progress` | core | Record task completion |
+| `sprint_complete` | core | Complete sprint, trigger compound learning |
+| `cost_report` | core | API costs from radl-ops internal Claude calls |
+| `knowledge_query` | core | Query compound learnings (patterns, lessons, decisions) |
+| `iron_laws` | core | List all iron laws and current branch status |
+| `team_recipe` | core | Get structured agent team recipe (review, feature, debug, research) |
+| `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
+| `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
 
 ## Architecture
 
@@ -120,7 +133,9 @@ Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
 Task types: `briefing`, `tool_execution`, `conversation`, `planning`, `review`, `architecture`, `roadmap`, `spot_check`, `social_generation`
 
 Briefings use eval-opt loop: Haiku generates, Sonnet evaluates (quality threshold 7/10).
-Eval-opt now tracks all iteration attempts and uses prompt caching for evaluation criteria.
+Eval-opt uses structured outputs (tool_use + forced tool_choice) for reliable JSON parsing.
+Eval-opt tracks all iteration attempts and uses prompt caching for evaluation criteria.
+Bloom pipeline uses structured outputs for rollout (lessons array) and judgment (quality score) stages.
 
 ## Agent Teams
 
