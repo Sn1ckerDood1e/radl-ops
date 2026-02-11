@@ -26,6 +26,7 @@ Available as `mcp__radl_ops__*` in Claude Code:
 | `iron_laws` | List all iron laws and current branch status |
 | `team_recipe` | Get structured agent team recipe (review, feature, debug, research) |
 | `eval_opt_generate` | Generate content with eval-opt quality loop (any prompt + criteria) |
+| `compound_extract` | AI-powered compound learning extraction via Bloom pipeline |
 
 ## Architecture
 
@@ -36,8 +37,9 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
                                     ├── monitoring tools (HTTP health checks)
                                     ├── sprint tools (wrap sprint.sh)
                                     ├── team recipes (structured agent team configs)
-                                    ├── eval-opt (generic generate→evaluate→refine loop)
-                                    └── cost reporting (in-memory token tracking)
+                                    ├── eval-opt (generate→evaluate→refine with memory + caching)
+                                    ├── compound learning (Bloom pipeline: 4-stage AI extraction)
+                                    └── cost reporting (token tracking with cache metrics)
 ```
 
 ## Iron Laws (NEVER violate)
@@ -58,7 +60,7 @@ Every session MUST follow:
 2. **Track sprint** — `sprint.sh start` before work, `sprint.sh progress` during
 3. **Review code** — Use code-reviewer agent after writing code
 4. **Update STATE.md** — At session end, update `/home/hb/radl/.planning/STATE.md`
-5. **Extract learnings** — `compound.sh extract` after completing sprint
+5. **Extract learnings** — `compound_extract` MCP tool (or `compound.sh extract` as fallback)
 
 ## Sprint Workflow
 
@@ -94,8 +96,9 @@ npm run typecheck
 /home/hb/radl-ops/scripts/sprint.sh complete "commit" "1.5 hours"
 /home/hb/radl-ops/scripts/sprint.sh status
 
-# Compound learning (after sprints)
-/home/hb/radl-ops/scripts/compound.sh extract
+# Compound learning (after sprints) — prefer MCP tool over shell
+# mcp__radl-ops__compound_extract (AI-powered Bloom pipeline)
+/home/hb/radl-ops/scripts/compound.sh extract  # legacy fallback
 ```
 
 ## Automated Tasks (Cron)
@@ -110,11 +113,14 @@ Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
 
 ## Model Routing (internal)
 
-- **Haiku**: Briefing drafts (cheap, fast generator)
-- **Sonnet**: Evaluator, social drafts, conversations
+- **Haiku**: Briefing drafts, spot checks, social ideas, Bloom understanding/rollout stages
+- **Sonnet**: Evaluator, social drafts/calendar, conversations, Bloom ideation/judgment stages
 - **Opus**: Roadmap ideation (deep reasoning)
 
+Task types: `briefing`, `tool_execution`, `conversation`, `planning`, `review`, `architecture`, `roadmap`, `spot_check`, `social_generation`
+
 Briefings use eval-opt loop: Haiku generates, Sonnet evaluates (quality threshold 7/10).
+Eval-opt now tracks all iteration attempts and uses prompt caching for evaluation criteria.
 
 ## Agent Teams
 
