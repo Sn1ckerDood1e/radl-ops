@@ -104,6 +104,64 @@ function getCurrentBranch(): string {
   }
 }
 
+interface TeamSuggestion {
+  recipe: string;
+  reason: string;
+}
+
+function getTeamSuggestion(
+  title: string,
+  taskCount: number | undefined,
+  teamRuns: TeamRunStore
+): string {
+  const suggestions: TeamSuggestion[] = [];
+  const titleLower = title.toLowerCase();
+
+  // Suggest sprint_advisor for 3+ tasks
+  if (taskCount && taskCount >= 3) {
+    suggestions.push({
+      recipe: 'sprint_advisor',
+      reason: `${taskCount} tasks detected — run \`sprint_advisor\` to check if a team would help`,
+    });
+  }
+
+  // Keyword matching for specific recipes
+  const keywordMap: Array<{ keywords: string[]; recipe: string; label: string }> = [
+    { keywords: ['review', 'audit', 'security'], recipe: 'review', label: 'review recipe' },
+    { keywords: ['migration', 'schema', 'database'], recipe: 'migration', label: 'migration recipe' },
+    { keywords: ['refactor', 'cleanup', 'tech debt'], recipe: 'refactor', label: 'refactor recipe' },
+    { keywords: ['test', 'coverage'], recipe: 'test-coverage', label: 'test-coverage recipe' },
+  ];
+
+  for (const { keywords, recipe, label } of keywordMap) {
+    if (keywords.some(kw => titleLower.includes(kw))) {
+      suggestions.push({
+        recipe,
+        reason: `Title suggests ${label} — run \`team_recipe(recipe: "${recipe}")\` for a team setup`,
+      });
+      break; // Only match first keyword group
+    }
+  }
+
+  // Historical context
+  const successful = teamRuns.runs.filter(r => r.outcome === 'success');
+  if (successful.length > 0) {
+    const last = successful[successful.length - 1];
+    suggestions.push({
+      recipe: last.recipe,
+      reason: `Last successful team: ${last.recipe} recipe in ${last.sprintPhase} (${last.duration})`,
+    });
+  }
+
+  if (suggestions.length === 0) return '';
+
+  const lines = ['\nTeam suggestion:'];
+  for (const s of suggestions) {
+    lines.push(`  - ${s.reason}`);
+  }
+  return lines.join('\n');
+}
+
 export function registerSprintTools(server: McpServer): void {
   server.tool(
     'sprint_status',
@@ -156,7 +214,9 @@ export function registerSprintTools(server: McpServer): void {
         ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
         : `Task plan: ${task_count} tasks\n`;
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}` }] };
+      const teamSuggestion = getTeamSuggestion(title, task_count, loadTeamRuns());
+
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}` }] };
     })
   );
 

@@ -169,6 +169,95 @@ describe('Sprint Tools - Task Count Advisory', () => {
   });
 });
 
+describe('Sprint Tools - Team Suggestion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(execSync).mockReturnValue('feat/test\n');
+    vi.mocked(execFileSync).mockReturnValue('Sprint started: Phase 62\n');
+  });
+
+  it('suggests sprint_advisor for 3+ tasks', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_start']({
+      phase: 'Phase 62',
+      title: 'Generic Sprint',
+      task_count: 5,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('sprint_advisor');
+    expect(text).toContain('5 tasks detected');
+  });
+
+  it('suggests review recipe for review-related title', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_start']({
+      phase: 'Phase 62',
+      title: 'Code Review Sprint',
+      task_count: 2,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('review recipe');
+    expect(text).toContain('team_recipe');
+  });
+
+  it('suggests migration recipe for database-related title', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_start']({
+      phase: 'Phase 62',
+      title: 'Database Schema Migration',
+      task_count: 2,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('migration recipe');
+  });
+
+  it('includes historical team run context', async () => {
+    const existingStore = {
+      runs: [
+        { id: 1, sprintPhase: 'Phase 60', recipe: 'review', teammateCount: 3, model: 'sonnet', duration: '5 min', outcome: 'success', date: '2026-02-10' },
+      ],
+    };
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(existingStore));
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_start']({
+      phase: 'Phase 62',
+      title: 'Generic Sprint',
+      task_count: 1,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Last successful team');
+    expect(text).toContain('review recipe');
+    expect(text).toContain('Phase 60');
+  });
+
+  it('shows no suggestion when no keywords match and few tasks', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_start']({
+      phase: 'Phase 62',
+      title: 'Bug Fix',
+      task_count: 1,
+    });
+    const text = result.content[0].text;
+
+    expect(text).not.toContain('Team suggestion');
+    expect(text).not.toContain('sprint_advisor');
+  });
+});
+
 describe('Sprint Tools - Team Used Tracking', () => {
   beforeEach(() => {
     vi.clearAllMocks();
