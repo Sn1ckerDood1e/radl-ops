@@ -29,6 +29,7 @@ import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerVerifyTools } from './tools/verify.js';
 import { registerTeamTools } from './tools/teams.js';
 import { registerEvalOptTools } from './tools/eval-opt.js';
+import { registerCompoundTools } from './tools/compound.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
 
@@ -46,6 +47,7 @@ registerKnowledgeTools(server);
 registerVerifyTools(server);
 registerTeamTools(server);
 registerEvalOptTools(server);
+registerCompoundTools(server);
 
 initTokenTracker();
 
