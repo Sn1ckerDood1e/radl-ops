@@ -92,7 +92,7 @@ function formatDecision(d: Decision): string {
 export function registerKnowledgeTools(server: McpServer): void {
   server.tool(
     'knowledge_query',
-    'Query the compound learning knowledge base. Returns patterns to apply, lessons to avoid, and past decisions. Supports keyword search. Use at session start and before making architectural choices.',
+    'Query the compound learning knowledge base. Returns patterns to apply, lessons to avoid, and past decisions. Supports keyword search. Use at session start and before making architectural choices. Example: { "type": "lessons", "query": "enum migration" }',
     {
       type: z.enum(['all', 'patterns', 'lessons', 'decisions']).optional()
         .describe('Type of knowledge to query (defaults to all)'),

@@ -20,6 +20,7 @@ export function registerCostTools(server: McpServer): void {
     },
     withErrorTracking('cost_report', async ({ format }) => {
       const alert = checkCostThreshold();
+      const analytics = getTodaySummary();
       const alertLine = alert.level !== 'ok'
         ? `\n\n**${alert.level.toUpperCase()}**: ${alert.message}`
         : '';
@@ -29,11 +30,18 @@ export function registerCostTools(server: McpServer): void {
         return { content: [{ type: 'text' as const, text: text + alertLine }] };
       }
 
-      const analytics = getTodaySummary();
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ ...analytics, alert }, null, 2),
+          text: JSON.stringify({
+            ...analytics,
+            cache: {
+              readTokens: analytics.totalCacheReadTokens,
+              writeTokens: analytics.totalCacheWriteTokens,
+              estimatedSavingsUsd: analytics.estimatedCacheSavingsUsd,
+            },
+            alert,
+          }, null, 2),
         }],
       };
     })

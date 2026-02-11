@@ -28,7 +28,9 @@ export type TaskType =
   | 'planning'
   | 'review'
   | 'architecture'
-  | 'roadmap';
+  | 'roadmap'
+  | 'spot_check'
+  | 'social_generation';
 
 // ============================================
 // Token Tracking
@@ -53,6 +55,9 @@ export interface CostAnalytics {
   totalCostUsd: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalCacheWriteTokens: number;
+  estimatedCacheSavingsUsd: number;
   byModel: Record<string, { calls: number; costUsd: number; tokens: number }>;
   byTaskType: Record<string, { calls: number; costUsd: number }>;
 }

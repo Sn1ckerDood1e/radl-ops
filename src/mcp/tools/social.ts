@@ -8,6 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
+import type { TaskType } from '../../types/index.js';
 import { getAnthropicClient } from '../../config/anthropic.js';
 import { getRoute } from '../../models/router.js';
 import { trackUsage } from '../../models/token-tracker.js';
@@ -21,8 +22,8 @@ Differentiators: Purpose-built for rowing (not generic sports), lineup planning 
 Tone: Professional but approachable, knowledgeable about rowing, not corporate-speak.
 URL: https://radl.app`;
 
-async function callSonnet(prompt: string): Promise<string> {
-  const route = getRoute('conversation');
+async function callModel(prompt: string, taskType: TaskType): Promise<string> {
+  const route = getRoute(taskType);
   const client = getAnthropicClient();
 
   const response = await client.messages.create({
@@ -35,7 +36,7 @@ async function callSonnet(prompt: string): Promise<string> {
     route.model,
     response.usage.input_tokens,
     response.usage.output_tokens,
-    'conversation',
+    taskType,
     'social_tool'
   );
 
@@ -69,7 +70,7 @@ For each idea:
 
 Be specific to rowing, not generic startup advice.`;
 
-      const text = await callSonnet(prompt);
+      const text = await callModel(prompt, 'social_generation');
       logger.info('MCP social ideas generated', { count });
       return { content: [{ type: 'text' as const, text }] };
     })
@@ -107,7 +108,7 @@ Requirements:
 
 Return the ready-to-post draft(s).`;
 
-      const text = await callSonnet(prompt);
+      const text = await callModel(prompt, 'conversation');
       logger.info('MCP social draft created', { platform, topic });
       return { content: [{ type: 'text' as const, text }] };
     })
@@ -115,7 +116,7 @@ Return the ready-to-post draft(s).`;
 
   server.tool(
     'social_calendar',
-    'Generate a weekly social media content calendar for Radl (Mon-Fri)',
+    'Generate a weekly social media content calendar for Radl (Mon-Fri). Example: { "themes": ["product launch", "rowing tips", "team culture"] }',
     {
       themes: z.array(z.string().max(100)).max(5).optional()
         .describe('Content themes for the week'),
@@ -135,7 +136,7 @@ For each day include:
 
 Keep each draft authentic and rowing-specific.`;
 
-      const text = await callSonnet(prompt);
+      const text = await callModel(prompt, 'conversation');
       logger.info('MCP social calendar generated');
       return { content: [{ type: 'text' as const, text }] };
     })

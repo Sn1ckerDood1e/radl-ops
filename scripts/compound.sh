@@ -29,6 +29,11 @@ case "$ACTION" in
   extract)
     echo "=== Compound Engineering: Extract ==="
     echo ""
+    echo "NOTE: For AI-powered extraction with Bloom pipeline, use:"
+    echo "  mcp__radl-ops__compound_extract"
+    echo "(This shell version uses basic Python parsing. The MCP tool uses"
+    echo "a 4-stage AI pipeline for deeper insight extraction.)"
+    echo ""
 
     # Find the latest completed sprint
     LATEST_ARCHIVE=""

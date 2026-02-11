@@ -4,6 +4,11 @@
  * Exposes radl-ops tools as MCP tools for Claude Code.
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
+ * Tool groups (dynamic loading):
+ * - core: always enabled (sprint, monitoring, knowledge, iron laws)
+ * - content: disabled by default, enable with enable_tools (briefing, social, roadmap)
+ * - advanced: disabled by default, enable with enable_tools (eval-opt, compound)
+ *
  * IMPORTANT: Set RADL_OPS_MODE before any imports that use logger/tracker.
  */
 
@@ -20,6 +25,7 @@ dotenvConfig({ path: envPath });
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 import { registerBriefingTools } from './tools/briefing.js';
 import { registerSocialTools } from './tools/social.js';
 import { registerMonitoringTools } from './tools/monitoring.js';
@@ -29,14 +35,21 @@ import { registerKnowledgeTools } from './tools/knowledge.js';
 import { registerVerifyTools } from './tools/verify.js';
 import { registerTeamTools } from './tools/teams.js';
 import { registerEvalOptTools } from './tools/eval-opt.js';
+import { registerCompoundTools } from './tools/compound.js';
+import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
 
 const server = new McpServer({
   name: 'radl-ops',
-  version: '1.2.0',
+  version: '1.3.0',
 });
 
+// Install tool registry to capture RegisteredTool references (must be before registrations)
+const registry = new ToolRegistry();
+registry.install(server);
+
+// Register all tools (registry captures references via intercepted server.tool())
 registerBriefingTools(server);
 registerSocialTools(server);
 registerMonitoringTools(server);
@@ -46,13 +59,68 @@ registerKnowledgeTools(server);
 registerVerifyTools(server);
 registerTeamTools(server);
 registerEvalOptTools(server);
+registerCompoundTools(server);
+
+// Register the enable_tools meta-tool (always enabled, manages other tool groups)
+const groupNames = TOOL_GROUPS.filter(g => !g.defaultEnabled).map(g => g.name);
+const groupDescriptions = TOOL_GROUPS
+  .filter(g => !g.defaultEnabled)
+  .map(g => `${g.name}: ${g.description}`)
+  .join('; ');
+
+server.tool(
+  'enable_tools',
+  `Enable or disable tool groups on demand. Available groups: ${groupDescriptions}. Core tools are always enabled.`,
+  {
+    group: z.enum(groupNames as [string, ...string[]])
+      .describe('Tool group to enable or disable'),
+    action: z.enum(['enable', 'disable']).default('enable')
+      .describe('Whether to enable or disable the group'),
+  },
+  ({ group, action }) => {
+    const affected = action === 'enable'
+      ? registry.enableGroup(group)
+      : registry.disableGroup(group);
+
+    if (affected.length > 0) {
+      server.sendToolListChanged();
+    }
+
+    const status = registry.getStatus();
+    const statusLines = status.map(s =>
+      `- **${s.group}**: ${s.enabled ? 'enabled' : 'disabled'} (${s.tools.join(', ')})`
+    );
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: [
+          `${action === 'enable' ? 'Enabled' : 'Disabled'} ${affected.length} tools in group "${group}"${affected.length > 0 ? `: ${affected.join(', ')}` : ' (already in desired state)'}`,
+          '',
+          '**Current status:**',
+          ...statusLines,
+        ].join('\n'),
+      }],
+    };
+  }
+);
+
+// Apply default enabled/disabled state (content + advanced start disabled)
+registry.applyDefaults();
 
 initTokenTracker();
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logger.info('radl-ops MCP server started');
+
+  const status = registry.getStatus();
+  const enabledCount = status.filter(s => s.enabled).length;
+  logger.info('radl-ops MCP server started', {
+    version: '1.3.0',
+    toolGroups: status.length,
+    enabledGroups: enabledCount,
+  });
 }
 
 main().catch((error) => {

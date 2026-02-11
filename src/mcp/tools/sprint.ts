@@ -61,7 +61,7 @@ export function registerSprintTools(server: McpServer): void {
 
   server.tool(
     'sprint_start',
-    'Start a new sprint. Checks iron laws (branch must not be main). Sends Slack notification.',
+    'Start a new sprint. Checks iron laws (branch must not be main). Sends Slack notification. Example: { "phase": "Phase 60", "title": "Auth Improvements", "estimate": "2 hours" }',
     {
       phase: z.string().min(1).max(50).describe('Sprint phase identifier (e.g., "Phase 54.1")'),
       title: z.string().min(1).max(100).describe('Sprint title (e.g., "MCP Server Migration")'),
