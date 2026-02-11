@@ -130,7 +130,7 @@ would have caught it before Task 3 replicated the pattern.
 
 Also available via MCP: `team_recipe(recipe: "incremental-review", context: "...", files: "...")`
 
-## Lessons Learned (Feb 9, 2026)
+## Lessons Learned (Feb 11, 2026 — updated)
 
 1. **Task list context switches** — When you create a team, task operations target
    the team's task list. After `TeamDelete`, context returns to the main list.
@@ -155,6 +155,15 @@ Also available via MCP: `team_recipe(recipe: "incremental-review", context: "...
 
 7. **Reviews work best, implementation needs more testing** — Parallel review is
    the proven use case. Parallel implementation carries risk of file conflicts.
+
+8. **Use teams for sprint tasks when 3+ are independent** — In Phase 60, 4 of 6
+   tasks had no dependencies. Serializing them added ~15 min of wall time that
+   parallelization would have eliminated. When a plan identifies independent tasks,
+   that's the signal to spawn teammates.
+
+9. **Always run BOTH code + security reviewers** — In Phase 60, only running
+   code-reviewer missed that the tier check could receive legacy enum values.
+   Security-reviewer catches auth/boundary issues that code-reviewer doesn't focus on.
 
 ## Display Mode
 

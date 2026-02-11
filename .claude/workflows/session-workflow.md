@@ -6,10 +6,11 @@ Standard workflow for every Claude Code session working on Radl.
 
 1. **Check sprint state**: Use `mcp__radl-ops__sprint_status` MCP tool
 2. **Check service health**: Use `mcp__radl-ops__health_check` if available
-3. **Parallel context loading**: Read these files simultaneously (parallel Read calls):
+3. **Parallel context loading**: Read ALL needed files in a single batch of parallel Read calls:
    - `/home/hb/radl/.planning/STATE.md` for current progress
-   - Key source files relevant to planned work
+   - ALL source files you plan to modify (read them together, not one-at-a-time)
    - Any test files for areas being modified
+   - For 10+ files, batch into 2-3 parallel Read calls (5 files each)
 4. **Create feature branch** if starting new work (never work on main)
 
 ## During Session
@@ -46,11 +47,23 @@ After completing a task that introduces a **new pattern**:
 - At ~75% context: Use `/strategic-compact` skill
 - Before compaction: Save sprint state via `sprint.sh checkpoint`
 
+### Data Flow Verification (CRITICAL for UI changes)
+When adding new data to a list page or card component, always trace the full path:
+1. **Prisma query** — Does it include the new relations/fields?
+2. **Server page** — Does the props mapping pass the new fields to the client?
+3. **Client component** — Does it accept and forward the fields to child components?
+4. **Render** — Does the child component actually display them?
+
+If any layer explicitly maps props (e.g., `.map(e => ({ id: e.id, ... }))`), new
+fields will be **silently dropped** unless added to the mapping. This was a real bug
+in Phase 60: API + client updated, but server page mapping dropped maintenance fields.
+
 ### Code Quality Gates
 After writing or modifying code:
 1. `npm run typecheck` — must pass
-2. Use **code-reviewer** agent for non-trivial changes
-3. Use **security-reviewer** agent for auth/API/input handling changes
+2. Use **code-reviewer** AND **security-reviewer** agents for non-trivial changes
+   (launch both in parallel with `run_in_background: true`)
+3. Never skip security-reviewer for auth, tier enforcement, or API boundary changes
 
 ## Session End
 
