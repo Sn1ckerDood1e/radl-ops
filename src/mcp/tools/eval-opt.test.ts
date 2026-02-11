@@ -40,6 +40,9 @@ function makeEvalOptResult(overrides: Record<string, unknown> = {}) {
     totalCostUsd: 0.003,
     evaluations: [],
     converged: true,
+    terminationReason: 'threshold_met',
+    attempts: [],
+    cacheSavingsUsd: 0,
     errors: [],
     ...overrides,
   };
@@ -76,7 +79,7 @@ describe('Eval-Opt Generate Tool', () => {
     expect(mockRunEvalOptLoop).toHaveBeenCalledWith(
       'Write a product description for rowing software',
       expect.objectContaining({
-        generatorTaskType: 'briefing',     // haiku
+        generatorTaskType: 'spot_check',    // haiku
         evaluatorTaskType: 'conversation', // sonnet
       })
     );

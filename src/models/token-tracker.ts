@@ -149,6 +149,13 @@ export function getCostSummaryForBriefing(): string {
     lines.push(`- ${taskType}: ${data.calls} calls, $${data.costUsd.toFixed(4)}`);
   }
 
+  if (today.totalCacheReadTokens > 0 || today.totalCacheWriteTokens > 0) {
+    lines.push('', '**Prompt Caching:**');
+    lines.push(`- Cache reads: ${today.totalCacheReadTokens.toLocaleString()} tokens`);
+    lines.push(`- Cache writes: ${today.totalCacheWriteTokens.toLocaleString()} tokens`);
+    lines.push(`- Estimated savings: $${today.estimatedCacheSavingsUsd.toFixed(4)}`);
+  }
+
   return lines.join('\n');
 }
 
@@ -166,11 +173,15 @@ function buildAnalytics(
   let totalCost = 0;
   let totalInput = 0;
   let totalOutput = 0;
+  let totalCacheRead = 0;
+  let totalCacheWrite = 0;
 
   for (const entry of entries) {
     totalCost += entry.costUsd;
     totalInput += entry.inputTokens;
     totalOutput += entry.outputTokens;
+    totalCacheRead += entry.cacheReadTokens ?? 0;
+    totalCacheWrite += entry.cacheWriteTokens ?? 0;
 
     const modelKey = entry.model;
     if (!byModel[modelKey]) {
@@ -192,6 +203,13 @@ function buildAnalytics(
     };
   }
 
+  // Estimate savings: cache reads cost 10% of normal input price
+  // Average input price across models used (~$3/1M for Sonnet which dominates eval)
+  const avgInputPrice = 3; // conservative estimate (Sonnet pricing)
+  const estimatedSavings = totalCacheRead > 0
+    ? (totalCacheRead / 1_000_000) * avgInputPrice * 0.9
+    : 0;
+
   return {
     period,
     startDate,
@@ -199,6 +217,9 @@ function buildAnalytics(
     totalCostUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
     totalInputTokens: totalInput,
     totalOutputTokens: totalOutput,
+    totalCacheReadTokens: totalCacheRead,
+    totalCacheWriteTokens: totalCacheWrite,
+    estimatedCacheSavingsUsd: Math.round(estimatedSavings * 1_000_000) / 1_000_000,
     byModel,
     byTaskType,
   };

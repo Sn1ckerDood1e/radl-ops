@@ -177,10 +177,10 @@ describe('Model Router', () => {
   });
 
   describe('getAllRoutes', () => {
-    it('returns all 7 task types', () => {
+    it('returns all 9 task types', () => {
       const routes = getAllRoutes();
       const taskTypes = Object.keys(routes);
-      expect(taskTypes).toHaveLength(7);
+      expect(taskTypes).toHaveLength(9);
       expect(taskTypes).toContain('briefing');
       expect(taskTypes).toContain('tool_execution');
       expect(taskTypes).toContain('conversation');
@@ -188,6 +188,8 @@ describe('Model Router', () => {
       expect(taskTypes).toContain('review');
       expect(taskTypes).toContain('architecture');
       expect(taskTypes).toContain('roadmap');
+      expect(taskTypes).toContain('spot_check');
+      expect(taskTypes).toContain('social_generation');
     });
 
     it('reflects overrides', () => {
