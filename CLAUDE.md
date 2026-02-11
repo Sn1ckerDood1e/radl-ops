@@ -12,7 +12,7 @@ Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups 
 
 | Group | Default | Tools |
 |-------|---------|-------|
-| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe |
+| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline |
 | **content** | Disabled | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
 | **advanced** | Disabled | eval_opt_generate, compound_extract |
 
@@ -37,7 +37,10 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `cost_report` | core | API costs from radl-ops internal Claude calls |
 | `knowledge_query` | core | Query compound learnings (patterns, lessons, decisions) |
 | `iron_laws` | core | List all iron laws and current branch status |
-| `team_recipe` | core | Get structured agent team recipe (review, feature, debug, research) |
+| `team_recipe` | core | Get structured agent team recipe (review, feature, debug, research, migration, test-coverage, refactor) |
+| `audit_triage` | core | Classify audit findings into DO_NOW/DO_SOON/DEFER via Haiku |
+| `sprint_advisor` | core | AI-powered analysis of sprint tasks to recommend team usage |
+| `review_pipeline` | core | Complete review workflow: recipe + triage template + orchestration checklist |
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
 | `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
 
@@ -49,7 +52,9 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
                                     ├── sprint tools (wrap sprint.sh)
-                                    ├── team recipes (structured agent team configs)
+                                    ├── team recipes (8 recipes: review, feature, debug, research, incremental-review, migration, test-coverage, refactor)
+                                    ├── sprint advisor (Haiku-powered team recommendation)
+                                    ├── review pipeline (chained review → triage → tracking)
                                     ├── eval-opt (generate→evaluate→refine with memory + caching)
                                     ├── compound learning (Bloom pipeline: 4-stage AI extraction)
                                     └── cost reporting (token tracking with cache metrics)
