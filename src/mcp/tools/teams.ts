@@ -12,7 +12,7 @@ import type { TeamRecipe } from '../../types/index.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 
-type RecipeType = 'review' | 'feature' | 'debug' | 'research';
+type RecipeType = 'review' | 'feature' | 'debug' | 'research' | 'incremental-review';
 type ModelTier = 'haiku' | 'sonnet' | 'opus';
 
 interface RecipeParams {
@@ -213,11 +213,49 @@ function buildResearchRecipe(context: string, files: string, model: ModelTier): 
   };
 }
 
+function buildIncrementalReviewRecipe(context: string, files: string, model: ModelTier): TeamRecipe {
+  const fileNote = files ? ` Focus on: ${files}.` : '';
+  return {
+    teamName: 'incremental-review',
+    teammates: [
+      {
+        name: 'pattern-reviewer',
+        subagentType: 'code-reviewer',
+        model,
+        taskDescription: `Review recently introduced patterns for correctness and consistency. Check for: repeated anti-patterns, missed abstractions, API misuse (e.g., loading all records when querying one).${fileNote} ${context}`,
+      },
+      {
+        name: 'security-spot-check',
+        subagentType: 'security-reviewer',
+        model,
+        taskDescription: `Quick security spot-check on new code. Focus on: auth bypass, data leaks, injection, missing guards (e.g., last-entity deletion).${fileNote} ${context}`,
+      },
+    ],
+    setupSteps: [
+      'Spawn both reviewers with Task tool using run_in_background: true',
+      'Continue working on the next task while reviewers run (~2-3 min)',
+      'Read findings when they arrive',
+      'Fix HIGH issues before they propagate to subsequent tasks',
+    ],
+    cleanupSteps: [
+      'No team cleanup needed — uses background sub-agents, not agent teams',
+    ],
+    tips: [
+      'Use after tasks that introduce NEW patterns (new API helpers, new data access patterns)',
+      'Skip for tasks that follow existing patterns (copy-paste with minor changes)',
+      'Haiku is sufficient for spot-checks — use Sonnet only for complex new patterns',
+      'Catching bugs between tasks prevents them from propagating to later tasks',
+      'This is lighter than a full review team — just 2 focused sub-agents',
+    ],
+  };
+}
+
 const RECIPE_BUILDERS: Record<RecipeType, (context: string, files: string, model: ModelTier) => TeamRecipe> = {
   review: buildReviewRecipe,
   feature: buildFeatureRecipe,
   debug: buildDebugRecipe,
   research: buildResearchRecipe,
+  'incremental-review': buildIncrementalReviewRecipe,
 };
 
 function formatRecipeOutput(recipe: TeamRecipe, recipeType: string): string {
@@ -274,9 +312,9 @@ function formatRecipeOutput(recipe: TeamRecipe, recipeType: string): string {
 export function registerTeamTools(server: McpServer): void {
   server.tool(
     'team_recipe',
-    'Get a structured agent team recipe for Claude Code to execute. Returns teammate configuration, setup steps, and cleanup instructions. Recipes: review (3 parallel reviewers), feature (backend + frontend + tester), debug (3 hypothesis investigators), research (library + architecture + risk).',
+    'Get a structured agent team recipe for Claude Code to execute. Returns teammate configuration, setup steps, and cleanup instructions. Recipes: review (3 parallel reviewers), feature (backend + frontend + tester), debug (3 hypothesis investigators), research (library + architecture + risk), incremental-review (2 background sub-agents for mid-sprint spot-checks).',
     {
-      recipe: z.enum(['review', 'feature', 'debug', 'research'])
+      recipe: z.enum(['review', 'feature', 'debug', 'research', 'incremental-review'])
         .describe('Type of team recipe to generate'),
       context: z.string().max(2000).optional()
         .describe('What the team will work on (e.g., "review the auth module", "implement dark mode")'),
