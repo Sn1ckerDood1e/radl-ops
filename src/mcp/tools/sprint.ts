@@ -10,7 +10,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
@@ -41,7 +41,9 @@ function loadDeferred(): DeferredStore {
 }
 
 function saveDeferred(store: DeferredStore): void {
-  writeFileSync(DEFERRED_PATH, JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  const tmpPath = `${DEFERRED_PATH}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, DEFERRED_PATH);
 }
 
 const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
