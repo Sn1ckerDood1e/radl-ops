@@ -32,7 +32,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     description: 'Sprint management, monitoring, knowledge, iron laws, cost reporting, team recipes, verification',
     toolNames: [
       'health_check', 'sprint_status', 'sprint_start', 'sprint_progress', 'sprint_complete',
-      'iron_laws', 'cost_report', 'knowledge_query', 'verify', 'team_recipe',
+      'iron_laws', 'cost_report', 'knowledge_query', 'verify', 'team_recipe', 'audit_triage',
     ],
     defaultEnabled: true,
   },
