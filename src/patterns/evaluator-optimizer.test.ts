@@ -29,6 +29,25 @@ function makeMessage(text: string, inputTokens = 100, outputTokens = 50) {
   };
 }
 
+/** Creates a mock response with a tool_use block (structured output from evaluator) */
+function makeToolMessage(score: number, passed: boolean, feedback = 'Good', inputTokens = 100, outputTokens = 50) {
+  return {
+    content: [{
+      type: 'tool_use' as const,
+      id: 'toolu_test',
+      name: 'evaluation_result',
+      input: {
+        score,
+        passed,
+        feedback,
+        strengths: ['clear'],
+        weaknesses: score < 7 ? ['needs improvement'] : [],
+      },
+    }],
+    usage: { input_tokens: inputTokens, output_tokens: outputTokens },
+  };
+}
+
 function makeEvalJson(score: number, passed: boolean, feedback = 'Good') {
   return JSON.stringify({
     score,
@@ -59,10 +78,10 @@ describe('Evaluator-Optimizer Loop', () => {
   });
 
   it('converges on first try when score meets threshold', async () => {
-    // Generator response
+    // Generator response (text)
     mockCreate.mockResolvedValueOnce(makeMessage('Great briefing content'));
-    // Evaluator response (score 8 >= threshold 7)
-    mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(8, true)));
+    // Evaluator response (structured tool_use, score 8 >= threshold 7)
+    mockCreate.mockResolvedValueOnce(makeToolMessage(8, true));
 
     const result = await runEvalOptLoop('Generate a briefing', baseConfig);
 
@@ -75,12 +94,12 @@ describe('Evaluator-Optimizer Loop', () => {
   });
 
   it('iterates when first score is below threshold', async () => {
-    // Iteration 1: generator + evaluator (score 5)
+    // Iteration 1: generator (text) + evaluator (tool_use, score 5)
     mockCreate.mockResolvedValueOnce(makeMessage('Draft v1'));
-    mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(5, false, 'Needs more detail')));
-    // Iteration 2: generator + evaluator (score 8)
+    mockCreate.mockResolvedValueOnce(makeToolMessage(5, false, 'Needs more detail'));
+    // Iteration 2: generator (text) + evaluator (tool_use, score 8)
     mockCreate.mockResolvedValueOnce(makeMessage('Draft v2 improved'));
-    mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(8, true)));
+    mockCreate.mockResolvedValueOnce(makeToolMessage(8, true));
 
     const result = await runEvalOptLoop('Generate a briefing', baseConfig);
 
@@ -91,10 +110,10 @@ describe('Evaluator-Optimizer Loop', () => {
   });
 
   it('returns non-converged result when max iterations reached', async () => {
-    // All 3 iterations score below threshold
+    // All 3 iterations score below threshold (tool_use responses)
     for (let i = 0; i < 3; i++) {
       mockCreate.mockResolvedValueOnce(makeMessage(`Draft v${i + 1}`));
-      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(4, false)));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(4, false));
     }
 
     const result = await runEvalOptLoop('Generate a briefing', baseConfig);
@@ -132,7 +151,7 @@ describe('Evaluator-Optimizer Loop', () => {
 
   it('tracks total cost across iterations', async () => {
     mockCreate.mockResolvedValueOnce(makeMessage('Content', 500, 200));
-    mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(9, true), 300, 100));
+    mockCreate.mockResolvedValueOnce(makeToolMessage(9, true, 'Excellent', 300, 100));
 
     const result = await runEvalOptLoop('Generate a briefing', baseConfig);
 
@@ -142,7 +161,7 @@ describe('Evaluator-Optimizer Loop', () => {
 
   it('uses default config values when not specified', async () => {
     mockCreate.mockResolvedValueOnce(makeMessage('Content'));
-    mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(8, true)));
+    mockCreate.mockResolvedValueOnce(makeToolMessage(8, true));
 
     const minConfig: EvalOptConfig = {
       generatorTaskType: 'conversation',
@@ -153,10 +172,10 @@ describe('Evaluator-Optimizer Loop', () => {
     expect(result.converged).toBe(true);
   });
 
-  describe('parseEvalResponse (tested via runEvalOptLoop)', () => {
-    it('parses valid JSON evaluation', async () => {
+  describe('structured output parsing (tested via runEvalOptLoop)', () => {
+    it('parses structured tool_use evaluation', async () => {
       mockCreate.mockResolvedValueOnce(makeMessage('Content'));
-      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(9, true, 'Excellent')));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(9, true, 'Excellent'));
 
       const result = await runEvalOptLoop('Test', baseConfig);
 
@@ -165,7 +184,17 @@ describe('Evaluator-Optimizer Loop', () => {
       expect(result.evaluations[0].strengths).toContain('clear');
     });
 
-    it('falls back to heuristic when JSON is invalid', async () => {
+    it('falls back to text JSON parsing when no tool_use block', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(8, true, 'Good work')));
+
+      const result = await runEvalOptLoop('Test', baseConfig);
+
+      expect(result.evaluations[0].score).toBe(8);
+      expect(result.converged).toBe(true);
+    });
+
+    it('falls back to heuristic when text has no JSON', async () => {
       mockCreate.mockResolvedValueOnce(makeMessage('Content'));
       mockCreate.mockResolvedValueOnce(makeMessage('Overall score: 8/10. Nice work.'));
 
@@ -180,7 +209,7 @@ describe('Evaluator-Optimizer Loop', () => {
       mockCreate.mockResolvedValueOnce(makeMessage('This is decent work without a numeric score.'));
       // After score 5 (below threshold 7), second iteration
       mockCreate.mockResolvedValueOnce(makeMessage('Better content'));
-      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(8, true)));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(8, true));
 
       const result = await runEvalOptLoop('Test', baseConfig);
 

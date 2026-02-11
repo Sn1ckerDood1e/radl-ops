@@ -17,6 +17,60 @@ import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
 
+/**
+ * Tool definitions for structured output stages.
+ * Forces the model to return structured JSON via tool_use
+ * instead of free-text (eliminates regex parsing).
+ */
+const ROLLOUT_TOOL: Anthropic.Tool = {
+  name: 'submit_lessons',
+  description: 'Submit the categorized lessons for the knowledge base',
+  input_schema: {
+    type: 'object',
+    properties: {
+      lessons: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            category: {
+              type: 'string',
+              enum: ['pattern', 'lesson', 'decision', 'estimation', 'blocker'],
+            },
+            content: { type: 'string', description: 'Clear, actionable statement' },
+            confidence: { type: 'number', description: 'Confidence score 1-10' },
+          },
+          required: ['category', 'content', 'confidence'],
+        },
+      },
+    },
+    required: ['lessons'],
+  },
+};
+
+const JUDGMENT_TOOL: Anthropic.Tool = {
+  name: 'submit_judgment',
+  description: 'Submit the quality judgment for the extracted lessons',
+  input_schema: {
+    type: 'object',
+    properties: {
+      score: { type: 'number', description: 'Overall quality score 0-10' },
+      feedback: { type: 'string', description: 'Brief assessment of extraction quality' },
+      keep: {
+        type: 'array',
+        items: { type: 'number' },
+        description: '0-based indices of insights worth keeping',
+      },
+      drop: {
+        type: 'array',
+        items: { type: 'number' },
+        description: '0-based indices of insights to drop',
+      },
+    },
+    required: ['score', 'feedback'],
+  },
+};
+
 export interface SprintData {
   phase: string;
   title: string;
@@ -51,13 +105,15 @@ interface StageConfig {
   name: string;
   model: ModelId;
   maxTokens: number;
+  /** Optional tool for structured output (forces tool_use response) */
+  tool?: Anthropic.Tool;
 }
 
 const STAGES: StageConfig[] = [
   { name: 'understanding', model: 'claude-haiku-4-5-20251001', maxTokens: 2048 },
   { name: 'ideation', model: 'claude-sonnet-4-5-20250929', maxTokens: 4096 },
-  { name: 'rollout', model: 'claude-haiku-4-5-20251001', maxTokens: 2048 },
-  { name: 'judgment', model: 'claude-sonnet-4-5-20250929', maxTokens: 2048 },
+  { name: 'rollout', model: 'claude-haiku-4-5-20251001', maxTokens: 2048, tool: ROLLOUT_TOOL },
+  { name: 'judgment', model: 'claude-sonnet-4-5-20250929', maxTokens: 2048, tool: JUDGMENT_TOOL },
 ];
 
 function formatSprintData(data: SprintData): string {
@@ -123,20 +179,13 @@ Generate 5-15 candidate insights. Quality over quantity.`;
 
 ${priorContext}
 
-For each insight, output a JSON array entry:
-\`\`\`json
-[
-  { "category": "pattern|lesson|decision|estimation|blocker", "content": "Clear, actionable statement", "confidence": 7 }
-]
-\`\`\`
-
 Rules:
 - Merge similar insights into single, stronger statements
 - Drop insights with confidence < 4
 - Content should be self-contained (understandable without sprint context)
 - Maximum 10 final insights
 
-Return ONLY the JSON array.`;
+Use the submit_lessons tool to submit the categorized lessons.`;
 
     case 'judgment':
       return `Evaluate the quality of these extracted lessons.
@@ -150,13 +199,7 @@ Score the overall extraction on a 0-10 scale:
 - 3-4: Too generic or obvious, minimal value
 - 0-2: Wrong, misleading, or irrelevant
 
-Respond with ONLY a JSON object:
-{
-  "score": <number 0-10>,
-  "feedback": "<brief assessment>",
-  "keep": [<indices of insights worth keeping, 0-based>],
-  "drop": [<indices of insights to drop, 0-based>]
-}`;
+Use the submit_judgment tool to submit your quality assessment. Include indices of insights to keep or drop.`;
 
     default:
       return `Process this sprint data:\n${sprintText}`;
@@ -166,14 +209,22 @@ Respond with ONLY a JSON object:
 async function callStage(
   stage: StageConfig,
   prompt: string
-): Promise<{ text: string; cost: number }> {
+): Promise<{ text: string; cost: number; toolInput?: unknown }> {
   const client = getAnthropicClient();
 
-  const response = await client.messages.create({
+  // Build request params, adding tools if the stage uses structured output
+  const requestParams: Anthropic.MessageCreateParams = {
     model: stage.model,
     max_tokens: stage.maxTokens,
     messages: [{ role: 'user', content: prompt }],
-  });
+  };
+
+  if (stage.tool) {
+    requestParams.tools = [stage.tool];
+    requestParams.tool_choice = { type: 'tool', name: stage.tool.name };
+  }
+
+  const response = await client.messages.create(requestParams);
 
   const cost = calculateCost(
     stage.model,
@@ -191,6 +242,21 @@ async function callStage(
     taskType,
     `bloom-${stage.name}`
   );
+
+  // Extract tool_use input if present, otherwise extract text
+  const toolBlock = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+  );
+
+  if (toolBlock) {
+    // For structured stages, return JSON-stringified input as text (for stage output accumulation)
+    // and the raw input for direct parsing
+    return {
+      text: JSON.stringify(toolBlock.input, null, 2),
+      cost,
+      toolInput: toolBlock.input,
+    };
+  }
 
   const text = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -217,17 +283,24 @@ export async function runBloomPipeline(
   });
 
   // Run stages sequentially — each sees prior outputs
+  // Structured stages (rollout, judgment) return toolInput for direct parsing
+  const structuredOutputs: Record<string, unknown> = {};
+
   for (const stage of STAGES) {
     const prompt = buildStagePrompt(stage.name, sprintText, stageOutputs);
 
     try {
       const result = await callStage(stage, prompt);
       stageOutputs[stage.name] = result.text;
+      if (result.toolInput) {
+        structuredOutputs[stage.name] = result.toolInput;
+      }
       totalCost += result.cost;
 
       logger.info(`Bloom stage complete: ${stage.name}`, {
         model: stage.model,
         outputLength: result.text.length,
+        structured: !!result.toolInput,
         cost: result.cost.toFixed(6),
       });
     } catch (error) {
@@ -237,49 +310,72 @@ export async function runBloomPipeline(
     }
   }
 
-  // Parse rollout output (JSON array of lessons)
+  // Parse rollout output — prefer structured tool input, fall back to regex
   let lessons: CategorizedLesson[] = [];
-  try {
-    const jsonMatch = stageOutputs.rollout?.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as Array<{
-        category?: string;
-        content?: string;
-        confidence?: number;
-      }>;
-      lessons = parsed
-        .filter(item => item.content && item.category)
-        .map(item => ({
-          category: (item.category ?? 'lesson') as CategorizedLesson['category'],
-          content: String(item.content),
-          confidence: Number(item.confidence) || 5,
-        }));
+  const rolloutInput = structuredOutputs.rollout as { lessons?: Array<{ category?: string; content?: string; confidence?: number }> } | undefined;
+  if (rolloutInput?.lessons) {
+    lessons = rolloutInput.lessons
+      .filter(item => item.content && item.category)
+      .map(item => ({
+        category: (item.category ?? 'lesson') as CategorizedLesson['category'],
+        content: String(item.content),
+        confidence: Number(item.confidence) || 5,
+      }));
+  } else {
+    // Fallback: regex parse from text output
+    try {
+      const jsonMatch = stageOutputs.rollout?.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as Array<{
+          category?: string;
+          content?: string;
+          confidence?: number;
+        }>;
+        lessons = parsed
+          .filter(item => item.content && item.category)
+          .map(item => ({
+            category: (item.category ?? 'lesson') as CategorizedLesson['category'],
+            content: String(item.content),
+            confidence: Number(item.confidence) || 5,
+          }));
+      }
+    } catch {
+      logger.warn('Failed to parse rollout JSON, using raw text');
     }
-  } catch {
-    logger.warn('Failed to parse rollout JSON, using raw text');
   }
 
-  // Parse judgment output (quality score + keep/drop indices)
+  // Parse judgment output — prefer structured tool input, fall back to regex
   let qualityScore = 5;
-  try {
-    const jsonMatch = stageOutputs.judgment?.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
-        score?: number;
-        keep?: number[];
-        drop?: number[];
-      };
-      qualityScore = Number(parsed.score) || 5;
+  const judgmentInput = structuredOutputs.judgment as { score?: number; keep?: number[]; drop?: number[] } | undefined;
+  if (judgmentInput) {
+    qualityScore = Number(judgmentInput.score) || 5;
 
-      // Filter lessons based on judgment's keep/drop
-      if (parsed.keep && parsed.keep.length > 0) {
-        lessons = lessons.filter((_, i) => parsed.keep!.includes(i));
-      } else if (parsed.drop && parsed.drop.length > 0) {
-        lessons = lessons.filter((_, i) => !parsed.drop!.includes(i));
-      }
+    if (judgmentInput.keep && judgmentInput.keep.length > 0) {
+      lessons = lessons.filter((_, i) => judgmentInput.keep!.includes(i));
+    } else if (judgmentInput.drop && judgmentInput.drop.length > 0) {
+      lessons = lessons.filter((_, i) => !judgmentInput.drop!.includes(i));
     }
-  } catch {
-    logger.warn('Failed to parse judgment JSON, using default score');
+  } else {
+    // Fallback: regex parse from text output
+    try {
+      const jsonMatch = stageOutputs.judgment?.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as {
+          score?: number;
+          keep?: number[];
+          drop?: number[];
+        };
+        qualityScore = Number(parsed.score) || 5;
+
+        if (parsed.keep && parsed.keep.length > 0) {
+          lessons = lessons.filter((_, i) => parsed.keep!.includes(i));
+        } else if (parsed.drop && parsed.drop.length > 0) {
+          lessons = lessons.filter((_, i) => !parsed.drop!.includes(i));
+        }
+      }
+    } catch {
+      logger.warn('Failed to parse judgment JSON, using default score');
+    }
   }
 
   logger.info('Bloom pipeline complete', {
