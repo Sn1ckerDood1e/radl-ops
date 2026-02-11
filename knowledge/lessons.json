@@ -89,6 +89,12 @@
       "situation": "Built agent teams capability but only used it once during the sprint that validated it",
       "learning": "Default to parallel execution. Before starting any task group, ask: are these independent? If yes, spawn teammates. The lead should coordinate and debug, not do grunt work. Lesson #3 (opt-in tools forgotten) applies to the agent itself, not just humans.",
       "date": "2026-02-09T16:00:00.000000"
+    },
+    {
+      "id": 16,
+      "situation": "Vitest tests failed after adding new mocks because afterEach used vi.resetAllMocks() which wipes factory-defined mock implementations",
+      "learning": "Never use vi.resetAllMocks() in afterEach — it destroys factory-level mock implementations (vi.mock factories). Use vi.clearAllMocks() in beforeEach instead, and re-establish mock return values there. resetAllMocks is only safe if ALL mocks are set up per-test.",
+      "date": "2026-02-11T14:00:00.000000"
     }
   ]
 }
