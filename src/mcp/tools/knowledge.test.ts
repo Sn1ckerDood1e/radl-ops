@@ -45,6 +45,13 @@ const MOCK_DECISIONS = JSON.stringify({
   ],
 });
 
+const MOCK_DEFERRED = JSON.stringify({
+  items: [
+    { id: 1, title: 'CASL inline role checks migration', reason: '90+ changes across 40 files', effort: 'large', sprintPhase: 'Phase 61', date: '2026-02-11', resolved: false },
+    { id: 2, title: 'Optimize listUsers query', reason: 'Low priority performance fix', effort: 'small', sprintPhase: 'Phase 59', date: '2026-02-10', resolved: true },
+  ],
+});
+
 function mockFiles() {
   vi.mocked(existsSync).mockReturnValue(true);
   vi.mocked(readFileSync).mockImplementation(((path: unknown) => {
@@ -52,6 +59,7 @@ function mockFiles() {
     if (p.includes('patterns.json')) return MOCK_PATTERNS;
     if (p.includes('lessons.json')) return MOCK_LESSONS;
     if (p.includes('decisions.json')) return MOCK_DECISIONS;
+    if (p.includes('deferred.json')) return MOCK_DEFERRED;
     return '';
   }) as typeof readFileSync);
 }
@@ -179,6 +187,78 @@ describe('Knowledge Query Tool', () => {
       const text = result.content[0].text;
 
       expect(text).toContain('MCP subprocess API failure');
+    });
+
+    it('searches deferred items by title', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'CASL' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('CASL inline role checks migration');
+      expect(text).toContain('[DEFERRED]');
+    });
+
+    it('searches deferred items by reason', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'performance' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Optimize listUsers query');
+    });
+
+    it('searches deferred items even when type filter is set', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      // Deferred items are always searched regardless of type filter
+      const result = await handler({ type: 'patterns', query: 'CASL' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('CASL inline role checks migration');
+    });
+  });
+
+  describe('deferred items in formatAll', () => {
+    it('shows open deferred items in all-view', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: undefined });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Deferred Items (1 open)');
+      expect(text).toContain('CASL inline role checks migration');
+      expect(text).toContain('[OPEN]');
+    });
+
+    it('excludes resolved deferred items from all-view', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: undefined });
+      const text = result.content[0].text;
+
+      // Resolved item should not appear in the deferred section
+      expect(text).not.toContain('Optimize listUsers query');
+    });
+
+    it('hides deferred section when no open items exist', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockImplementation(((path: unknown) => {
+        const p = String(path);
+        if (p.includes('patterns.json')) return MOCK_PATTERNS;
+        if (p.includes('lessons.json')) return MOCK_LESSONS;
+        if (p.includes('decisions.json')) return MOCK_DECISIONS;
+        if (p.includes('deferred.json')) return JSON.stringify({
+          items: [{ id: 1, title: 'Done', reason: 'done', effort: 'small', sprintPhase: 'Phase 1', date: '2026-01-01', resolved: true }],
+        });
+        return '';
+      }) as typeof readFileSync);
+
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: undefined });
+      const text = result.content[0].text;
+
+      expect(text).not.toContain('Deferred Items');
     });
   });
 });
