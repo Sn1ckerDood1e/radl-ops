@@ -47,6 +47,7 @@ function buildReviewRecipe(context: string, files: string, model: ModelTier): Te
       },
     ],
     setupSteps: [
+      'Run `npm run typecheck` in the target repo to establish baseline before spawning reviewers',
       'Create team with TeamCreate',
       'Create one task per reviewer in the team task list',
       'Spawn each teammate with Task tool using run_in_background: true',
@@ -104,13 +105,14 @@ function buildFeatureRecipe(context: string, files: string, model: ModelTier): T
       'Create tasks with clear file ownership boundaries to avoid conflicts',
       'Spawn teammates with Task tool, mode: "plan" to require plan approval',
       'Review and approve each teammate\'s plan before they implement',
+      'Each teammate MUST run `npm run typecheck` after their changes and before marking their task complete',
       'Monitor progress via team messages',
       'Coordinate integration points between backend and frontend',
     ],
     cleanupSteps: [
       'Send shutdown_request to each teammate via SendMessage',
       'Wait for shutdown confirmations',
-      'Run typecheck and tests to verify integration',
+      'Run `npm run typecheck && npm run test` to verify all teammates\' changes integrate without errors',
       'Call TeamDelete to clean up team resources',
     ],
     tips: [
@@ -118,6 +120,7 @@ function buildFeatureRecipe(context: string, files: string, model: ModelTier): T
       'Split file ownership clearly — each teammate owns different files',
       'Backend should finish first so frontend can integrate',
       'Test engineer can start writing test stubs while others implement',
+      'Typecheck catches 80% of integration issues between teammates — enforce it per-task, not just at the end',
     ],
   };
 }
@@ -246,6 +249,7 @@ function buildIncrementalReviewRecipe(context: string, files: string, model: Mod
       'Haiku is sufficient for spot-checks — use Sonnet only for complex new patterns',
       'Catching bugs between tasks prevents them from propagating to later tasks',
       'This is lighter than a full review team — just 2 focused sub-agents',
+      'Include \'verify npm run typecheck passes\' in the review prompt to catch type regressions early',
     ],
   };
 }

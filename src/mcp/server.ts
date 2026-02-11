@@ -36,6 +36,7 @@ import { registerVerifyTools } from './tools/verify.js';
 import { registerTeamTools } from './tools/teams.js';
 import { registerEvalOptTools } from './tools/eval-opt.js';
 import { registerCompoundTools } from './tools/compound.js';
+import { registerAuditTriageTools } from './tools/audit-triage.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
@@ -60,6 +61,7 @@ registerVerifyTools(server);
 registerTeamTools(server);
 registerEvalOptTools(server);
 registerCompoundTools(server);
+registerAuditTriageTools(server);
 
 // Register the enable_tools meta-tool (always enabled, manages other tool groups)
 const groupNames = TOOL_GROUPS.filter(g => !g.defaultEnabled).map(g => g.name);

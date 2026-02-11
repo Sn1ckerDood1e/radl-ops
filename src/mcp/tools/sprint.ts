@@ -10,9 +10,45 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
+import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
+
+const DEFERRED_PATH = '/home/hb/radl-ops/knowledge/deferred.json';
+
+interface DeferredItem {
+  id: number;
+  title: string;
+  reason: string;
+  effort: 'small' | 'medium' | 'large';
+  sprintPhase: string;
+  date: string;
+  resolved: boolean;
+}
+
+interface DeferredStore {
+  items: DeferredItem[];
+}
+
+function loadDeferred(): DeferredStore {
+  if (!existsSync(DEFERRED_PATH)) return { items: [] };
+  try {
+    return JSON.parse(readFileSync(DEFERRED_PATH, 'utf-8')) as DeferredStore;
+  } catch (error) {
+    logger.error('Failed to load deferred items, returning empty store', {
+      error: String(error),
+      path: DEFERRED_PATH,
+    });
+    return { items: [] };
+  }
+}
+
+function saveDeferred(store: DeferredStore): void {
+  const tmpPath = `${DEFERRED_PATH}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, DEFERRED_PATH);
+}
 
 const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
 const RADL_DIR = '/home/hb/radl';
@@ -66,8 +102,9 @@ export function registerSprintTools(server: McpServer): void {
       phase: z.string().min(1).max(50).describe('Sprint phase identifier (e.g., "Phase 54.1")'),
       title: z.string().min(1).max(100).describe('Sprint title (e.g., "MCP Server Migration")'),
       estimate: z.string().max(50).optional().describe('Time estimate (e.g., "3 hours")'),
+      task_count: z.number().int().min(0).optional().describe('Number of planned tasks (0 or omitted triggers advisory warning)'),
     },
-    withErrorTracking('sprint_start', async ({ phase, title, estimate }) => {
+    withErrorTracking('sprint_start', async ({ phase, title, estimate, task_count }) => {
       // Iron law check: verify we're on a feature branch
       const branch = getCurrentBranch();
       const lawCheck = checkIronLaws({
@@ -89,7 +126,12 @@ export function registerSprintTools(server: McpServer): void {
       const args = ['start', phase, title];
       if (estimate) args.push(estimate);
       const output = runSprint(args);
-      return { content: [{ type: 'text' as const, text: `Branch: ${branch}\n${output}` }] };
+
+      const taskAdvisory = (!task_count || task_count === 0)
+        ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
+        : `Task plan: ${task_count} tasks\n`;
+
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}` }] };
     })
   );
 
@@ -110,14 +152,50 @@ export function registerSprintTools(server: McpServer): void {
 
   server.tool(
     'sprint_complete',
-    'Complete the current sprint. Triggers compound learning extraction and Slack notification.',
+    'Complete the current sprint. Triggers compound learning extraction and Slack notification. Optionally tracks deferred items.',
     {
       commit: z.string().min(1).max(100).describe('Commit hash of the final commit'),
       actual_time: z.string().min(1).max(50).describe('Actual time taken (e.g., "1.5 hours")'),
+      deferred_items: z.array(z.object({
+        title: z.string().min(1).max(200),
+        reason: z.string().min(1).max(500),
+        effort: z.enum(['small', 'medium', 'large']),
+      })).optional().describe('Items deferred from this sprint to track for future work'),
     },
-    withErrorTracking('sprint_complete', async ({ commit, actual_time }) => {
+    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items }) => {
       const output = runSprint(['complete', commit, actual_time]);
-      return { content: [{ type: 'text' as const, text: output }] };
+
+      let deferredNote = '';
+      if (deferred_items && deferred_items.length > 0) {
+        const store = loadDeferred();
+        const nextId = store.items.length > 0
+          ? Math.max(...store.items.map(i => i.id)) + 1
+          : 1;
+
+        // Get current sprint phase from the sprint output (best-effort parse)
+        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
+        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+
+        const newItems: DeferredItem[] = deferred_items.map((item, idx) => ({
+          id: nextId + idx,
+          title: item.title,
+          reason: item.reason,
+          effort: item.effort,
+          sprintPhase,
+          date: new Date().toISOString(),
+          resolved: false,
+        }));
+
+        const updatedStore: DeferredStore = {
+          items: [...store.items, ...newItems],
+        };
+        saveDeferred(updatedStore);
+
+        deferredNote = `\nDeferred items: ${deferred_items.length} (tracked in knowledge/deferred.json)`;
+        logger.info('Deferred items tracked', { count: deferred_items.length, sprintPhase });
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}` }] };
     })
   );
 
