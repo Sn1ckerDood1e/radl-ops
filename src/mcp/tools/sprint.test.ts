@@ -169,6 +169,140 @@ describe('Sprint Tools - Task Count Advisory', () => {
   });
 });
 
+describe('Sprint Tools - Team Used Tracking', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(execSync).mockReturnValue('feat/test\n');
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 62\n');
+  });
+
+  it('completes sprint without team_used', async () => {
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Sprint completed');
+    expect(text).not.toContain('Team run tracked');
+  });
+
+  it('tracks team run when team_used is provided', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      team_used: {
+        recipe: 'review',
+        teammateCount: 3,
+        model: 'sonnet',
+        duration: '5 minutes',
+        findingsCount: 12,
+        outcome: 'success',
+      },
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Team run tracked: review recipe, 3 teammates, outcome: success');
+
+    // Verify atomic write
+    expect(vi.mocked(writeFileSync)).toHaveBeenCalledWith(
+      expect.stringContaining('team-runs.json.tmp'),
+      expect.any(String),
+      'utf-8'
+    );
+    expect(vi.mocked(renameSync)).toHaveBeenCalled();
+
+    const writtenJson = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
+    expect(writtenJson.runs).toHaveLength(1);
+    expect(writtenJson.runs[0].id).toBe(1);
+    expect(writtenJson.runs[0].recipe).toBe('review');
+    expect(writtenJson.runs[0].teammateCount).toBe(3);
+    expect(writtenJson.runs[0].outcome).toBe('success');
+    expect(writtenJson.runs[0].findingsCount).toBe(12);
+  });
+
+  it('appends to existing team runs with correct IDs', async () => {
+    const existingStore = {
+      runs: [
+        { id: 1, sprintPhase: 'Phase 60', recipe: 'review', teammateCount: 3, model: 'sonnet', duration: '5 min', outcome: 'success', date: '2026-02-10' },
+        { id: 3, sprintPhase: 'Phase 61', recipe: 'debug', teammateCount: 3, model: 'sonnet', duration: '8 min', outcome: 'partial', date: '2026-02-11' },
+      ],
+    };
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(existingStore));
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'def5678',
+      actual_time: '2 hours',
+      team_used: {
+        recipe: 'feature',
+        teammateCount: 3,
+        model: 'sonnet',
+        duration: '10 min',
+        outcome: 'success',
+      },
+    });
+
+    const writtenJson = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
+    expect(writtenJson.runs).toHaveLength(3);
+    // Next ID should be max(1, 3) + 1 = 4
+    expect(writtenJson.runs[2].id).toBe(4);
+    expect(writtenJson.runs[2].recipe).toBe('feature');
+  });
+
+  it('handles both deferred_items and team_used in same call', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      deferred_items: [
+        { title: 'Tech debt', reason: 'Low priority', effort: 'small' },
+      ],
+      team_used: {
+        recipe: 'review',
+        teammateCount: 3,
+        model: 'sonnet',
+        duration: '5 min',
+        outcome: 'success',
+      },
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Deferred items: 1');
+    expect(text).toContain('Team run tracked');
+    // 2 write calls: one for deferred, one for team runs
+    expect(vi.mocked(writeFileSync)).toHaveBeenCalledTimes(2);
+  });
+
+  it('stores lessonsLearned when provided', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      team_used: {
+        recipe: 'review',
+        teammateCount: 3,
+        model: 'sonnet',
+        duration: '5 min',
+        outcome: 'success',
+        lessonsLearned: 'Sonnet finds same issues as Opus at lower cost',
+      },
+    });
+
+    const writtenJson = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
+    expect(writtenJson.runs[0].lessonsLearned).toBe('Sonnet finds same issues as Opus at lower cost');
+  });
+});
+
 describe('Sprint Tools - Deferred Items', () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -90,6 +90,28 @@ export interface LogEntry {
 // Team Recipes
 // ============================================
 
+// ============================================
+// Team Performance Memory
+// ============================================
+
+export interface TeamRun {
+  id: number;
+  sprintPhase: string;
+  recipe: string;
+  teammateCount: number;
+  model: string;
+  duration: string;
+  findingsCount?: number;
+  tasksCompleted?: number;
+  outcome: 'success' | 'partial' | 'failed';
+  lessonsLearned?: string;
+  date: string;
+}
+
+export interface TeamRunStore {
+  runs: TeamRun[];
+}
+
 export interface TeamRecipe {
   teamName: string;
   teammates: Array<{

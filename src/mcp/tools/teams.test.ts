@@ -125,8 +125,130 @@ describe('Team Recipe Tool', () => {
     });
   });
 
+  describe('migration recipe', () => {
+    it('returns 3 teammates with correct names', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'migration' });
+      const text = result.content[0].text;
+
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+      const recipe = JSON.parse(jsonMatch![1]);
+      expect(recipe.teammates).toHaveLength(3);
+      expect(recipe.teammates[0].name).toBe('database-engineer');
+      expect(recipe.teammates[1].name).toBe('integration-tester');
+      expect(recipe.teammates[2].name).toBe('doc-updater');
+    });
+
+    it('includes enum migration tip', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'migration' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('enum');
+      expect(text).toContain('2 migrations');
+    });
+
+    it('includes cleanup with prisma migrate', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'migration' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('prisma migrate');
+      expect(text).toContain('shutdown_request');
+    });
+
+    it('interpolates context into task descriptions', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'migration', context: 'add rack_bay table' });
+      const text = result.content[0].text;
+
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+      const recipe = JSON.parse(jsonMatch![1]);
+      for (const t of recipe.teammates) {
+        expect(t.taskDescription).toContain('add rack_bay table');
+      }
+    });
+  });
+
+  describe('test-coverage recipe', () => {
+    it('returns 3 testers', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'test-coverage' });
+      const text = result.content[0].text;
+
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+      const recipe = JSON.parse(jsonMatch![1]);
+      expect(recipe.teammates).toHaveLength(3);
+      expect(recipe.teammates[0].name).toBe('unit-tester');
+      expect(recipe.teammates[1].name).toBe('integration-tester');
+      expect(recipe.teammates[2].name).toBe('e2e-tester');
+    });
+
+    it('mentions parallel work in tips', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'test-coverage' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('parallel');
+    });
+
+    it('includes cleanup with npm run test', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'test-coverage' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('npm run test');
+      expect(text).toContain('shutdown_request');
+    });
+  });
+
+  describe('refactor recipe', () => {
+    it('returns 3 code-reviewer teammates', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'refactor' });
+      const text = result.content[0].text;
+
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+      const recipe = JSON.parse(jsonMatch![1]);
+      expect(recipe.teammates).toHaveLength(3);
+      expect(recipe.teammates[0].name).toBe('dead-code-finder');
+      expect(recipe.teammates[1].name).toBe('pattern-enforcer');
+      expect(recipe.teammates[2].name).toBe('type-improver');
+      for (const t of recipe.teammates) {
+        expect(t.subagentType).toBe('code-reviewer');
+      }
+    });
+
+    it('mentions read-only in tips', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'refactor' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('read-only');
+    });
+
+    it('returns non-empty tips', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'refactor' });
+      const text = result.content[0].text;
+
+      const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+      const recipe = JSON.parse(jsonMatch![1]);
+      expect(recipe.tips.length).toBeGreaterThan(0);
+    });
+
+    it('includes cleanup with shutdown_request', async () => {
+      const handler = await getHandler();
+      const result = await handler({ recipe: 'refactor' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('shutdown_request');
+      expect(text).toContain('TeamDelete');
+    });
+  });
+
   describe('cleanup steps', () => {
-    it.each(['review', 'feature', 'debug', 'research'] as const)(
+    it.each(['review', 'feature', 'debug', 'research', 'migration', 'test-coverage', 'refactor'] as const)(
       '%s recipe returns cleanup steps',
       async (recipeType) => {
         const handler = await getHandler();
@@ -143,7 +265,7 @@ describe('Team Recipe Tool', () => {
   });
 
   describe('tips', () => {
-    it.each(['review', 'feature', 'debug', 'research'] as const)(
+    it.each(['review', 'feature', 'debug', 'research', 'migration', 'test-coverage', 'refactor'] as const)(
       '%s recipe returns non-empty tips',
       async (recipeType) => {
         const handler = await getHandler();

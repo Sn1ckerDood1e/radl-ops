@@ -52,6 +52,13 @@ const MOCK_DEFERRED = JSON.stringify({
   ],
 });
 
+const MOCK_TEAM_RUNS = JSON.stringify({
+  runs: [
+    { id: 1, sprintPhase: 'Phase 53', recipe: 'review', teammateCount: 3, model: 'sonnet', duration: '5 min', findingsCount: 12, outcome: 'success', lessonsLearned: 'Sonnet sufficient for reviews', date: '2026-02-09' },
+    { id: 2, sprintPhase: 'Phase 60', recipe: 'debug', teammateCount: 3, model: 'sonnet', duration: '8 min', outcome: 'partial', date: '2026-02-10' },
+  ],
+});
+
 function mockFiles() {
   vi.mocked(existsSync).mockReturnValue(true);
   vi.mocked(readFileSync).mockImplementation(((path: unknown) => {
@@ -60,6 +67,7 @@ function mockFiles() {
     if (p.includes('lessons.json')) return MOCK_LESSONS;
     if (p.includes('decisions.json')) return MOCK_DECISIONS;
     if (p.includes('deferred.json')) return MOCK_DEFERRED;
+    if (p.includes('team-runs.json')) return MOCK_TEAM_RUNS;
     return '';
   }) as typeof readFileSync);
 }
@@ -216,6 +224,49 @@ describe('Knowledge Query Tool', () => {
       const text = result.content[0].text;
 
       expect(text).toContain('CASL inline role checks migration');
+    });
+  });
+
+  describe('team-runs search', () => {
+    it('finds team runs by recipe keyword', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'review' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('[TEAM]');
+      expect(text).toContain('review');
+    });
+
+    it('finds team runs by outcome keyword', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'partial' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('debug');
+      expect(text).toContain('[PARTIAL]');
+    });
+
+    it('shows team runs in all-view formatAll', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: undefined });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Team Runs (2 total');
+      expect(text).toContain('[TEAM]');
+    });
+
+    it('shows team runs when type is team-runs', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: 'team-runs', query: undefined });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Team Runs');
+      expect(text).toContain('review');
+      expect(text).toContain('debug');
     });
   });
 
