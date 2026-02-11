@@ -33,7 +33,15 @@ When the user says "run autonomous sprint" or similar, follow this workflow.
 
 ## Execution Phase
 
-For each task:
+### Task Parallelization
+
+Before starting execution, check the task dependency graph:
+- **Independent tasks** (no shared files, no data dependencies) → consider spawning
+  a team with Sonnet teammates, each owning one task
+- **Dependent tasks** (later task reads earlier task's output) → execute sequentially
+- **Rule of thumb:** If 3+ tasks are independent, use a team. If <3, serial is fine.
+
+### For each task:
 
 1. **Update task status** - Set to `in_progress`
 2. **Research before implementing** — If the task involves an external API or library
@@ -43,16 +51,25 @@ For each task:
    ```
    This prevents writing code that misuses APIs (e.g., loading all users when you need one).
 3. **Execute the work** - Write code, run tests
-4. **Typecheck after changes**: `npm run typecheck`
-5. **Commit to feature branch** (never to main):
+4. **Trace the full data flow** — When adding data to a list/page, verify ALL layers connect:
+   - Server component → Prisma query (includes the new fields?)
+   - Server component → client props mapping (passes the new fields?)
+   - Client component → child component props (forwards the new fields?)
+   - Child component → render (displays the new fields?)
+   Don't just update the API endpoint and client independently. If the server page
+   maps props explicitly, new fields will be silently dropped.
+5. **Typecheck after changes**: `npm run typecheck`
+6. **Commit per task** (never batch all tasks into one commit):
    ```bash
    git add <specific-files> && git commit -m "feat(<scope>): description"
    ```
-6. **Record progress** (use MCP tool):
+   Per-task commits enable targeted reverts. One monolith commit for an entire sprint
+   makes it impossible to roll back a single task without losing the others.
+7. **Record progress** (use MCP tool):
    ```
    mcp__radl-ops__sprint_progress(message: "Done: task description")
    ```
-7. **Mid-sprint review gate** — If this task introduced a NEW pattern (new helper,
+8. **Mid-sprint review gate** — If this task introduced a NEW pattern (new helper,
    new data access approach, new API integration), run a background incremental review:
    ```
    Task(subagent_type="code-reviewer", run_in_background=true, model="sonnet",
@@ -61,7 +78,7 @@ For each task:
         prompt="Spot-check [files] for auth bypass, data leaks, injection")
    ```
    Fix HIGH issues before they propagate to the next task.
-8. **Update task status** to `completed`
+9. **Update task status** to `completed`
 
 ## Checkpoint Protocol
 
@@ -72,13 +89,21 @@ Every 30-45 minutes or after completing 2-3 tasks:
 
 If context window is filling up (>75%), use `/strategic-compact` skill.
 
-## Code Review (Mandatory)
+## Code Review (Mandatory — BOTH reviewers)
 
 After completing all tasks, before creating PR:
-1. Run **code-reviewer** agent on all changed files (parallel with security)
-2. Run **security-reviewer** agent on all changed files (parallel with code)
-3. Fix any CRITICAL or HIGH issues
-4. Run final typecheck: `npm run typecheck`
+1. Run **code-reviewer** AND **security-reviewer** agents in parallel (both `run_in_background: true`):
+   ```
+   Task(subagent_type="code-reviewer", run_in_background=true, model="sonnet",
+        prompt="Review git diff main...HEAD for [scope]")
+   Task(subagent_type="security-reviewer", run_in_background=true, model="sonnet",
+        prompt="Security review git diff main...HEAD for [scope]")
+   ```
+   **Never skip the security reviewer** — especially for auth changes, tier enforcement,
+   API boundary changes, or user input handling. In Phase 60, skipping it missed that
+   the tier check could receive legacy enum values.
+2. Fix any CRITICAL or HIGH issues
+3. Run final typecheck: `npm run typecheck`
 
 ## Completion
 
