@@ -39,8 +39,18 @@ interface Decision {
   date: string;
 }
 
+interface DeferredItem {
+  id: number;
+  title: string;
+  reason: string;
+  effort: 'small' | 'medium' | 'large';
+  sprintPhase: string;
+  date: string;
+  resolved: boolean;
+}
+
 interface ScoredEntry {
-  type: 'pattern' | 'lesson' | 'decision';
+  type: 'pattern' | 'lesson' | 'decision' | 'deferred';
   score: number;
   text: string;
 }
@@ -87,6 +97,11 @@ function formatDecision(d: Decision): string {
   const lines = [`- [${d.phase ?? '?'}] **${d.title}**`];
   if (d.rationale) lines.push(`  Rationale: ${d.rationale}`);
   return lines.join('\n');
+}
+
+function formatDeferred(d: DeferredItem): string {
+  const status = d.resolved ? 'RESOLVED' : 'OPEN';
+  return `- [DEFERRED] [${status}] **${d.title}** (${d.effort}, ${d.sprintPhase})\n  Reason: ${d.reason}`;
 }
 
 export function registerKnowledgeTools(server: McpServer): void {
@@ -139,6 +154,17 @@ export function registerKnowledgeTools(server: McpServer): void {
           ]);
           if (score > 0) {
             scored.push({ type: 'decision', score, text: formatDecision(d) });
+          }
+        }
+      }
+
+      // Always search deferred items (they're cross-cutting)
+      {
+        const data = loadJson<{ items: DeferredItem[] }>('deferred.json');
+        for (const d of data?.items ?? []) {
+          const score = scoreEntry(keywords, [d.title, d.reason, d.effort, d.sprintPhase]);
+          if (score > 0) {
+            scored.push({ type: 'deferred', score, text: formatDeferred(d) });
           }
         }
       }
@@ -212,6 +238,19 @@ function formatAll(queryType: string): string {
     } else {
       for (const d of decisions.slice(-10)) {
         lines.push(formatDecision(d));
+      }
+      lines.push('');
+    }
+  }
+
+  // Always include deferred items in "all" view
+  if (queryType === 'all') {
+    const data = loadJson<{ items: DeferredItem[] }>('deferred.json');
+    const items = (data?.items ?? []).filter(d => !d.resolved);
+    if (items.length > 0) {
+      lines.push(`## Deferred Items (${items.length} open)`, '');
+      for (const d of items) {
+        lines.push(formatDeferred(d));
       }
       lines.push('');
     }
