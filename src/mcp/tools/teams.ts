@@ -312,7 +312,7 @@ function formatRecipeOutput(recipe: TeamRecipe, recipeType: string): string {
 export function registerTeamTools(server: McpServer): void {
   server.tool(
     'team_recipe',
-    'Get a structured agent team recipe for Claude Code to execute. Returns teammate configuration, setup steps, and cleanup instructions. Recipes: review (3 parallel reviewers), feature (backend + frontend + tester), debug (3 hypothesis investigators), research (library + architecture + risk), incremental-review (2 background sub-agents for mid-sprint spot-checks).',
+    'Get a structured agent team recipe for Claude Code to execute. Returns teammate configuration, setup steps, and cleanup instructions. Recipes: review (3 parallel reviewers), feature (backend + frontend + tester), debug (3 hypothesis investigators), research (library + architecture + risk), incremental-review (2 background sub-agents for mid-sprint spot-checks). Example: { "recipe": "review", "context": "auth module security audit", "files": "src/lib/auth,src/app/api/auth", "model": "sonnet" }',
     {
       recipe: z.enum(['review', 'feature', 'debug', 'research', 'incremental-review'])
         .describe('Type of team recipe to generate'),

@@ -28,7 +28,9 @@ export type TaskType =
   | 'planning'
   | 'review'
   | 'architecture'
-  | 'roadmap';
+  | 'roadmap'
+  | 'spot_check'
+  | 'social_generation';
 
 // ============================================
 // Token Tracking

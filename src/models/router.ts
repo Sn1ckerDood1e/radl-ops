@@ -72,6 +72,20 @@ const DEFAULT_ROUTES: Record<TaskType, ModelRoute> = {
     inputCostPer1M: MODEL_PRICING['claude-opus-4-6'].input,
     outputCostPer1M: MODEL_PRICING['claude-opus-4-6'].output,
   },
+  spot_check: {
+    model: 'claude-haiku-4-5-20251001',
+    effort: 'low',
+    maxTokens: 1024,
+    inputCostPer1M: MODEL_PRICING['claude-haiku-4-5-20251001'].input,
+    outputCostPer1M: MODEL_PRICING['claude-haiku-4-5-20251001'].output,
+  },
+  social_generation: {
+    model: 'claude-haiku-4-5-20251001',
+    effort: 'low',
+    maxTokens: 2048,
+    inputCostPer1M: MODEL_PRICING['claude-haiku-4-5-20251001'].input,
+    outputCostPer1M: MODEL_PRICING['claude-haiku-4-5-20251001'].output,
+  },
 };
 
 /**

@@ -19,9 +19,9 @@ type ModelTier = 'haiku' | 'sonnet' | 'opus';
  * See src/models/router.ts for the routing table.
  */
 const MODEL_TO_TASK_TYPE: Record<ModelTier, TaskType> = {
-  haiku: 'briefing',         // routes to Haiku
-  sonnet: 'conversation',    // routes to Sonnet
-  opus: 'architecture',      // routes to Opus
+  haiku: 'spot_check',        // routes to Haiku
+  sonnet: 'conversation',     // routes to Sonnet
+  opus: 'architecture',       // routes to Opus
 };
 
 interface EvalOptParams {
@@ -36,7 +36,7 @@ interface EvalOptParams {
 export function registerEvalOptTools(server: McpServer): void {
   server.tool(
     'eval_opt_generate',
-    'Generate content using an evaluator-optimizer quality loop. A generator model produces content, an evaluator model scores it against your criteria, and the loop iterates until quality threshold is met. Returns the final output with quality metadata.',
+    'Generate content using an evaluator-optimizer quality loop. A generator model produces content, an evaluator model scores it against your criteria, and the loop iterates until quality threshold is met. Returns the final output with quality metadata. Example: { "prompt": "Write a concise README for a CLI tool", "criteria": ["Clear install instructions", "Usage examples included", "Under 500 words"], "generator_model": "haiku", "quality_threshold": 8 }',
     {
       prompt: z.string().min(10).max(10000)
         .describe('The generation prompt - what content to produce'),
