@@ -112,8 +112,7 @@ function buildFeatureRecipe(context: string, files: string, model: ModelTier): T
     cleanupSteps: [
       'Send shutdown_request to each teammate via SendMessage',
       'Wait for shutdown confirmations',
-      'Run `npm run typecheck` to verify all teammates\' changes integrate without type errors',
-      'Run typecheck and tests to verify integration',
+      'Run `npm run typecheck && npm run test` to verify all teammates\' changes integrate without errors',
       'Call TeamDelete to clean up team resources',
     ],
     tips: [

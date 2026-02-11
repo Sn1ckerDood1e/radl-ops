@@ -15,6 +15,13 @@ import { getAnthropicClient } from '../../config/anthropic.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 
+/** Haiku context ~100k tokens; 50k chars leaves safe margin for system prompt + response */
+const MAX_FINDINGS_LENGTH = 50000;
+
+const VALID_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const;
+const VALID_EFFORTS = ['small', 'medium', 'large'] as const;
+const VALID_CATEGORIES = ['DO_NOW', 'DO_SOON', 'DEFER'] as const;
+
 interface TriagedFinding {
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   effort: 'small' | 'medium' | 'large';
@@ -146,6 +153,15 @@ function formatTriageOutput(findings: TriagedFinding[]): string {
   return lines.join('\n');
 }
 
+const TriagedFindingSchema = z.object({
+  severity: z.enum(VALID_SEVERITIES),
+  effort: z.enum(VALID_EFFORTS),
+  category: z.enum(VALID_CATEGORIES),
+  title: z.string(),
+  file: z.string(),
+  description: z.string(),
+});
+
 function parseTriageFromToolUse(response: Anthropic.Message): TriageOutput | null {
   const toolBlock = response.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
@@ -156,16 +172,15 @@ function parseTriageFromToolUse(response: Anthropic.Message): TriageOutput | nul
   const input = toolBlock.input as Record<string, unknown>;
   const rawFindings = Array.isArray(input.findings) ? input.findings : [];
 
-  const findings: TriagedFinding[] = rawFindings.map((f: Record<string, unknown>) => ({
-    severity: String(f.severity ?? 'MEDIUM') as TriagedFinding['severity'],
-    effort: String(f.effort ?? 'medium') as TriagedFinding['effort'],
-    category: String(f.category ?? 'DEFER') as TriagedFinding['category'],
-    title: String(f.title ?? 'Untitled'),
-    file: String(f.file ?? 'unknown'),
-    description: String(f.description ?? ''),
-  }));
-
-  return { findings };
+  try {
+    const findings = rawFindings.map(f => TriagedFindingSchema.parse(f));
+    return { findings };
+  } catch (error) {
+    logger.warn('Invalid triage response structure, falling back to text parsing', {
+      error: String(error),
+    });
+    return null;
+  }
 }
 
 function parseTriageFromText(response: Anthropic.Message): TriageOutput {
@@ -192,8 +207,8 @@ export function registerAuditTriageTools(server: McpServer): void {
     'audit_triage',
     'Classify audit findings from review agents into DO_NOW / DO_SOON / DEFER categories using AI (Haiku). Paste raw findings from code-reviewer, security-reviewer, or architect agents. Returns a categorized markdown table.',
     {
-      findings: z.string().min(10).max(50000)
-        .describe('Raw text of findings from review agents'),
+      findings: z.string().min(10).max(MAX_FINDINGS_LENGTH)
+        .describe('Raw text of findings from review agents. For large codebases, split into multiple triage calls.'),
       sprint_context: z.string().max(500).optional()
         .describe('Brief description of the sprint scope for context'),
     },

@@ -35,7 +35,11 @@ function loadDeferred(): DeferredStore {
   if (!existsSync(DEFERRED_PATH)) return { items: [] };
   try {
     return JSON.parse(readFileSync(DEFERRED_PATH, 'utf-8')) as DeferredStore;
-  } catch {
+  } catch (error) {
+    logger.error('Failed to load deferred items, returning empty store', {
+      error: String(error),
+      path: DEFERRED_PATH,
+    });
     return { items: [] };
   }
 }
