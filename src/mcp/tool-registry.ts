@@ -33,6 +33,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     toolNames: [
       'health_check', 'sprint_status', 'sprint_start', 'sprint_progress', 'sprint_complete',
       'iron_laws', 'cost_report', 'knowledge_query', 'verify', 'team_recipe', 'audit_triage',
+      'sprint_advisor', 'review_pipeline',
     ],
     defaultEnabled: true,
   },

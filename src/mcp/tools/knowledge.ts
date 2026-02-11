@@ -49,8 +49,22 @@ interface DeferredItem {
   resolved: boolean;
 }
 
+interface TeamRun {
+  id: number;
+  sprintPhase: string;
+  recipe: string;
+  teammateCount: number;
+  model: string;
+  duration: string;
+  findingsCount?: number;
+  tasksCompleted?: number;
+  outcome: 'success' | 'partial' | 'failed';
+  lessonsLearned?: string;
+  date: string;
+}
+
 interface ScoredEntry {
-  type: 'pattern' | 'lesson' | 'decision' | 'deferred';
+  type: 'pattern' | 'lesson' | 'decision' | 'deferred' | 'team-run';
   score: number;
   text: string;
 }
@@ -104,12 +118,19 @@ function formatDeferred(d: DeferredItem): string {
   return `- [DEFERRED] [${status}] **${d.title}** (${d.effort}, ${d.sprintPhase})\n  Reason: ${d.reason}`;
 }
 
+function formatTeamRun(r: TeamRun): string {
+  const findings = r.findingsCount !== undefined ? `, ${r.findingsCount} findings` : '';
+  const tasks = r.tasksCompleted !== undefined ? `, ${r.tasksCompleted} tasks` : '';
+  const lesson = r.lessonsLearned ? `\n  Lesson: ${r.lessonsLearned}` : '';
+  return `- [TEAM] [${r.outcome.toUpperCase()}] **${r.recipe}** recipe (${r.teammateCount} teammates, ${r.model}, ${r.duration}${findings}${tasks}) — ${r.sprintPhase}${lesson}`;
+}
+
 export function registerKnowledgeTools(server: McpServer): void {
   server.tool(
     'knowledge_query',
     'Query the compound learning knowledge base. Returns patterns to apply, lessons to avoid, and past decisions. Supports keyword search. Use at session start and before making architectural choices. Example: { "type": "lessons", "query": "enum migration" }',
     {
-      type: z.enum(['all', 'patterns', 'lessons', 'decisions']).optional()
+      type: z.enum(['all', 'patterns', 'lessons', 'decisions', 'team-runs']).optional()
         .describe('Type of knowledge to query (defaults to all)'),
       query: z.string().max(200).optional()
         .describe('Search keyword to filter results (searches names, descriptions, learnings, rationale)'),
@@ -165,6 +186,19 @@ export function registerKnowledgeTools(server: McpServer): void {
           const score = scoreEntry(keywords, [d.title, d.reason, d.effort, d.sprintPhase]);
           if (score > 0) {
             scored.push({ type: 'deferred', score, text: formatDeferred(d) });
+          }
+        }
+      }
+
+      // Always search team runs (they're cross-cutting like deferred items)
+      {
+        const data = loadJson<{ runs: TeamRun[] }>('team-runs.json');
+        for (const r of data?.runs ?? []) {
+          const score = scoreEntry(keywords, [
+            r.recipe, r.sprintPhase, r.model, r.outcome, r.lessonsLearned ?? '',
+          ]);
+          if (score > 0) {
+            scored.push({ type: 'team-run', score, text: formatTeamRun(r) });
           }
         }
       }
@@ -251,6 +285,20 @@ function formatAll(queryType: string): string {
       lines.push(`## Deferred Items (${items.length} open)`, '');
       for (const d of items) {
         lines.push(formatDeferred(d));
+      }
+      lines.push('');
+    }
+  }
+
+  // Show team runs in "all" or "team-runs" view
+  if (queryType === 'all' || queryType === 'team-runs') {
+    const data = loadJson<{ runs: TeamRun[] }>('team-runs.json');
+    const runs = data?.runs ?? [];
+    if (runs.length > 0) {
+      const recent = runs.slice(-5);
+      lines.push(`## Team Runs (${runs.length} total, showing last ${recent.length})`, '');
+      for (const r of recent) {
+        lines.push(formatTeamRun(r));
       }
       lines.push('');
     }

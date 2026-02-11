@@ -14,8 +14,10 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
+import type { TeamRun, TeamRunStore } from '../../types/index.js';
 
 const DEFERRED_PATH = '/home/hb/radl-ops/knowledge/deferred.json';
+const TEAM_RUNS_PATH = '/home/hb/radl-ops/knowledge/team-runs.json';
 
 interface DeferredItem {
   id: number;
@@ -50,6 +52,29 @@ function saveDeferred(store: DeferredStore): void {
   renameSync(tmpPath, DEFERRED_PATH);
 }
 
+function loadTeamRuns(): TeamRunStore {
+  if (!existsSync(TEAM_RUNS_PATH)) return { runs: [] };
+  try {
+    return JSON.parse(readFileSync(TEAM_RUNS_PATH, 'utf-8')) as TeamRunStore;
+  } catch (error) {
+    logger.error('Failed to load team runs, returning empty store', {
+      error: String(error),
+      path: TEAM_RUNS_PATH,
+    });
+    return { runs: [] };
+  }
+}
+
+function saveTeamRun(run: TeamRun): void {
+  const store = loadTeamRuns();
+  const updatedStore: TeamRunStore = {
+    runs: [...store.runs, run],
+  };
+  const tmpPath = `${TEAM_RUNS_PATH}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(updatedStore, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, TEAM_RUNS_PATH);
+}
+
 const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
 const RADL_DIR = '/home/hb/radl';
 
@@ -77,6 +102,64 @@ function getCurrentBranch(): string {
   } catch {
     return 'unknown';
   }
+}
+
+interface TeamSuggestion {
+  recipe: string;
+  reason: string;
+}
+
+function getTeamSuggestion(
+  title: string,
+  taskCount: number | undefined,
+  teamRuns: TeamRunStore
+): string {
+  const suggestions: TeamSuggestion[] = [];
+  const titleLower = title.toLowerCase();
+
+  // Suggest sprint_advisor for 3+ tasks
+  if (taskCount && taskCount >= 3) {
+    suggestions.push({
+      recipe: 'sprint_advisor',
+      reason: `${taskCount} tasks detected — run \`sprint_advisor\` to check if a team would help`,
+    });
+  }
+
+  // Keyword matching for specific recipes
+  const keywordMap: Array<{ keywords: string[]; recipe: string; label: string }> = [
+    { keywords: ['review', 'audit', 'security'], recipe: 'review', label: 'review recipe' },
+    { keywords: ['migration', 'schema', 'database'], recipe: 'migration', label: 'migration recipe' },
+    { keywords: ['refactor', 'cleanup', 'tech debt'], recipe: 'refactor', label: 'refactor recipe' },
+    { keywords: ['test', 'coverage'], recipe: 'test-coverage', label: 'test-coverage recipe' },
+  ];
+
+  for (const { keywords, recipe, label } of keywordMap) {
+    if (keywords.some(kw => titleLower.includes(kw))) {
+      suggestions.push({
+        recipe,
+        reason: `Title suggests ${label} — run \`team_recipe(recipe: "${recipe}")\` for a team setup`,
+      });
+      break; // Only match first keyword group
+    }
+  }
+
+  // Historical context
+  const successful = teamRuns.runs.filter(r => r.outcome === 'success');
+  if (successful.length > 0) {
+    const last = successful[successful.length - 1];
+    suggestions.push({
+      recipe: last.recipe,
+      reason: `Last successful team: ${last.recipe} recipe in ${last.sprintPhase} (${last.duration})`,
+    });
+  }
+
+  if (suggestions.length === 0) return '';
+
+  const lines = ['\nTeam suggestion:'];
+  for (const s of suggestions) {
+    lines.push(`  - ${s.reason}`);
+  }
+  return lines.join('\n');
 }
 
 export function registerSprintTools(server: McpServer): void {
@@ -131,7 +214,9 @@ export function registerSprintTools(server: McpServer): void {
         ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
         : `Task plan: ${task_count} tasks\n`;
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}` }] };
+      const teamSuggestion = getTeamSuggestion(title, task_count, loadTeamRuns());
+
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}` }] };
     })
   );
 
@@ -161,8 +246,18 @@ export function registerSprintTools(server: McpServer): void {
         reason: z.string().min(1).max(500),
         effort: z.enum(['small', 'medium', 'large']),
       })).optional().describe('Items deferred from this sprint to track for future work'),
+      team_used: z.object({
+        recipe: z.string().max(50),
+        teammateCount: z.number().int().min(1).max(10),
+        model: z.string().max(50),
+        duration: z.string().max(50),
+        findingsCount: z.number().int().optional(),
+        tasksCompleted: z.number().int().optional(),
+        outcome: z.enum(['success', 'partial', 'failed']),
+        lessonsLearned: z.string().max(500).optional(),
+      }).optional().describe('Track agent team usage for performance memory'),
     },
-    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items }) => {
+    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used }) => {
       const output = runSprint(['complete', commit, actual_time]);
 
       let deferredNote = '';
@@ -195,7 +290,36 @@ export function registerSprintTools(server: McpServer): void {
         logger.info('Deferred items tracked', { count: deferred_items.length, sprintPhase });
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}` }] };
+      let teamNote = '';
+      if (team_used) {
+        const store = loadTeamRuns();
+        const nextId = store.runs.length > 0
+          ? Math.max(...store.runs.map(r => r.id)) + 1
+          : 1;
+
+        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
+        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+
+        const teamRun: TeamRun = {
+          id: nextId,
+          sprintPhase,
+          recipe: team_used.recipe,
+          teammateCount: team_used.teammateCount,
+          model: team_used.model,
+          duration: team_used.duration,
+          findingsCount: team_used.findingsCount,
+          tasksCompleted: team_used.tasksCompleted,
+          outcome: team_used.outcome,
+          lessonsLearned: team_used.lessonsLearned,
+          date: new Date().toISOString(),
+        };
+
+        saveTeamRun(teamRun);
+        teamNote = `\nTeam run tracked: ${team_used.recipe} recipe, ${team_used.teammateCount} teammates, outcome: ${team_used.outcome}`;
+        logger.info('Team run tracked', { id: nextId, recipe: team_used.recipe, outcome: team_used.outcome });
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}` }] };
     })
   );
 
