@@ -135,6 +135,7 @@ export function registerKnowledgeTools(server: McpServer): void {
       query: z.string().max(200).optional()
         .describe('Search keyword to filter results (searches names, descriptions, learnings, rationale)'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('knowledge_query', async ({ type, query }) => {
       const queryType = type ?? 'all';
 

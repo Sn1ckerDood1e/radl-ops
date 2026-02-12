@@ -125,6 +125,7 @@ export function registerCompoundTools(server: McpServer): void {
       source: z.enum(['latest', 'current']).optional().default('latest')
         .describe('Sprint data source: latest archived sprint or current in-progress sprint'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('compound_extract', async ({ source }) => {
       ensureDirs();
 

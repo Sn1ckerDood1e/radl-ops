@@ -56,6 +56,7 @@ export function registerSocialTools(server: McpServer): void {
       focus: z.string().max(200).optional()
         .describe('Topic focus (e.g., "launch announcement", "rowing tips")'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('social_ideas', async ({ count, focus }) => {
       const prompt = `${RADL_CONTEXT}
 
@@ -87,6 +88,7 @@ Be specific to rowing, not generic startup advice.`;
       tone: z.enum(['professional', 'casual', 'educational', 'exciting']).optional().default('professional')
         .describe('Desired tone'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('social_draft', async ({ platform, topic, tone }) => {
       const constraints = platform === 'twitter'
         ? 'Max 280 characters. Punchy. Include 1-2 relevant hashtags.'
@@ -121,6 +123,7 @@ Return the ready-to-post draft(s).`;
       themes: z.array(z.string().max(100)).max(5).optional()
         .describe('Content themes for the week'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('social_calendar', async ({ themes }) => {
       const prompt = `${RADL_CONTEXT}
 

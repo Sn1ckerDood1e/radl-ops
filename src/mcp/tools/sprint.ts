@@ -167,6 +167,7 @@ export function registerSprintTools(server: McpServer): void {
     'sprint_status',
     'Get current sprint status including phase, tasks completed, blockers, and git branch',
     {},
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('sprint_status', async () => {
       const branch = getCurrentBranch();
       const branchWarning = (branch === 'main' || branch === 'master')
@@ -187,6 +188,7 @@ export function registerSprintTools(server: McpServer): void {
       estimate: z.string().max(50).optional().describe('Time estimate (e.g., "3 hours")'),
       task_count: z.number().int().min(0).optional().describe('Number of planned tasks (0 or omitted triggers advisory warning)'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('sprint_start', async ({ phase, title, estimate, task_count }) => {
       // Iron law check: verify we're on a feature branch
       const branch = getCurrentBranch();
@@ -227,6 +229,7 @@ export function registerSprintTools(server: McpServer): void {
       message: z.string().min(1).max(500).describe('Description of completed task'),
       notify: z.boolean().optional().default(false).describe('Send Slack notification'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('sprint_progress', async ({ message, notify }) => {
       const args = ['progress', message];
       if (notify) args.push('--notify');
@@ -257,6 +260,7 @@ export function registerSprintTools(server: McpServer): void {
         lessonsLearned: z.string().max(500).optional(),
       }).optional().describe('Track agent team usage for performance memory'),
     },
+    { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used }) => {
       const output = runSprint(['complete', commit, actual_time]);
 
@@ -328,6 +332,7 @@ export function registerSprintTools(server: McpServer): void {
     'iron_laws',
     'List all iron laws (non-negotiable constraints). Use this to check what rules must never be violated.',
     {},
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('iron_laws', async () => {
       const laws = getIronLaws();
       const branch = getCurrentBranch();

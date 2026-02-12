@@ -212,6 +212,7 @@ export function registerAuditTriageTools(server: McpServer): void {
       sprint_context: z.string().max(500).optional()
         .describe('Brief description of the sprint scope for context'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('audit_triage', async ({ findings, sprint_context }) => {
       const context = sprint_context ?? 'General code audit';
       const route = getRoute('spot_check'); // Routes to Haiku

@@ -44,6 +44,7 @@ export function registerBriefingTools(server: McpServer): void {
       custom_focus: z.string().max(500).optional()
         .describe('Custom area to focus on in the briefing'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('daily_briefing', async ({ github_context, custom_focus }) => {
       const costSummary = getCostSummaryForBriefing();
       const date = new Date().toISOString().split('T')[0];
@@ -98,6 +99,7 @@ Keep it brief and actionable. Use bullet points.`;
       week_start: z.string().optional()
         .describe('Start date of the week (YYYY-MM-DD, defaults to 7 days ago)'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('weekly_briefing', async ({ github_context, week_start }) => {
       const start = week_start ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const end = new Date().toISOString().split('T')[0];
@@ -152,6 +154,7 @@ Be thorough but organized. Use headers and bullet points.`;
       constraint: z.string().max(200).optional()
         .describe('Constraints to consider (e.g., "solo developer", "launch in 2 months")'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('roadmap_ideas', async ({ focus_area, constraint }) => {
       const route = getRoute('roadmap');
       const client = getAnthropicClient();

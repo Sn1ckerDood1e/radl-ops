@@ -18,6 +18,7 @@ export function registerCostTools(server: McpServer): void {
       format: z.enum(['summary', 'detailed']).optional().default('summary')
         .describe('Output format: summary (text) or detailed (JSON breakdown)'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('cost_report', async ({ format }) => {
       const alert = checkCostThreshold();
       const analytics = getTodaySummary();

@@ -467,6 +467,7 @@ export function registerTeamTools(server: McpServer): void {
       model: z.enum(['haiku', 'sonnet', 'opus']).optional()
         .describe('Model for teammates (default: sonnet)'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('team_recipe', async ({ recipe, context, files, model }: RecipeParams) => {
       const selectedModel = model ?? 'sonnet';
       const contextStr = context ?? '';

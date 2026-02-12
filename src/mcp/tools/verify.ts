@@ -50,6 +50,7 @@ export function registerVerifyTools(server: McpServer): void {
       checks: z.array(z.enum(['typecheck', 'build', 'test'])).optional()
         .describe('Which checks to run (defaults to typecheck + build)'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('verify', async ({ checks }) => {
       const toRun = checks ?? ['typecheck', 'build'];
       const results: CheckResult[] = [];

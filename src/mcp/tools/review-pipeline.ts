@@ -77,6 +77,7 @@ export function registerReviewPipelineTools(server: McpServer): void {
       model: z.enum(['haiku', 'sonnet', 'opus']).optional()
         .describe('Model for review teammates (default: sonnet)'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('review_pipeline', async ({ context, files, model }) => {
       const selectedModel: ModelTier = model ?? 'sonnet';
       const contextStr = context ?? '';

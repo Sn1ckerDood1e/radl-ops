@@ -220,6 +220,7 @@ export function registerSprintAdvisorTools(server: McpServer): void {
       sprint_context: z.string().max(500).optional()
         .describe('Brief sprint context (e.g., "Phase 62 — Auth improvements")'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     withErrorTracking('sprint_advisor', async ({ tasks, sprint_context }) => {
       const context = sprint_context ?? 'General sprint';
       const route = getRoute('spot_check'); // Haiku
