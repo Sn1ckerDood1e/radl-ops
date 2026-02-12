@@ -1,8 +1,13 @@
 /**
- * MCP Server Entry Point
+ * MCP Server Entry Point (v1.4.0)
  *
- * Exposes radl-ops tools as MCP tools for Claude Code.
+ * Exposes radl-ops tools, resources, and prompts for Claude Code.
  * Communicates via stdio (JSON-RPC over stdin/stdout).
+ *
+ * Capabilities:
+ * - Tools: 21 tools across 3 groups (core, content, advanced) with annotations
+ * - Resources: sprint://current, config://iron-laws, config://tool-groups
+ * - Prompts: sprint-start, sprint-review, code-review
  *
  * Tool groups (dynamic loading):
  * - core: always enabled (sprint, monitoring, knowledge, iron laws)
@@ -40,12 +45,14 @@ import { registerAuditTriageTools } from './tools/audit-triage.js';
 import { registerSprintAdvisorTools } from './tools/sprint-advisor.js';
 import { registerReviewPipelineTools } from './tools/review-pipeline.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
+import { registerPrompts } from './prompts.js';
+import { registerResources } from './resources.js';
 import { initTokenTracker } from '../models/token-tracker.js';
 import { logger } from '../config/logger.js';
 
 const server = new McpServer({
   name: 'radl-ops',
-  version: '1.3.0',
+  version: '1.4.0',
 });
 
 // Install tool registry to capture RegisteredTool references (must be before registrations)
@@ -67,6 +74,12 @@ registerAuditTriageTools(server);
 registerSprintAdvisorTools(server);
 registerReviewPipelineTools(server);
 
+// Register MCP prompts (workflow templates)
+registerPrompts(server);
+
+// Register MCP resources (read-only state)
+registerResources(server, registry);
+
 // Register the enable_tools meta-tool (always enabled, manages other tool groups)
 const groupNames = TOOL_GROUPS.filter(g => !g.defaultEnabled).map(g => g.name);
 const groupDescriptions = TOOL_GROUPS
@@ -83,6 +96,7 @@ server.tool(
     action: z.enum(['enable', 'disable']).default('enable')
       .describe('Whether to enable or disable the group'),
   },
+  { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   ({ group, action }) => {
     const affected = action === 'enable'
       ? registry.enableGroup(group)
@@ -123,7 +137,7 @@ async function main(): Promise<void> {
   const status = registry.getStatus();
   const enabledCount = status.filter(s => s.enabled).length;
   logger.info('radl-ops MCP server started', {
-    version: '1.3.0',
+    version: '1.4.0',
     toolGroups: status.length,
     enabledGroups: enabledCount,
   });
