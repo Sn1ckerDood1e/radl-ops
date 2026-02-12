@@ -47,16 +47,32 @@ After completing a task that introduces a **new pattern**:
 - At ~75% context: Use `/strategic-compact` skill
 - Before compaction: Save sprint state via `sprint.sh checkpoint`
 
-### Data Flow Verification (CRITICAL for UI changes)
-When adding new data to a list page or card component, always trace the full path:
+### Data Flow Verification (CRITICAL for all changes)
+When adding new fields or features, trace the full path in BOTH directions:
+
+**READ path** (displaying data):
 1. **Prisma query** — Does it include the new relations/fields?
 2. **Server page** — Does the props mapping pass the new fields to the client?
 3. **Client component** — Does it accept and forward the fields to child components?
 4. **Render** — Does the child component actually display them?
 
 If any layer explicitly maps props (e.g., `.map(e => ({ id: e.id, ... }))`), new
-fields will be **silently dropped** unless added to the mapping. This was a real bug
-in Phase 60: API + client updated, but server page mapping dropped maintenance fields.
+fields will be **silently dropped** unless added to the mapping. (Phase 60 bug)
+
+**WRITE path** (mutations — equally critical):
+1. **Client** — Does the fetch call send the new field?
+2. **Validation** — Is the field in the Zod schema?
+3. **API handler** — Is the field destructured from the validated body?
+4. **API handler** — Is the field in the condition check that triggers the update?
+5. **API handler** — Is the field added to the updateData object?
+6. **Prisma** — Does the upsert/update persist it?
+
+If the API handler uses a pattern like `if (fieldA !== undefined || fieldB !== undefined)`
+to decide which section handles the request, new fields MUST be added to the condition.
+Otherwise the handler silently returns `{ success: true }` without persisting. (Phase 69 bug)
+
+**New Field Lifecycle Checklist:**
+When adding a Prisma field, verify ALL 5 exist: Schema → Migration → Validation → API Handler → Client
 
 ### Code Quality Gates
 After writing or modifying code:
