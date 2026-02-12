@@ -44,10 +44,37 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
 | `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
 
+## MCP Resources
+
+Read-only state exposed as MCP resources (no tool call needed). Clients can subscribe to these for efficient state inspection.
+
+| URI | Description |
+|-----|-------------|
+| `sprint://current` | Current sprint state + active git branch |
+| `config://iron-laws` | Non-negotiable constraints (all 6 laws) |
+| `config://tool-groups` | Tool group enabled/disabled status |
+
+## MCP Prompts
+
+Workflow templates exposed as MCP prompts. Appear as prompt selections in compatible clients.
+
+| Prompt | Args | Description |
+|--------|------|-------------|
+| `sprint-start` | phase, title, estimate? | Pre-filled sprint start workflow |
+| `sprint-review` | phase, branch? | End-of-sprint review checklist |
+| `code-review` | files, focus? | Structured code review with severity levels |
+
+## Tool Annotations
+
+All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) enabling MCP clients to make UX decisions about tool behavior.
+
 ## Architecture
 
 ```
-Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
+Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v1.4.0)
+                                    ├── tools (21 tools, 3 groups, with annotations)
+                                    ├── resources (3: sprint, iron-laws, tool-groups)
+                                    ├── prompts (3: sprint-start, sprint-review, code-review)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
