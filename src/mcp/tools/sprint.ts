@@ -14,10 +14,16 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
+import { setCurrentSprintPhase } from '../../models/token-tracker.js';
 import type { TeamRun, TeamRunStore } from '../../types/index.js';
+import { getConfig } from '../../config/paths.js';
 
-const DEFERRED_PATH = '/home/hb/radl-ops/knowledge/deferred.json';
-const TEAM_RUNS_PATH = '/home/hb/radl-ops/knowledge/team-runs.json';
+function getDeferredPath(): string {
+  return `${getConfig().knowledgeDir}/deferred.json`;
+}
+function getTeamRunsPath(): string {
+  return `${getConfig().knowledgeDir}/team-runs.json`;
+}
 
 interface DeferredItem {
   id: number;
@@ -34,32 +40,32 @@ interface DeferredStore {
 }
 
 function loadDeferred(): DeferredStore {
-  if (!existsSync(DEFERRED_PATH)) return { items: [] };
+  if (!existsSync(getDeferredPath())) return { items: [] };
   try {
-    return JSON.parse(readFileSync(DEFERRED_PATH, 'utf-8')) as DeferredStore;
+    return JSON.parse(readFileSync(getDeferredPath(), 'utf-8')) as DeferredStore;
   } catch (error) {
     logger.error('Failed to load deferred items, returning empty store', {
       error: String(error),
-      path: DEFERRED_PATH,
+      path: getDeferredPath(),
     });
     return { items: [] };
   }
 }
 
 function saveDeferred(store: DeferredStore): void {
-  const tmpPath = `${DEFERRED_PATH}.tmp`;
+  const tmpPath = `${getDeferredPath()}.tmp`;
   writeFileSync(tmpPath, JSON.stringify(store, null, 2) + '\n', 'utf-8');
-  renameSync(tmpPath, DEFERRED_PATH);
+  renameSync(tmpPath, getDeferredPath());
 }
 
 function loadTeamRuns(): TeamRunStore {
-  if (!existsSync(TEAM_RUNS_PATH)) return { runs: [] };
+  if (!existsSync(getTeamRunsPath())) return { runs: [] };
   try {
-    return JSON.parse(readFileSync(TEAM_RUNS_PATH, 'utf-8')) as TeamRunStore;
+    return JSON.parse(readFileSync(getTeamRunsPath(), 'utf-8')) as TeamRunStore;
   } catch (error) {
     logger.error('Failed to load team runs, returning empty store', {
       error: String(error),
-      path: TEAM_RUNS_PATH,
+      path: getTeamRunsPath(),
     });
     return { runs: [] };
   }
@@ -70,17 +76,21 @@ function saveTeamRun(run: TeamRun): void {
   const updatedStore: TeamRunStore = {
     runs: [...store.runs, run],
   };
-  const tmpPath = `${TEAM_RUNS_PATH}.tmp`;
+  const tmpPath = `${getTeamRunsPath()}.tmp`;
   writeFileSync(tmpPath, JSON.stringify(updatedStore, null, 2) + '\n', 'utf-8');
-  renameSync(tmpPath, TEAM_RUNS_PATH);
+  renameSync(tmpPath, getTeamRunsPath());
 }
 
-const SPRINT_SCRIPT = '/home/hb/radl-ops/scripts/sprint.sh';
-const RADL_DIR = '/home/hb/radl';
+function getSprintScript(): string {
+  return getConfig().sprintScript;
+}
+function getRadlDir(): string {
+  return getConfig().radlDir;
+}
 
 function runSprint(args: string[]): string {
   try {
-    return execFileSync(SPRINT_SCRIPT, args, {
+    return execFileSync(getSprintScript(), args, {
       encoding: 'utf-8',
       timeout: 30000,
       env: { ...process.env, PATH: process.env.PATH },
@@ -96,7 +106,7 @@ function getCurrentBranch(): string {
   try {
     return execSync('git branch --show-current', {
       encoding: 'utf-8',
-      cwd: RADL_DIR,
+      cwd: getRadlDir(),
       timeout: 5000,
     }).trim();
   } catch {
@@ -203,7 +213,7 @@ export function registerSprintTools(server: McpServer): void {
         return {
           content: [{
             type: 'text' as const,
-            text: `BLOCKED by iron law:\n${violations}\n\nCreate a feature branch first:\n  cd ${RADL_DIR} && git checkout -b feat/${phase.toLowerCase().replace(/\s+/g, '-')}`,
+            text: `BLOCKED by iron law:\n${violations}\n\nCreate a feature branch first:\n  cd ${getRadlDir()} && git checkout -b feat/${phase.toLowerCase().replace(/\s+/g, '-')}`,
           }],
         };
       }
@@ -211,6 +221,9 @@ export function registerSprintTools(server: McpServer): void {
       const args = ['start', phase, title];
       if (estimate) args.push(estimate);
       const output = runSprint(args);
+
+      // Tag all subsequent API calls with this sprint phase
+      setCurrentSprintPhase(phase);
 
       const taskAdvisory = (!task_count || task_count === 0)
         ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
@@ -263,6 +276,9 @@ export function registerSprintTools(server: McpServer): void {
     { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used }) => {
       const output = runSprint(['complete', commit, actual_time]);
+
+      // Clear sprint phase tag for cost tracking
+      setCurrentSprintPhase(null);
 
       let deferredNote = '';
       if (deferred_items && deferred_items.length > 0) {

@@ -7,7 +7,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getTodaySummary, getCostSummaryForBriefing, checkCostThreshold } from '../../models/token-tracker.js';
+import { getTodaySummary, getCostSummaryForBriefing, checkCostThreshold, getCurrentSprintPhase } from '../../models/token-tracker.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 
 export function registerCostTools(server: McpServer): void {
@@ -27,7 +27,22 @@ export function registerCostTools(server: McpServer): void {
         : '';
 
       if (format === 'summary') {
-        const text = getCostSummaryForBriefing();
+        let text = getCostSummaryForBriefing();
+
+        // Add sprint cost breakdown if available
+        const sprintEntries = Object.entries(analytics.bySprint).filter(([k]) => k !== 'untagged');
+        if (sprintEntries.length > 0) {
+          text += '\n\n**By Sprint:**';
+          for (const [sprint, data] of sprintEntries) {
+            text += `\n- ${sprint}: ${data.calls} calls, $${data.costUsd.toFixed(4)}`;
+          }
+        }
+
+        const currentPhase = getCurrentSprintPhase();
+        if (currentPhase) {
+          text += `\n\n_Active sprint: ${currentPhase}_`;
+        }
+
         return { content: [{ type: 'text' as const, text: text + alertLine }] };
       }
 
@@ -41,6 +56,7 @@ export function registerCostTools(server: McpServer): void {
               writeTokens: analytics.totalCacheWriteTokens,
               estimatedSavingsUsd: analytics.estimatedCacheSavingsUsd,
             },
+            activeSprint: getCurrentSprintPhase(),
             alert,
           }, null, 2),
         }],
