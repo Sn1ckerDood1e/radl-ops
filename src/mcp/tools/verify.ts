@@ -10,8 +10,7 @@ import { z } from 'zod';
 import { execSync } from 'child_process';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
-
-const RADL_DIR = '/home/hb/radl';
+import { getConfig } from '../../config/paths.js';
 
 interface CheckResult {
   name: string;
@@ -25,7 +24,7 @@ function runCheck(name: string, command: string): CheckResult {
   try {
     const output = execSync(command, {
       encoding: 'utf-8',
-      cwd: RADL_DIR,
+      cwd: getConfig().radlDir,
       timeout: 300000, // 5 min max
       env: {
         ...process.env,
