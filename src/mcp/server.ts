@@ -1,12 +1,12 @@
 /**
- * MCP Server Entry Point (v1.4.0)
+ * MCP Server Entry Point (v1.5.0)
  *
  * Exposes radl-ops tools, resources, and prompts for Claude Code.
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 21 tools across 3 groups (core, content, advanced) with annotations
- * - Resources: sprint://current, config://iron-laws, config://tool-groups
+ * - Tools: 23 tools across 3 groups (core, content, advanced) with annotations
+ * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
  * Tool groups (dynamic loading):
@@ -44,6 +44,8 @@ import { registerCompoundTools } from './tools/compound.js';
 import { registerAuditTriageTools } from './tools/audit-triage.js';
 import { registerSprintAdvisorTools } from './tools/sprint-advisor.js';
 import { registerReviewPipelineTools } from './tools/review-pipeline.js';
+import { registerSprintDecomposeTools } from './tools/sprint-decompose.js';
+import { registerDriftDetectionTools } from './tools/drift-detection.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -52,7 +54,7 @@ import { logger } from '../config/logger.js';
 
 const server = new McpServer({
   name: 'radl-ops',
-  version: '1.4.0',
+  version: '1.5.0',
 });
 
 // Install tool registry to capture RegisteredTool references (must be before registrations)
@@ -73,6 +75,8 @@ registerCompoundTools(server);
 registerAuditTriageTools(server);
 registerSprintAdvisorTools(server);
 registerReviewPipelineTools(server);
+registerSprintDecomposeTools(server);
+registerDriftDetectionTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
@@ -137,7 +141,7 @@ async function main(): Promise<void> {
   const status = registry.getStatus();
   const enabledCount = status.filter(s => s.enabled).length;
   logger.info('radl-ops MCP server started', {
-    version: '1.4.0',
+    version: '1.5.0',
     toolGroups: status.length,
     enabledGroups: enabledCount,
   });
