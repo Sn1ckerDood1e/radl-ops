@@ -17,8 +17,9 @@ vi.mock('../with-error-tracking.js', () => ({
 async function getHandler() {
   const handlers: Record<string, Function> = {};
   const mockServer = {
-    tool: (_name: string, _desc: string, _schema: unknown, handler: Function) => {
-      handlers[_name] = handler;
+    tool: (...args: unknown[]) => {
+      const name = args[0] as string;
+      handlers[name] = args[args.length - 1] as Function;
     },
   };
 

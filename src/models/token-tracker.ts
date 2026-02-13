@@ -30,6 +30,27 @@ let todayUsage: TokenUsage[] = [];
 let todayDate = new Date().toISOString().split('T')[0];
 
 /**
+ * Current sprint phase for automatic cost tagging.
+ * Set via setCurrentSprintPhase() when a sprint starts.
+ */
+let currentSprintPhase: string | null = null;
+
+/**
+ * Set the active sprint phase for automatic cost tagging.
+ * All trackUsage calls will inherit this phase unless overridden.
+ */
+export function setCurrentSprintPhase(phase: string | null): void {
+  currentSprintPhase = phase;
+}
+
+/**
+ * Get the current sprint phase (for cost reporting).
+ */
+export function getCurrentSprintPhase(): string | null {
+  return currentSprintPhase;
+}
+
+/**
  * Initialize the usage tracking directory
  */
 export function initTokenTracker(): void {
@@ -50,9 +71,12 @@ export function trackUsage(
   taskType: TaskType,
   toolName?: string,
   cacheReadTokens?: number,
-  cacheWriteTokens?: number
+  cacheWriteTokens?: number,
+  sprintPhase?: string
 ): TokenUsage {
   const costUsd = calculateCost(model, inputTokens, outputTokens);
+
+  const resolvedPhase = sprintPhase ?? currentSprintPhase ?? undefined;
 
   const usage: TokenUsage = {
     model,
@@ -64,6 +88,7 @@ export function trackUsage(
     timestamp: new Date(),
     taskType,
     toolName,
+    sprintPhase: resolvedPhase,
   };
 
   // Append to daily rotated JSONL file
@@ -170,6 +195,7 @@ function buildAnalytics(
 ): CostAnalytics {
   const byModel: Record<string, { calls: number; costUsd: number; tokens: number }> = {};
   const byTaskType: Record<string, { calls: number; costUsd: number }> = {};
+  const bySprint: Record<string, { calls: number; costUsd: number }> = {};
   let totalCost = 0;
   let totalInput = 0;
   let totalOutput = 0;
@@ -201,6 +227,15 @@ function buildAnalytics(
       calls: byTaskType[taskKey].calls + 1,
       costUsd: byTaskType[taskKey].costUsd + entry.costUsd,
     };
+
+    const sprintKey = entry.sprintPhase ?? 'untagged';
+    if (!bySprint[sprintKey]) {
+      bySprint[sprintKey] = { calls: 0, costUsd: 0 };
+    }
+    bySprint[sprintKey] = {
+      calls: bySprint[sprintKey].calls + 1,
+      costUsd: bySprint[sprintKey].costUsd + entry.costUsd,
+    };
   }
 
   // Estimate savings: cache reads cost 10% of normal input price
@@ -222,6 +257,7 @@ function buildAnalytics(
     estimatedCacheSavingsUsd: Math.round(estimatedSavings * 1_000_000) / 1_000_000,
     byModel,
     byTaskType,
+    bySprint,
   };
 }
 

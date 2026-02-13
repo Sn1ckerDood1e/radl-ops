@@ -14,21 +14,27 @@ import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { runBloomPipeline } from '../../patterns/bloom-orchestrator.js';
 import type { SprintData, CategorizedLesson } from '../../patterns/bloom-orchestrator.js';
+import { getConfig } from '../../config/paths.js';
 
-const RADL_DIR = '/home/hb/radl';
-const SPRINT_DIR = join(RADL_DIR, '.planning/sprints');
-const KNOWLEDGE_DIR = '/home/hb/radl-ops/knowledge';
-const COMPOUND_DIR = join(KNOWLEDGE_DIR, 'compounds');
+function getSprintDir(): string {
+  return join(getConfig().radlDir, '.planning/sprints');
+}
+function getKnowledgeDir(): string {
+  return getConfig().knowledgeDir;
+}
+function getCompoundDir(): string {
+  return join(getKnowledgeDir(), 'compounds');
+}
 
 function ensureDirs(): void {
-  if (!existsSync(COMPOUND_DIR)) {
-    mkdirSync(COMPOUND_DIR, { recursive: true });
+  if (!existsSync(getCompoundDir())) {
+    mkdirSync(getCompoundDir(), { recursive: true });
   }
 }
 
 function findLatestSprint(): { path: string; data: SprintData } | null {
   // Try archive first
-  const archiveDir = join(SPRINT_DIR, 'archive');
+  const archiveDir = join(getSprintDir(), 'archive');
   if (existsSync(archiveDir)) {
     try {
       const files = readdirSync(archiveDir)
@@ -47,7 +53,7 @@ function findLatestSprint(): { path: string; data: SprintData } | null {
   }
 
   // Fall back to current sprint
-  const currentPath = join(SPRINT_DIR, 'current.json');
+  const currentPath = join(getSprintDir(), 'current.json');
   if (existsSync(currentPath)) {
     try {
       const data = JSON.parse(readFileSync(currentPath, 'utf-8'));
@@ -82,7 +88,7 @@ interface LessonsFile {
 }
 
 function mergeIntoKnowledge(lessons: CategorizedLesson[], phase: string): number {
-  const lessonsPath = join(KNOWLEDGE_DIR, 'lessons.json');
+  const lessonsPath = join(getKnowledgeDir(), 'lessons.json');
   const existing: LessonsFile = existsSync(lessonsPath)
     ? JSON.parse(readFileSync(lessonsPath, 'utf-8'))
     : { lessons: [] };
@@ -125,13 +131,14 @@ export function registerCompoundTools(server: McpServer): void {
       source: z.enum(['latest', 'current']).optional().default('latest')
         .describe('Sprint data source: latest archived sprint or current in-progress sprint'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('compound_extract', async ({ source }) => {
       ensureDirs();
 
       // Find sprint data
       let sprint: { path: string; data: SprintData } | null = null;
       if (source === 'current') {
-        const currentPath = join(SPRINT_DIR, 'current.json');
+        const currentPath = join(getSprintDir(), 'current.json');
         if (existsSync(currentPath)) {
           const data = JSON.parse(readFileSync(currentPath, 'utf-8'));
           sprint = { path: currentPath, data: normalizeSprintData(data) };
@@ -161,7 +168,7 @@ export function registerCompoundTools(server: McpServer): void {
 
       // Save compound file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-      const compoundFile = join(COMPOUND_DIR, `bloom-${timestamp}.json`);
+      const compoundFile = join(getCompoundDir(), `bloom-${timestamp}.json`);
       writeFileSync(compoundFile, JSON.stringify({
         extractedAt: new Date().toISOString(),
         method: 'bloom-pipeline',

@@ -12,7 +12,7 @@ Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups 
 
 | Group | Default | Tools |
 |-------|---------|-------|
-| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline |
+| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns |
 | **content** | Disabled | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
 | **advanced** | Disabled | eval_opt_generate, compound_extract |
 
@@ -41,13 +41,42 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `audit_triage` | core | Classify audit findings into DO_NOW/DO_SOON/DEFER via Haiku |
 | `sprint_advisor` | core | AI-powered analysis of sprint tasks to recommend team usage |
 | `review_pipeline` | core | Complete review workflow: recipe + triage template + orchestration checklist |
+| `sprint_decompose` | core | Auto-decompose sprint into structured tasks with AI (Haiku). Returns TaskCreate-ready JSON |
+| `verify_patterns` | core | Check git diffs against knowledge base patterns. Detects drift before PR |
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
 | `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
+
+## MCP Resources
+
+Read-only state exposed as MCP resources (no tool call needed). Clients can subscribe to these for efficient state inspection.
+
+| URI | Description |
+|-----|-------------|
+| `sprint://current` | Current sprint state + active git branch |
+| `config://iron-laws` | Non-negotiable constraints (all 6 laws) |
+| `config://tool-groups` | Tool group enabled/disabled status |
+
+## MCP Prompts
+
+Workflow templates exposed as MCP prompts. Appear as prompt selections in compatible clients.
+
+| Prompt | Args | Description |
+|--------|------|-------------|
+| `sprint-start` | phase, title, estimate? | Pre-filled sprint start workflow |
+| `sprint-review` | phase, branch? | End-of-sprint review checklist |
+| `code-review` | files, focus? | Structured code review with severity levels |
+
+## Tool Annotations
+
+All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) enabling MCP clients to make UX decisions about tool behavior.
 
 ## Architecture
 
 ```
-Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
+Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v1.5.0)
+                                    ├── tools (23 tools, 3 groups, with annotations)
+                                    ├── resources (3: sprint [cached], iron-laws, tool-groups)
+                                    ├── prompts (3: sprint-start, sprint-review, code-review)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
@@ -57,7 +86,10 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server
                                     ├── review pipeline (chained review → triage → tracking)
                                     ├── eval-opt (generate→evaluate→refine with memory + caching)
                                     ├── compound learning (Bloom pipeline: 4-stage AI extraction)
-                                    └── cost reporting (token tracking with cache metrics)
+                                    ├── sprint decompose (AI auto-breaks sprint into tasks with DAG)
+                                    ├── drift detection (verify code against knowledge base patterns)
+                                    ├── per-sprint cost tracking (tags API calls with active phase)
+                                    └── cost reporting (token tracking with cache + sprint metrics)
 ```
 
 ## Iron Laws (NEVER violate)

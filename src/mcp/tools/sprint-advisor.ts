@@ -16,8 +16,7 @@ import { getAnthropicClient } from '../../config/anthropic.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import type { TeamRunStore } from '../../types/index.js';
-
-const TEAM_RUNS_PATH = '/home/hb/radl-ops/knowledge/team-runs.json';
+import { getConfig } from '../../config/paths.js';
 
 const VALID_RECIPES = [
   'review', 'feature', 'debug', 'research', 'migration',
@@ -100,9 +99,9 @@ Be concise. Focus on whether parallelization adds real value.
 Use the team_advice tool to submit your structured recommendation.`;
 
 function loadRecentTeamRuns(): string {
-  if (!existsSync(TEAM_RUNS_PATH)) return '';
+  if (!existsSync(`${getConfig().knowledgeDir}/team-runs.json`)) return '';
   try {
-    const store = JSON.parse(readFileSync(TEAM_RUNS_PATH, 'utf-8')) as TeamRunStore;
+    const store = JSON.parse(readFileSync(`${getConfig().knowledgeDir}/team-runs.json`, 'utf-8')) as TeamRunStore;
     const successful = store.runs.filter(r => r.outcome === 'success').slice(-3);
     if (successful.length === 0) return '';
 
@@ -220,6 +219,7 @@ export function registerSprintAdvisorTools(server: McpServer): void {
       sprint_context: z.string().max(500).optional()
         .describe('Brief sprint context (e.g., "Phase 62 — Auth improvements")'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     withErrorTracking('sprint_advisor', async ({ tasks, sprint_context }) => {
       const context = sprint_context ?? 'General sprint';
       const route = getRoute('spot_check'); // Haiku

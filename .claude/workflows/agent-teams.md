@@ -165,6 +165,23 @@ Also available via MCP: `team_recipe(recipe: "incremental-review", context: "...
    code-reviewer missed that the tier check could receive legacy enum values.
    Security-reviewer catches auth/boundary issues that code-reviewer doesn't focus on.
 
+10. **Lightweight parallel > full TeamCreate for implementation** — In Phase 69,
+    4 wave agents using `Task(run_in_background=true)` completed 10 tasks in ~45 min
+    with no TeamCreate overhead. Reserve full TeamCreate for review teams that need
+    inter-agent messaging. Implementation agents just need to finish and report back.
+
+11. **Agents can't catch cross-cutting bugs** — In Phase 69, wave1-agent added
+    `setupChecklistDismissed` to the Prisma schema and Zod validation, but the API
+    route handler (owned by nobody) was never updated. The field passed validation
+    but was silently discarded. **Fix:** Plans must list ALL files in every data flow.
+    If a field is written by client and read by server, the API handler file MUST be
+    in some agent's file list. Security review is the last line of defense.
+
+12. **Strict file ownership prevents conflicts completely** — In Phase 69, 4 agents
+    modified 20+ files with zero merge conflicts because each file had exactly one
+    owner. The leader handled the one shared hub file (page.tsx) after all agents
+    completed. This is the proven pattern for parallel implementation.
+
 ## Display Mode
 
 Default: `auto` (uses split panes if in tmux, otherwise in-process)

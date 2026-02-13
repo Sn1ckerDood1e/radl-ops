@@ -46,6 +46,7 @@ export interface TokenUsage {
   timestamp: Date;
   taskType: TaskType;
   toolName?: string;
+  sprintPhase?: string;
 }
 
 export interface CostAnalytics {
@@ -60,6 +61,7 @@ export interface CostAnalytics {
   estimatedCacheSavingsUsd: number;
   byModel: Record<string, { calls: number; costUsd: number; tokens: number }>;
   byTaskType: Record<string, { calls: number; costUsd: number }>;
+  bySprint: Record<string, { calls: number; costUsd: number }>;
 }
 
 // ============================================

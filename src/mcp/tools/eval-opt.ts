@@ -51,6 +51,7 @@ export function registerEvalOptTools(server: McpServer): void {
       max_iterations: z.number().min(1).max(5).optional()
         .describe('Maximum refinement iterations (default: 3)'),
     },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('eval_opt_generate', async ({
       prompt,
       criteria,

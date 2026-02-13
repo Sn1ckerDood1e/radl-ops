@@ -11,8 +11,7 @@ import { z } from 'zod';
 import { readFileSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
-
-const KNOWLEDGE_DIR = '/home/hb/radl-ops/knowledge';
+import { getConfig } from '../../config/paths.js';
 
 interface Pattern {
   id: number;
@@ -70,7 +69,7 @@ interface ScoredEntry {
 }
 
 function loadJson<T>(filename: string): T | null {
-  const path = `${KNOWLEDGE_DIR}/${filename}`;
+  const path = `${getConfig().knowledgeDir}/${filename}`;
   if (!existsSync(path)) return null;
   try {
     const content = readFileSync(path, 'utf-8');
@@ -135,6 +134,7 @@ export function registerKnowledgeTools(server: McpServer): void {
       query: z.string().max(200).optional()
         .describe('Search keyword to filter results (searches names, descriptions, learnings, rationale)'),
     },
+    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('knowledge_query', async ({ type, query }) => {
       const queryType = type ?? 'all';
 

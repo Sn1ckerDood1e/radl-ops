@@ -51,13 +51,25 @@ Before starting execution, check the task dependency graph:
    ```
    This prevents writing code that misuses APIs (e.g., loading all users when you need one).
 3. **Execute the work** - Write code, run tests
-4. **Trace the full data flow** — When adding data to a list/page, verify ALL layers connect:
+4. **Trace the full data flow** — Verify ALL layers connect in BOTH directions:
+
+   **READ path** (displaying data):
    - Server component → Prisma query (includes the new fields?)
    - Server component → client props mapping (passes the new fields?)
    - Client component → child component props (forwards the new fields?)
    - Child component → render (displays the new fields?)
    Don't just update the API endpoint and client independently. If the server page
    maps props explicitly, new fields will be silently dropped.
+
+   **WRITE path** (mutations — Phase 69 lesson):
+   - Client component → fetch call (sends the new field?)
+   - API route handler → destructuring (extracts the new field from body?)
+   - API route handler → condition check (triggers on the new field?)
+   - API route handler → updateData object (includes the new field?)
+   - Prisma upsert/update (persists the new field?)
+   In Phase 69, `setupChecklistDismissed` was added to schema + validation + client
+   but the API handler never processed it. The PATCH returned `{ success: true }` while
+   silently discarding the field. Only the security reviewer caught it post-implementation.
 5. **Typecheck after changes**: `npm run typecheck`
 6. **Commit per task** (never batch all tasks into one commit):
    ```bash

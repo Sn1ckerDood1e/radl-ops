@@ -1,3 +1,184 @@
 {
-  "items": []
+  "items": [
+    {
+      "id": 1,
+      "title": "Fix RackBay facilityId TS error",
+      "reason": "Smoke test only — real fix needed in radl codebase",
+      "effort": "small",
+      "sprintPhase": "Phase 64",
+      "date": "2026-02-11T23:31:06.000Z",
+      "resolved": false
+    },
+    {
+      "id": 2,
+      "title": "Fix Team create facility relation TS error",
+      "reason": "Smoke test only — real fix needed in radl codebase",
+      "effort": "small",
+      "sprintPhase": "Phase 64",
+      "date": "2026-02-11T23:31:06.000Z",
+      "resolved": false
+    },
+    {
+      "id": 3,
+      "title": "Prisma client regeneration needed at build time",
+      "reason": "Generated types were stale — facilityId showed as required instead of optional. Fixed with prisma generate but gitignored files won't persist.",
+      "effort": "small",
+      "sprintPhase": "Phase 65",
+      "date": "2026-02-12T00:10:31.052Z",
+      "resolved": false
+    },
+    {
+      "id": 4,
+      "title": "verifyFacilityAdmin duplicated in activity route",
+      "reason": "Same auth pattern duplicated in 6+ facility routes — extract to shared helper",
+      "effort": "small",
+      "sprintPhase": "Phase 65",
+      "date": "2026-02-12T00:10:31.052Z",
+      "resolved": false
+    },
+    {
+      "id": 5,
+      "title": "Multi-child parent dashboard",
+      "reason": "Dashboard only shows first linked athlete; multi-child support deferred",
+      "effort": "medium",
+      "sprintPhase": "Phase 66.2",
+      "date": "2026-02-12T13:52:52.810Z",
+      "resolved": false
+    },
+    {
+      "id": 6,
+      "title": "Contact Coach button in parent empty state",
+      "reason": "Low priority UX enhancement for parent with no linked athlete",
+      "effort": "small",
+      "sprintPhase": "Phase 66.2",
+      "date": "2026-02-12T13:52:52.811Z",
+      "resolved": false
+    },
+    {
+      "id": 7,
+      "title": "Extract dashboard data fetching branches",
+      "reason": "Dashboard page.tsx approaching 400 lines; could extract coach/parent/athlete branches",
+      "effort": "small",
+      "sprintPhase": "Phase 66.2",
+      "date": "2026-02-12T13:52:52.811Z",
+      "resolved": false
+    },
+    {
+      "id": 8,
+      "title": "aria-labels for icon-only buttons",
+      "reason": "~60-80 buttons need labels, estimated 3-5 hours of careful audit",
+      "effort": "large",
+      "sprintPhase": "Phase 67",
+      "date": "2026-02-12T15:04:00.764Z",
+      "resolved": false
+    },
+    {
+      "id": 9,
+      "title": "Oversized components (15 files >400 lines)",
+      "reason": "Requires careful refactoring judgment per component, not mechanical",
+      "effort": "large",
+      "sprintPhase": "Phase 67",
+      "date": "2026-02-12T15:04:00.765Z",
+      "resolved": false
+    },
+    {
+      "id": 10,
+      "title": "Component/E2E test coverage",
+      "reason": "Zero component tests currently, large effort needs dedicated sprint",
+      "effort": "large",
+      "sprintPhase": "Phase 67",
+      "date": "2026-02-12T15:04:00.765Z",
+      "resolved": false
+    },
+    {
+      "id": 11,
+      "title": "Remaining 14 mutation routes without Zod",
+      "reason": "Most are action-only (no body to validate), low risk",
+      "effort": "small",
+      "sprintPhase": "Phase 67",
+      "date": "2026-02-12T15:04:00.765Z",
+      "resolved": false
+    },
+    {
+      "id": 12,
+      "title": "ConfirmDialog unit tests",
+      "reason": "No existing test patterns for shared UI components — better as part of a test coverage sprint",
+      "effort": "small",
+      "sprintPhase": "Phase 68",
+      "date": "2026-02-12T15:37:45.356Z",
+      "resolved": false
+    },
+    {
+      "id": 13,
+      "title": "ConfirmDialog CSS variable destructive colors",
+      "reason": "Hardcoded red-600 works for now, should use theme variables when theming is revisited",
+      "effort": "small",
+      "sprintPhase": "Phase 68",
+      "date": "2026-02-12T15:37:45.356Z",
+      "resolved": false
+    },
+    {
+      "id": 14,
+      "title": "Date range validation on practice duplication",
+      "reason": "Medium priority from security review — coach could create practices with unreasonable dates",
+      "effort": "small",
+      "sprintPhase": "Phase 69",
+      "date": "2026-02-12T21:48:32.150Z",
+      "resolved": false
+    },
+    {
+      "id": 15,
+      "title": "Improve error handling in checklist dismiss",
+      "reason": "Medium priority from security review — errors silently swallowed",
+      "effort": "small",
+      "sprintPhase": "Phase 69",
+      "date": "2026-02-12T21:48:32.150Z",
+      "resolved": false
+    },
+    {
+      "id": 16,
+      "title": "Extract parent dashboard queries to separate module",
+      "reason": "page.tsx approaching 500+ lines — code review recommended extraction",
+      "effort": "small",
+      "sprintPhase": "Phase 69",
+      "date": "2026-02-12T21:48:32.150Z",
+      "resolved": false
+    },
+    {
+      "id": 17,
+      "title": "Add resource caching with TTL",
+      "reason": "MEDIUM security review finding - subprocess spawning on every resource read. Low risk for single-user stdio MCP.",
+      "effort": "small",
+      "sprintPhase": "Phase 70",
+      "date": "2026-02-12T22:33:59.705Z",
+      "resolved": true
+    },
+    {
+      "id": 18,
+      "title": "Extract shared test mock utility",
+      "reason": "LOW code review finding - mock server pattern duplicated across 9 test files.",
+      "effort": "small",
+      "sprintPhase": "Phase 70",
+      "date": "2026-02-12T22:33:59.705Z",
+      "resolved": true
+    },
+    {
+      "id": 19,
+      "title": "Add Zod .max() constraints to prompt arguments",
+      "reason": "LOW security review finding - string args have no length limits.",
+      "effort": "small",
+      "sprintPhase": "Phase 70",
+      "date": "2026-02-12T22:33:59.705Z",
+      "resolved": true
+    },
+    {
+      "id": 20,
+      "title": "Make file paths configurable via env vars",
+      "reason": "MEDIUM code review finding - hardcoded /home/hb paths reduce portability.",
+      "effort": "small",
+      "sprintPhase": "Phase 70",
+      "date": "2026-02-12T22:33:59.705Z",
+      "resolved": true
+    }
+  ]
 }
