@@ -14,6 +14,17 @@ vi.mock('../config/logger.js', () => ({
   },
 }));
 
+vi.mock('../config/paths.js', () => ({
+  getConfig: vi.fn(() => ({
+    radlDir: '/home/hb/radl',
+    radlOpsDir: '/home/hb/radl-ops',
+    knowledgeDir: '/home/hb/radl-ops/knowledge',
+    sprintScript: '/home/hb/radl-ops/scripts/sprint.sh',
+    compoundScript: '/home/hb/radl-ops/scripts/compound.sh',
+    usageLogsDir: '/home/hb/radl-ops/usage-logs',
+  })),
+}));
+
 vi.mock('../guardrails/iron-laws.js', () => ({
   getIronLaws: vi.fn(() => [
     { id: 'no-push-main', description: 'Never push to main' },
@@ -49,8 +60,11 @@ async function getHandlers() {
 }
 
 describe('MCP Resources', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // Clear the sprint resource cache between tests
+    const { clearResourceCache } = await import('./resources.js');
+    clearResourceCache();
   });
 
   describe('sprint://current', () => {
@@ -95,6 +109,27 @@ describe('MCP Resources', () => {
       const data = JSON.parse(result.contents[0].text);
       expect(data.error).toContain('Failed to get git branch');
       expect(data.sprintOutput).toBe('Phase 70: In Progress');
+    });
+
+    it('returns cached result on second read within TTL', async () => {
+      vi.mocked(execFileSync).mockReturnValue('Phase 71: In Progress\n');
+      vi.mocked(execSync).mockReturnValue('feat/phase-71\n');
+
+      const handlers = await getHandlers();
+
+      // First call populates cache
+      await handlers['sprint://current'](new URL('sprint://current'));
+
+      // Change mocks — cache should prevent these from being called
+      vi.mocked(execFileSync).mockReturnValue('Phase 72: Different\n');
+      vi.mocked(execSync).mockReturnValue('feat/phase-72\n');
+
+      const result = await handlers['sprint://current'](new URL('sprint://current'));
+      const data = JSON.parse(result.contents[0].text);
+
+      // Should still see cached Phase 71 data
+      expect(data.sprintOutput).toBe('Phase 71: In Progress');
+      expect(data.branch).toBe('feat/phase-71');
     });
   });
 

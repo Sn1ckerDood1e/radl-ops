@@ -5,9 +5,12 @@
  * reducing context pollution and enabling efficient state inspection.
  *
  * Resources:
- * - sprint://current - Current sprint state + git branch
+ * - sprint://current - Current sprint state + git branch (cached 30s)
  * - config://iron-laws - Non-negotiable constraints
  * - config://tool-groups - Tool group enable/disable status
+ *
+ * sprint://current uses a TTL cache to avoid spawning subprocesses
+ * on every read (sprint.sh + git branch).
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -15,12 +18,28 @@ import { execFileSync, execSync } from 'child_process';
 import { getIronLaws } from '../guardrails/iron-laws.js';
 import type { ToolRegistry } from './tool-registry.js';
 import { logger } from '../config/logger.js';
+import { getConfig } from '../config/paths.js';
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const SPRINT_CACHE_TTL_MS = 30_000; // 30 seconds
+let sprintCache: CacheEntry<{ branch: string; sprintOutput: string; error?: string }> | null = null;
+
+/** Clear the sprint resource cache (for testing) */
+export function clearResourceCache(): void {
+  sprintCache = null;
+}
 
 /**
  * Register all MCP resources on the server
  */
 export function registerResources(server: McpServer, registry: ToolRegistry): void {
-  // Resource 1: Current sprint state + git branch
+  const config = getConfig();
+
+  // Resource 1: Current sprint state + git branch (cached)
   server.resource(
     'sprint://current',
     'sprint://current',
@@ -30,14 +49,27 @@ export function registerResources(server: McpServer, registry: ToolRegistry): vo
       mimeType: 'application/json',
     },
     async (uri) => {
+      const now = Date.now();
+
+      // Return cached result if fresh
+      if (sprintCache && (now - sprintCache.timestamp) < SPRINT_CACHE_TTL_MS) {
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: 'application/json',
+            text: JSON.stringify(sprintCache.data, null, 2),
+          }],
+        };
+      }
+
       let sprintOutput = '';
       let branch = '';
-      let error = null;
+      let error: string | undefined;
 
       // Get sprint status
       try {
         sprintOutput = execFileSync(
-          '/home/hb/radl-ops/scripts/sprint.sh',
+          config.sprintScript,
           ['status'],
           { encoding: 'utf-8', timeout: 10000 }
         ).trim();
@@ -50,28 +82,28 @@ export function registerResources(server: McpServer, registry: ToolRegistry): vo
       try {
         branch = execSync('git branch --show-current', {
           encoding: 'utf-8',
-          cwd: '/home/hb/radl',
+          cwd: config.radlDir,
           timeout: 5000,
         }).trim();
       } catch (err) {
-        error = error
-          ? `${error}; Failed to get git branch: ${err instanceof Error ? err.message : String(err)}`
-          : `Failed to get git branch: ${err instanceof Error ? err.message : String(err)}`;
+        const branchError = `Failed to get git branch: ${err instanceof Error ? err.message : String(err)}`;
+        error = error ? `${error}; ${branchError}` : branchError;
         logger.error('Resource sprint://current: git branch failed', { error: err });
       }
 
       const data = error
-        ? { error, branch: branch || null, sprintOutput: sprintOutput || null }
+        ? { error, branch: branch || '', sprintOutput: sprintOutput || '' }
         : { branch, sprintOutput };
 
+      // Cache the result
+      sprintCache = { data, timestamp: now };
+
       return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: 'application/json',
-            text: JSON.stringify(data, null, 2),
-          },
-        ],
+        contents: [{
+          uri: uri.href,
+          mimeType: 'application/json',
+          text: JSON.stringify(data, null, 2),
+        }],
       };
     }
   );
@@ -88,13 +120,11 @@ export function registerResources(server: McpServer, registry: ToolRegistry): vo
     async (uri) => {
       const laws = getIronLaws();
       return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: 'application/json',
-            text: JSON.stringify(laws, null, 2),
-          },
-        ],
+        contents: [{
+          uri: uri.href,
+          mimeType: 'application/json',
+          text: JSON.stringify(laws, null, 2),
+        }],
       };
     }
   );
@@ -111,13 +141,11 @@ export function registerResources(server: McpServer, registry: ToolRegistry): vo
     async (uri) => {
       const status = registry.getStatus();
       return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: 'application/json',
-            text: JSON.stringify(status, null, 2),
-          },
-        ],
+        contents: [{
+          uri: uri.href,
+          mimeType: 'application/json',
+          text: JSON.stringify(status, null, 2),
+        }],
       };
     }
   );
