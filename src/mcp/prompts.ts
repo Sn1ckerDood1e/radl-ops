@@ -28,9 +28,9 @@ export function registerPrompts(server: McpServer): void {
     'sprint-start',
     'Pre-filled sprint start workflow template with branch creation, tracking, and task execution steps',
     {
-      phase: z.string().describe('Phase identifier (e.g., "Phase 70", "01-foundation")'),
-      title: z.string().describe('Sprint title describing the work being done'),
-      estimate: z.string().optional().describe('Time estimate (e.g., "3 hours", "90 minutes")'),
+      phase: z.string().max(50).describe('Phase identifier (e.g., "Phase 70", "01-foundation")'),
+      title: z.string().max(200).describe('Sprint title describing the work being done'),
+      estimate: z.string().max(50).optional().describe('Time estimate (e.g., "3 hours", "90 minutes")'),
     },
     ({ phase, title, estimate }) => {
       const phaseSlug = phase.toLowerCase().replace(/\s+/g, '-');
@@ -66,8 +66,8 @@ Workflow:
     'sprint-review',
     'End-of-sprint review checklist with pre-PR verification steps and completion workflow',
     {
-      phase: z.string().describe('Phase identifier (e.g., "Phase 70", "01-foundation")'),
-      branch: z.string().optional().describe('Feature branch name (defaults to phase-slug)'),
+      phase: z.string().max(50).describe('Phase identifier (e.g., "Phase 70", "01-foundation")'),
+      branch: z.string().max(100).optional().describe('Feature branch name (defaults to phase-slug)'),
     },
     ({ phase, branch }) => {
       const phaseSlug = phase.toLowerCase().replace(/\s+/g, '-');
@@ -108,7 +108,7 @@ Workflow:
     'code-review',
     'Structured code review prompt with severity levels and focus areas',
     {
-      files: z.string().describe('Comma-separated list of file paths to review'),
+      files: z.string().max(2000).describe('Comma-separated list of file paths to review'),
       focus: z
         .enum(['security', 'performance', 'correctness', 'all'])
         .default('all')
