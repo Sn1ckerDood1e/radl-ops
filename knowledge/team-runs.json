@@ -1,1 +1,56 @@
-{ "runs": [] }
+{
+  "runs": [
+    {
+      "id": 1,
+      "sprintPhase": "Phase 67",
+      "recipe": "parallel-review",
+      "teammateCount": 3,
+      "model": "sonnet",
+      "duration": "5 min",
+      "findingsCount": 4,
+      "tasksCompleted": 3,
+      "outcome": "success",
+      "lessonsLearned": "Parallel agents for audit tasks (dedup, console, any-types) works well. Initial survey estimates were inflated — actual issues much smaller.",
+      "date": "2026-02-12T15:04:00.769Z"
+    },
+    {
+      "id": 2,
+      "sprintPhase": "Phase 67.1",
+      "recipe": "parallel-work",
+      "teammateCount": 2,
+      "model": "sonnet",
+      "duration": "5 min",
+      "findingsCount": 22,
+      "tasksCompleted": 2,
+      "outcome": "success",
+      "lessonsLearned": "Parallel agents for mechanical edits (aria-labels + Zod) works perfectly. Both completed in ~5 min with zero conflicts since they touched different files.",
+      "date": "2026-02-12T15:13:06.619Z"
+    },
+    {
+      "id": 3,
+      "sprintPhase": "Phase 69",
+      "recipe": "multi-module-feature",
+      "teammateCount": 4,
+      "model": "sonnet",
+      "duration": "45 min",
+      "findingsCount": 6,
+      "tasksCompleted": 10,
+      "outcome": "success",
+      "lessonsLearned": "4 parallel wave agents with strict file ownership prevents conflicts. Leader handles shared hub file (page.tsx) after all agents complete. Security review caught HIGH bug that all 4 agents missed.",
+      "date": "2026-02-12T21:48:32.154Z"
+    },
+    {
+      "id": 4,
+      "sprintPhase": "Phase 70",
+      "recipe": "implementation",
+      "teammateCount": 3,
+      "model": "sonnet",
+      "duration": "45 minutes",
+      "findingsCount": 0,
+      "tasksCompleted": 6,
+      "outcome": "success",
+      "lessonsLearned": "Lightweight parallel (Task run_in_background) works well for independent module creation. Mock server pattern in tests needs updating when adding annotations - spread args pattern is more resilient.",
+      "date": "2026-02-12T22:33:59.707Z"
+    }
+  ]
+}
