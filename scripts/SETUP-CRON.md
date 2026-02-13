@@ -43,7 +43,7 @@ curl -X POST 'https://api.resend.com/emails' \
   -H 'Content-Type: application/json' \
   -d "{
     \"from\": \"radl-ops@yourdomain.com\",
-    \"to\": \"kinseymi@radl.solutions\",
+    \"to\": \"$BRIEFING_EMAIL\",
     \"subject\": \"Radl Daily Briefing - $DATE\",
     \"text\": \"$(cat $BRIEFING_FILE)\"
   }"

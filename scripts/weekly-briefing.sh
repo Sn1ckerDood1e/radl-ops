@@ -1,6 +1,6 @@
 #!/bin/bash
 # Weekly Briefing Script - Runs Saturday at 7am
-# Generates comprehensive weekly summary and emails to kinseymi@radl.solutions
+# Generates comprehensive weekly summary and sends via configured channel
 
 set -e
 

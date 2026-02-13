@@ -28,6 +28,10 @@ audit-logs/
 usage-logs/
 logs/
 
+# Generated artifacts (personal work output)
+briefings/
+training/
+
 # Test coverage
 coverage/
 
