@@ -29,11 +29,12 @@ export interface ToolGroup {
 export const TOOL_GROUPS: ToolGroup[] = [
   {
     name: 'core',
-    description: 'Sprint management, monitoring, knowledge, iron laws, cost reporting, team recipes, verification',
+    description: 'Sprint management, monitoring, knowledge, iron laws, cost reporting, team recipes, verification, conductor, data flow, pre-flight',
     toolNames: [
       'health_check', 'sprint_status', 'sprint_start', 'sprint_progress', 'sprint_complete',
       'iron_laws', 'cost_report', 'knowledge_query', 'verify', 'team_recipe', 'audit_triage',
       'sprint_advisor', 'review_pipeline', 'sprint_decompose', 'verify_patterns',
+      'sprint_conductor', 'verify_data_flow', 'pre_flight_check',
     ],
     defaultEnabled: true,
   },

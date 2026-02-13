@@ -1,16 +1,16 @@
 /**
- * MCP Server Entry Point (v1.5.0)
+ * MCP Server Entry Point (v2.0.0)
  *
  * Exposes radl-ops tools, resources, and prompts for Claude Code.
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 23 tools across 3 groups (core, content, advanced) with annotations
+ * - Tools: 26 tools across 3 groups (core, content, advanced) with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
  * Tool groups (dynamic loading):
- * - core: always enabled (sprint, monitoring, knowledge, iron laws)
+ * - core: always enabled (sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight)
  * - content: disabled by default, enable with enable_tools (briefing, social, roadmap)
  * - advanced: disabled by default, enable with enable_tools (eval-opt, compound)
  *
@@ -46,6 +46,9 @@ import { registerSprintAdvisorTools } from './tools/sprint-advisor.js';
 import { registerReviewPipelineTools } from './tools/review-pipeline.js';
 import { registerSprintDecomposeTools } from './tools/sprint-decompose.js';
 import { registerDriftDetectionTools } from './tools/drift-detection.js';
+import { registerSprintConductorTools } from './tools/sprint-conductor.js';
+import { registerDataFlowVerifierTools } from './tools/data-flow-verifier.js';
+import { registerPreFlightTools } from './tools/pre-flight.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -54,7 +57,7 @@ import { logger } from '../config/logger.js';
 
 const server = new McpServer({
   name: 'radl-ops',
-  version: '1.5.0',
+  version: '2.0.0',
 });
 
 // Install tool registry to capture RegisteredTool references (must be before registrations)
@@ -77,6 +80,9 @@ registerSprintAdvisorTools(server);
 registerReviewPipelineTools(server);
 registerSprintDecomposeTools(server);
 registerDriftDetectionTools(server);
+registerSprintConductorTools(server);
+registerDataFlowVerifierTools(server);
+registerPreFlightTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
@@ -141,7 +147,7 @@ async function main(): Promise<void> {
   const status = registry.getStatus();
   const enabledCount = status.filter(s => s.enabled).length;
   logger.info('radl-ops MCP server started', {
-    version: '1.5.0',
+    version: '2.0.0',
     toolGroups: status.length,
     enabledGroups: enabledCount,
   });
