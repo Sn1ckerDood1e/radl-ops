@@ -12,7 +12,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { existsSync } from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { resolve } from 'path';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
@@ -34,14 +35,24 @@ function sanitizePattern(input: string): string {
  */
 function searchFiles(dir: string, pattern: string, extensions: string[]): string[] {
   const config = getConfig();
-  const searchDir = `${config.radlDir}/${dir}`;
+  const searchDir = resolve(config.radlDir, dir);
+
+  // Path traversal protection: ensure resolved path stays within radlDir
+  if (!searchDir.startsWith(resolve(config.radlDir))) return [];
   if (!existsSync(searchDir)) return [];
+
   try {
-    const extGlob = extensions.map(e => `--include="*.${e}"`).join(' ');
-    const output = execSync(
-      `grep -rl "${pattern}" ${extGlob} "${searchDir}" 2>/dev/null || true`,
-      { encoding: 'utf-8', timeout: 10000 }
-    );
+    // Use execFileSync with args array to prevent command injection (no shell)
+    const args = ['-rl', pattern];
+    for (const e of extensions) {
+      args.push(`--include=*.${e}`);
+    }
+    args.push(searchDir);
+
+    const output = execFileSync('grep', args, {
+      encoding: 'utf-8',
+      timeout: 10000,
+    });
     const radlDir = config.radlDir;
     return output
       .trim()
@@ -49,6 +60,7 @@ function searchFiles(dir: string, pattern: string, extensions: string[]): string
       .filter(Boolean)
       .map(f => f.startsWith(radlDir) ? f.slice(radlDir.length + 1) : f);
   } catch {
+    // grep returns exit code 1 when no matches found — that's expected
     return [];
   }
 }

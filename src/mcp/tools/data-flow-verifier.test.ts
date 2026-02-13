@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 
 vi.mock('child_process', () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 vi.mock('fs', () => ({
@@ -70,7 +70,7 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('returns FOUND for all layers when field exists everywhere', async () => {
-    vi.mocked(execSync).mockReturnValue(
+    vi.mocked(execFileSync).mockReturnValue(
       '/tmp/test-radl/prisma/schema.prisma\n'
     );
 
@@ -88,11 +88,12 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('returns MISSING for API Handler when field not in routes', async () => {
-    // Schema, Migration, Validation, Client all return results
-    // API Handler returns nothing
-    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
-      const command = String(cmd);
-      if (command.includes('src/app/api')) {
+    // execFileSync receives ('grep', args[], options) — check args for directory
+    vi.mocked(execFileSync).mockImplementation((_cmd: unknown, args: unknown) => {
+      const argsArr = args as string[];
+      // Check if the search dir includes src/app/api
+      const searchDir = argsArr[argsArr.length - 1];
+      if (typeof searchDir === 'string' && searchDir.includes('src/app/api')) {
         return '';
       }
       return '/tmp/test-radl/some/file.ts\n';
@@ -122,11 +123,11 @@ describe('Data Flow Verifier Tool', () => {
     expect(text).toContain('| Client | MISSING |');
     expect(text).toContain('**Result:** INCOMPLETE');
     // grep should not be called when directories don't exist
-    expect(vi.mocked(execSync)).not.toHaveBeenCalled();
+    expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
   });
 
   it('handles grep returning no results', async () => {
-    vi.mocked(execSync).mockReturnValue('');
+    vi.mocked(execFileSync).mockReturnValue('');
 
     const handler = await getHandler();
     const result = await handler({ field: 'nonexistentField', model: 'SomeModel' });
@@ -137,7 +138,7 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('reports COMPLETE status when all layers present', async () => {
-    vi.mocked(execSync).mockReturnValue(
+    vi.mocked(execFileSync).mockReturnValue(
       '/tmp/test-radl/some/matching-file.ts\n'
     );
 
@@ -150,10 +151,10 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('reports INCOMPLETE status when any layer missing', async () => {
-    // Only validation layer returns empty
-    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
-      const command = String(cmd);
-      if (command.includes('src/lib/validations')) {
+    vi.mocked(execFileSync).mockImplementation((_cmd: unknown, args: unknown) => {
+      const argsArr = args as string[];
+      const searchDir = argsArr[argsArr.length - 1];
+      if (typeof searchDir === 'string' && searchDir.includes('src/lib/validations')) {
         return '';
       }
       return '/tmp/test-radl/some/file.ts\n';
@@ -168,7 +169,7 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('strips radlDir prefix from file paths in output', async () => {
-    vi.mocked(execSync).mockReturnValue(
+    vi.mocked(execFileSync).mockReturnValue(
       '/tmp/test-radl/prisma/schema.prisma\n'
     );
 
@@ -181,7 +182,7 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('handles grep command failure gracefully', async () => {
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error('grep failed');
     });
 
@@ -195,13 +196,13 @@ describe('Data Flow Verifier Tool', () => {
   });
 
   it('excludes API routes from client layer check', async () => {
-    // Return an API route file for the component/app searches
-    vi.mocked(execSync).mockImplementation((cmd: unknown) => {
-      const command = String(cmd);
-      if (command.includes('src/components')) {
+    vi.mocked(execFileSync).mockImplementation((_cmd: unknown, args: unknown) => {
+      const argsArr = args as string[];
+      const searchDir = argsArr[argsArr.length - 1];
+      if (typeof searchDir === 'string' && searchDir.includes('src/components')) {
         return '';
       }
-      if (command.includes('src/app') && !command.includes('src/app/api')) {
+      if (typeof searchDir === 'string' && searchDir.includes('src/app') && !searchDir.includes('src/app/api')) {
         return '/tmp/test-radl/src/app/api/some/route.ts\n';
       }
       return '/tmp/test-radl/some/file.ts\n';
@@ -211,26 +212,26 @@ describe('Data Flow Verifier Tool', () => {
     const result = await handler({ field: 'myField', model: 'MyModel' });
     const text = result.content[0].text;
 
-    // Client layer should filter out API routes
-    // The exact behavior depends on the grep results
     expect(text).toContain('# Data Flow Verification');
   });
 
-  it('uses correct timeout for grep commands', async () => {
-    vi.mocked(execSync).mockReturnValue('');
+  it('uses execFileSync instead of execSync for command injection prevention', async () => {
+    vi.mocked(execFileSync).mockReturnValue('');
 
     const handler = await getHandler();
     await handler({ field: 'testField', model: 'TestModel' });
 
-    // Verify all execSync calls use timeout
-    const calls = vi.mocked(execSync).mock.calls;
+    // Verify all calls use execFileSync with 'grep' as first arg
+    const calls = vi.mocked(execFileSync).mock.calls;
     for (const call of calls) {
-      expect(call[1]).toMatchObject({ timeout: 10000 });
+      expect(call[0]).toBe('grep');
+      expect(Array.isArray(call[1])).toBe(true);
+      expect(call[2]).toMatchObject({ timeout: 10000 });
     }
   });
 
   it('logs verification start and completion', async () => {
-    vi.mocked(execSync).mockReturnValue('');
+    vi.mocked(execFileSync).mockReturnValue('');
 
     const handler = await getHandler();
     await handler({ field: 'testField', model: 'TestModel' });
