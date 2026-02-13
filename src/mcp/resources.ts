@@ -34,6 +34,18 @@ export function clearResourceCache(): void {
 }
 
 /**
+ * Notify that the sprint resource has changed. Invalidates cache so the next
+ * resource read gets fresh data.
+ *
+ * TODO: When MCP SDK supports server.notification(), emit:
+ *   server.notification({ method: 'notifications/resources/updated', params: { uri: 'sprint://current' } })
+ */
+export function notifySprintChanged(): void {
+  sprintCache = null;
+  logger.debug('Sprint cache invalidated (sprint state changed)');
+}
+
+/**
  * Register all MCP resources on the server
  */
 export function registerResources(server: McpServer, registry: ToolRegistry): void {

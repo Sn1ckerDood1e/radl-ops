@@ -1,0 +1,63 @@
+{
+  "extractedAt": "2026-02-12T14:25:41.935Z",
+  "method": "bloom-pipeline",
+  "sprintPhase": "Phase 66.3",
+  "sprintTitle": "Radl Ops Self-Improvement (7 items from Phase 66.2 retro)",
+  "qualityScore": 8,
+  "lessons": [
+    {
+      "category": "pattern",
+      "content": "Zero completion rate combined with zero documented blockers indicates systemic tracking failure, not execution failure. Use the '0/0 pattern' as a trigger for immediate sprint health assessment—it reveals the team isn't actively engaging with visibility mechanisms.",
+      "confidence": 9
+    },
+    {
+      "category": "lesson",
+      "content": "Retrospective action items consistently fail when treated like regular sprint work without additional structure. Allocate explicit capacity (max 1-3 items per sprint) with assigned owners and mid-sprint review gates, or defer items with documented reasoning rather than leaving them to languish.",
+      "confidence": 9
+    },
+    {
+      "category": "lesson",
+      "content": "Vague work item titles (e.g., 'Self-Improvement') correlate directly with zero progress. Require all retro items to include measurable acceptance criteria before sprint commitment. If completion cannot be verified, the item cannot be committed to.",
+      "confidence": 9
+    },
+    {
+      "category": "lesson",
+      "content": "Placeholder estimates (unrealistically low figures used as defaults) create false planning confidence and obscure real scope issues. Flag items as 'requires estimation' rather than accepting token numbers that no one believes, which mislead capacity planning.",
+      "confidence": 8
+    },
+    {
+      "category": "decision",
+      "content": "Reserve explicit calendar capacity or percentage-based allocation (e.g., 20% of sprint) for process improvement work. Treating improvement as gap-filler between reactive work guarantees deprioritization. Without dedicated time blocks, improvement work will perpetually fail.",
+      "confidence": 8
+    },
+    {
+      "category": "lesson",
+      "content": "Absurdly optimistic estimates signal avoidance behavior rather than misplaced confidence. When estimates are unrealistically low, the team may be signaling unwillingness to commit while appearing to consent. Treat obviously unrealistic estimates as a discussion trigger about team commitment and priority alignment.",
+      "confidence": 8
+    },
+    {
+      "category": "pattern",
+      "content": "Silent sprints (zero progress updates, no blockers documented, no decisions recorded) indicate the team has psychologically checked out of the sprint process. This late-stage process debt suggests the team doesn't trust the mechanism serves them. Diagnose underlying trust before attempting process fixes.",
+      "confidence": 8
+    },
+    {
+      "category": "pattern",
+      "content": "Data quality itself is a leading indicator of process health. Complete absence of tracking artifacts (time logs, blocker documentation, decision records) reveals systemic disengagement. Track 'process health score' based on data completeness, not just work completion.",
+      "confidence": 8
+    },
+    {
+      "category": "blocker",
+      "content": "Lack of visible technical decisions during operational improvement work often indicates non-technical blockers upstream (unclear ownership, competing priorities, role ambiguity). When expected decision-making is absent, investigate organizational and permission-related obstacles before diagnosing technical paralysis.",
+      "confidence": 7
+    },
+    {
+      "category": "lesson",
+      "content": "Mid-sprint checkpoint calls address symptoms, not root causes. Sprint planning failures—vague items accepted without challenge, unrealistic estimates unchallenged—cannot be recovered in-flight. Invest in pre-flight commitment validation (clear definitions, realistic estimates, capacity confirmation) instead of expensive mid-sprint rescues.",
+      "confidence": 7
+    }
+  ],
+  "totalCostUsd": 0.063162,
+  "merged": true,
+  "mergedAt": "2026-02-12T14:25:41.943Z",
+  "lessonsAdded": 10
+}

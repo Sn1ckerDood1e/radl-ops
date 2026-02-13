@@ -26,6 +26,17 @@ export function registerCostTools(server: McpServer): void {
         ? `\n\n**${alert.level.toUpperCase()}**: ${alert.message}`
         : '';
 
+      const structured = {
+        ...analytics,
+        cache: {
+          readTokens: analytics.totalCacheReadTokens,
+          writeTokens: analytics.totalCacheWriteTokens,
+          estimatedSavingsUsd: analytics.estimatedCacheSavingsUsd,
+        },
+        activeSprint: getCurrentSprintPhase(),
+        alert,
+      };
+
       if (format === 'summary') {
         let text = getCostSummaryForBriefing();
 
@@ -43,23 +54,18 @@ export function registerCostTools(server: McpServer): void {
           text += `\n\n_Active sprint: ${currentPhase}_`;
         }
 
-        return { content: [{ type: 'text' as const, text: text + alertLine }] };
+        return {
+          content: [{ type: 'text' as const, text: text + alertLine }],
+          structuredContent: structured,
+        };
       }
 
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({
-            ...analytics,
-            cache: {
-              readTokens: analytics.totalCacheReadTokens,
-              writeTokens: analytics.totalCacheWriteTokens,
-              estimatedSavingsUsd: analytics.estimatedCacheSavingsUsd,
-            },
-            activeSprint: getCurrentSprintPhase(),
-            alert,
-          }, null, 2),
+          text: JSON.stringify(structured, null, 2),
         }],
+        structuredContent: structured,
       };
     })
   );

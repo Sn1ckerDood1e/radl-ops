@@ -12,7 +12,7 @@ Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups 
 
 | Group | Default | Tools |
 |-------|---------|-------|
-| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns |
+| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check |
 | **content** | Disabled | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
 | **advanced** | Disabled | eval_opt_generate, compound_extract |
 
@@ -33,7 +33,7 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `sprint_status` | core | Current sprint state |
 | `sprint_start` | core | Start a new sprint (Slack notification) |
 | `sprint_progress` | core | Record task completion |
-| `sprint_complete` | core | Complete sprint, trigger compound learning |
+| `sprint_complete` | core | Complete sprint, auto-extract compound learnings via Bloom pipeline |
 | `cost_report` | core | API costs from radl-ops internal Claude calls |
 | `knowledge_query` | core | Query compound learnings (patterns, lessons, decisions) |
 | `iron_laws` | core | List all iron laws and current branch status |
@@ -43,6 +43,9 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `review_pipeline` | core | Complete review workflow: recipe + triage template + orchestration checklist |
 | `sprint_decompose` | core | Auto-decompose sprint into structured tasks with AI (Haiku). Returns TaskCreate-ready JSON |
 | `verify_patterns` | core | Check git diffs against knowledge base patterns. Detects drift before PR |
+| `sprint_conductor` | core | Full sprint orchestration: knowledge → eval-opt spec → decompose → execution plan |
+| `verify_data_flow` | core | Zero-cost field lifecycle check (Schema→Migration→Validation→API→Client) |
+| `pre_flight_check` | core | Zero-cost pre-push verification (branch, sprint, clean tree, typecheck, secrets) |
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
 | `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
 
@@ -73,24 +76,53 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 ## Architecture
 
 ```
-Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v1.5.0)
-                                    ├── tools (23 tools, 3 groups, with annotations)
+Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
+                                    ├── tools (26 tools, 3 groups, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
+                                    ├── sprint conductor (knowledge → eval-opt spec → decompose → execution plan)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
-                                    ├── sprint tools (wrap sprint.sh)
-                                    ├── team recipes (8 recipes: review, feature, debug, research, incremental-review, migration, test-coverage, refactor)
-                                    ├── sprint advisor (Haiku-powered team recommendation)
+                                    ├── sprint tools (wrap sprint.sh, auto compound extract)
+                                    ├── team recipes (8 recipes)
+                                    ├── sprint advisor + decompose (AI task planning)
                                     ├── review pipeline (chained review → triage → tracking)
                                     ├── eval-opt (generate→evaluate→refine with memory + caching)
                                     ├── compound learning (Bloom pipeline: 4-stage AI extraction)
-                                    ├── sprint decompose (AI auto-breaks sprint into tasks with DAG)
+                                    ├── data flow verifier (zero-cost field lifecycle check)
+                                    ├── pre-flight check (zero-cost pre-push verification)
                                     ├── drift detection (verify code against knowledge base patterns)
                                     ├── per-sprint cost tracking (tags API calls with active phase)
                                     └── cost reporting (token tracking with cache + sprint metrics)
 ```
+
+## Hooks (Automatic Enforcement)
+
+10 hooks across 7 Claude Code lifecycle events. All quality gates fire automatically.
+
+| Hook | Type | Event | Purpose |
+|------|------|-------|---------|
+| Full Context Restore | command | SessionStart | Re-injects sprint state, branch, patterns every session |
+| Pre-Compact Save | command | PreCompact | Auto-checkpoints sprint state before compaction |
+| Risk Classifier | command | PreToolUse (Bash) | Classifies commit risk by files touched |
+| Sprint Guard | command | PreToolUse (Bash) | Warns if committing without active sprint |
+| Push Pre-Flight | command | PreToolUse (Bash) | Runs pre_flight_check before git push |
+| Branch Guard | command | PreToolUse (Bash) | Blocks pushes to main/master |
+| Typecheck After Edit | command | PostToolUse (Edit/Write) | Runs tsc after editing .ts/.tsx files |
+| Task Review Detector | agent | TaskCompleted | Inspects git diff for new patterns, recommends review |
+| Session Verify | agent | Stop | Verifies STATE.md updated, sprint tracked, no uncommitted changes |
+| Build Self-Healer | agent | PostToolUseFailure | Auto-diagnoses build/typecheck failures |
+
+Hook scripts live in `scripts/hooks/`. Agent hooks are configured in `~/.claude/settings.json`.
+
+## Skills (Autonomous Workflows)
+
+| Skill | Description |
+|-------|-------------|
+| `/sprint-execute` | One command, full autonomous sprint. Chains conductor → approve → branch → tasks → team → review → PR → learn |
+
+Usage: `/sprint-execute "Add practice attendance tracking"`
 
 ## Iron Laws (NEVER violate)
 
@@ -107,10 +139,12 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v1.5.0)
 
 Every session MUST follow:
 1. **Branch first** — `git checkout -b feat/<scope>` before any code changes
-2. **Track sprint** — `sprint.sh start` before work, `sprint.sh progress` during
+2. **Track sprint** — `sprint_start` MCP tool before work, `sprint_progress` during
 3. **Review code** — Use code-reviewer agent after writing code
 4. **Update STATE.md** — At session end, update `/home/hb/radl/.planning/STATE.md`
-5. **Extract learnings** — `compound_extract` MCP tool (or `compound.sh extract` as fallback)
+5. **Extract learnings** — Auto-extracted by `sprint_complete` (Bloom pipeline)
+
+For autonomous sprints, use `/sprint-execute "feature description"` instead.
 
 ## Sprint Workflow
 

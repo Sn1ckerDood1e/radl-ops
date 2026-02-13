@@ -87,50 +87,271 @@ interface LessonsFile {
   }>;
 }
 
-function mergeIntoKnowledge(lessons: CategorizedLesson[], phase: string): number {
-  const lessonsPath = join(getKnowledgeDir(), 'lessons.json');
-  const existing: LessonsFile = existsSync(lessonsPath)
-    ? JSON.parse(readFileSync(lessonsPath, 'utf-8'))
-    : { lessons: [] };
+interface PatternsFile {
+  patterns: Array<{
+    id: number;
+    name: string;
+    description: string;
+    example: string;
+    date: string;
+    category: string;
+  }>;
+}
 
-  const nextId = existing.lessons.reduce(
-    (max, l) => Math.max(max, l.id),
-    0
-  ) + 1;
+interface DecisionsFile {
+  decisions: Array<{
+    id: number;
+    title: string;
+    context: string;
+    alternatives: string;
+    rationale: string;
+    phase: string;
+    date: string;
+    status: string;
+    supersededBy: string | null;
+  }>;
+}
 
-  let added = 0;
+interface DeferredFile {
+  items: Array<{
+    id: number;
+    title: string;
+    reason: string;
+    effort: string;
+    sprintPhase: string;
+    date: string;
+    resolved: boolean;
+  }>;
+}
+
+interface MergeResult {
+  lessonsAdded: number;
+  patternsAdded: number;
+  decisionsAdded: number;
+  estimationsAdded: number;
+  blockersAdded: number;
+}
+
+function mergePattern(content: string): { name: string; description: string } {
+  // Extract a name from the content (first 5-8 words or up to first punctuation)
+  const words = content.split(/\s+/);
+  const nameWords = words.slice(0, Math.min(8, words.length));
+  const name = nameWords.join(' ').replace(/[.,:;]$/, '');
+
+  return {
+    name: name.length > 60 ? name.substring(0, 57) + '...' : name,
+    description: content,
+  };
+}
+
+function mergeDecision(content: string, phase: string): { title: string; context: string } {
+  // Extract title from content (first sentence or first 10 words)
+  const firstSentence = content.match(/^[^.!?]+[.!?]/)?.[0] || content;
+  const words = firstSentence.split(/\s+/);
+  const title = words.slice(0, Math.min(10, words.length)).join(' ').replace(/[.,:;]$/, '');
+
+  return {
+    title: title.length > 80 ? title.substring(0, 77) + '...' : title,
+    context: `${phase}: ${content}`,
+  };
+}
+
+function mergeIntoKnowledge(lessons: CategorizedLesson[], phase: string): MergeResult {
+  const knowledgeDir = getKnowledgeDir();
+  const result: MergeResult = {
+    lessonsAdded: 0,
+    patternsAdded: 0,
+    decisionsAdded: 0,
+    estimationsAdded: 0,
+    blockersAdded: 0,
+  };
+
+  // Route each lesson to the appropriate knowledge store
   for (const lesson of lessons) {
-    // Skip duplicates (content similarity check)
-    const isDuplicate = existing.lessons.some(
-      l => l.learning.includes(lesson.content.substring(0, 50)) ||
-           lesson.content.includes(l.learning.substring(0, 50))
-    );
-    if (isDuplicate) continue;
+    switch (lesson.category) {
+      case 'pattern': {
+        const patternsPath = join(knowledgeDir, 'patterns.json');
+        const patternsFile: PatternsFile = existsSync(patternsPath)
+          ? JSON.parse(readFileSync(patternsPath, 'utf-8'))
+          : { patterns: [] };
 
-    existing.lessons.push({
-      id: nextId + added,
-      situation: `[${lesson.category}] ${phase}`,
-      learning: lesson.content,
-      date: new Date().toISOString(),
-    });
-    added++;
+        // Check for duplicates
+        const isDuplicate = patternsFile.patterns.some(
+          p => p.description.includes(lesson.content.substring(0, 50)) ||
+               lesson.content.includes(p.description.substring(0, 50))
+        );
+        if (isDuplicate) break;
+
+        const nextId = patternsFile.patterns.reduce((max, p) => Math.max(max, p.id), 0) + 1;
+        const { name, description } = mergePattern(lesson.content);
+
+        patternsFile.patterns.push({
+          id: nextId,
+          name,
+          description,
+          example: '', // Will be filled in manually later
+          date: new Date().toISOString(),
+          category: 'general', // Will be categorized manually later
+        });
+
+        writeFileSync(patternsPath, JSON.stringify(patternsFile, null, 2));
+        result.patternsAdded++;
+        break;
+      }
+
+      case 'decision': {
+        const decisionsPath = join(knowledgeDir, 'decisions.json');
+        const decisionsFile: DecisionsFile = existsSync(decisionsPath)
+          ? JSON.parse(readFileSync(decisionsPath, 'utf-8'))
+          : { decisions: [] };
+
+        // Check for duplicates
+        const isDuplicate = decisionsFile.decisions.some(
+          d => d.context.includes(lesson.content.substring(0, 50)) ||
+               lesson.content.includes(d.context.substring(0, 50))
+        );
+        if (isDuplicate) break;
+
+        const nextId = decisionsFile.decisions.reduce((max, d) => Math.max(max, d.id), 0) + 1;
+        const { title, context } = mergeDecision(lesson.content, phase);
+
+        decisionsFile.decisions.push({
+          id: nextId,
+          title,
+          context,
+          alternatives: '', // Will be filled in manually later
+          rationale: '', // Will be filled in manually later
+          phase,
+          date: new Date().toISOString(),
+          status: 'accepted',
+          supersededBy: null,
+        });
+
+        writeFileSync(decisionsPath, JSON.stringify(decisionsFile, null, 2));
+        result.decisionsAdded++;
+        break;
+      }
+
+      case 'blocker': {
+        const deferredPath = join(knowledgeDir, 'deferred.json');
+        const deferredFile: DeferredFile = existsSync(deferredPath)
+          ? JSON.parse(readFileSync(deferredPath, 'utf-8'))
+          : { items: [] };
+
+        // Check for duplicates
+        const isDuplicate = deferredFile.items.some(
+          item => item.title.includes(lesson.content.substring(0, 50)) ||
+                  lesson.content.includes(item.title.substring(0, 50))
+        );
+        if (isDuplicate) break;
+
+        const nextId = deferredFile.items.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+
+        deferredFile.items.push({
+          id: nextId,
+          title: lesson.content.substring(0, 80),
+          reason: lesson.content,
+          effort: 'small', // Default, can be adjusted manually
+          sprintPhase: phase,
+          date: new Date().toISOString(),
+          resolved: false,
+        });
+
+        writeFileSync(deferredPath, JSON.stringify(deferredFile, null, 2));
+        result.blockersAdded++;
+        break;
+      }
+
+      case 'estimation':
+      case 'lesson':
+      default: {
+        const lessonsPath = join(knowledgeDir, 'lessons.json');
+        const lessonsFile: LessonsFile = existsSync(lessonsPath)
+          ? JSON.parse(readFileSync(lessonsPath, 'utf-8'))
+          : { lessons: [] };
+
+        // Check for duplicates
+        const isDuplicate = lessonsFile.lessons.some(
+          l => l.learning.includes(lesson.content.substring(0, 50)) ||
+               lesson.content.includes(l.learning.substring(0, 50))
+        );
+        if (isDuplicate) break;
+
+        const nextId = lessonsFile.lessons.reduce((max, l) => Math.max(max, l.id), 0) + 1;
+
+        lessonsFile.lessons.push({
+          id: nextId,
+          situation: `[${lesson.category}] ${phase}`,
+          learning: lesson.content,
+          date: new Date().toISOString(),
+        });
+
+        writeFileSync(lessonsPath, JSON.stringify(lessonsFile, null, 2));
+
+        if (lesson.category === 'estimation') {
+          result.estimationsAdded++;
+        } else {
+          result.lessonsAdded++;
+        }
+        break;
+      }
+    }
   }
 
-  if (added > 0) {
-    writeFileSync(lessonsPath, JSON.stringify(existing, null, 2));
+  return result;
+}
+
+function loadExistingKnowledge(): string {
+  const knowledgeDir = getKnowledgeDir();
+  const lines: string[] = [];
+
+  // Load patterns
+  const patternsPath = join(knowledgeDir, 'patterns.json');
+  if (existsSync(patternsPath)) {
+    try {
+      const patternsFile: PatternsFile = JSON.parse(readFileSync(patternsPath, 'utf-8'));
+      if (patternsFile.patterns.length > 0) {
+        lines.push('## Existing Patterns');
+        for (const pattern of patternsFile.patterns.slice(0, 15)) { // Limit to 15 most recent
+          lines.push(`- ${pattern.name}: ${pattern.description}`);
+        }
+        lines.push('');
+      }
+    } catch (error) {
+      logger.warn('Failed to load patterns.json', { error: String(error) });
+    }
   }
 
-  return added;
+  // Load lessons
+  const lessonsPath = join(knowledgeDir, 'lessons.json');
+  if (existsSync(lessonsPath)) {
+    try {
+      const lessonsFile: LessonsFile = JSON.parse(readFileSync(lessonsPath, 'utf-8'));
+      if (lessonsFile.lessons.length > 0) {
+        lines.push('## Existing Lessons');
+        for (const lesson of lessonsFile.lessons.slice(-15)) { // Last 15
+          lines.push(`- ${lesson.situation}: ${lesson.learning}`);
+        }
+        lines.push('');
+      }
+    } catch (error) {
+      logger.warn('Failed to load lessons.json', { error: String(error) });
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n') : '';
 }
 
 export function registerCompoundTools(server: McpServer): void {
+  const sourceSchema = z.object({
+    source: z.enum(['latest', 'current']).optional().default('latest')
+      .describe('Sprint data source: latest archived sprint or current in-progress sprint'),
+  });
+
   server.tool(
     'compound_extract',
     'Extract compound learnings from the latest sprint using AI-powered Bloom pipeline (4-stage: Understanding → Ideation → Rollout → Judgment). Reads sprint data, generates categorized lessons, merges into knowledge base. Example: { "source": "latest" }',
-    {
-      source: z.enum(['latest', 'current']).optional().default('latest')
-        .describe('Sprint data source: latest archived sprint or current in-progress sprint'),
-    },
+    sourceSchema.shape,
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('compound_extract', async ({ source }) => {
       ensureDirs();
@@ -163,8 +384,11 @@ export function registerCompoundTools(server: McpServer): void {
         title: sprint.data.title,
       });
 
+      // Load existing knowledge to feed into Bloom pipeline
+      const existingKnowledge = loadExistingKnowledge();
+
       // Run Bloom pipeline
-      const result = await runBloomPipeline(sprint.data);
+      const result = await runBloomPipeline(sprint.data, existingKnowledge);
 
       // Save compound file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
@@ -181,7 +405,7 @@ export function registerCompoundTools(server: McpServer): void {
       }, null, 2));
 
       // Merge into knowledge base
-      const newLessons = mergeIntoKnowledge(
+      const mergeResult = mergeIntoKnowledge(
         result.lessons,
         sprint.data.phase
       );
@@ -192,19 +416,28 @@ export function registerCompoundTools(server: McpServer): void {
         ...compoundData,
         merged: true,
         mergedAt: new Date().toISOString(),
-        lessonsAdded: newLessons,
+        mergeResult,
       }, null, 2));
 
       // Format output
+      const totalAdded = mergeResult.lessonsAdded + mergeResult.patternsAdded +
+                         mergeResult.decisionsAdded + mergeResult.estimationsAdded +
+                         mergeResult.blockersAdded;
+
       const lines: string[] = [
         `## Compound Extract: ${sprint.data.phase} — ${sprint.data.title}`,
         '',
         `**Quality Score:** ${result.qualityScore}/10`,
         `**Lessons Extracted:** ${result.lessons.length}`,
-        `**New Lessons Added:** ${newLessons}`,
+        `**Total Added to Knowledge Base:** ${totalAdded}`,
+        `  - Patterns: ${mergeResult.patternsAdded}`,
+        `  - Decisions: ${mergeResult.decisionsAdded}`,
+        `  - Lessons: ${mergeResult.lessonsAdded}`,
+        `  - Estimations: ${mergeResult.estimationsAdded}`,
+        `  - Blockers: ${mergeResult.blockersAdded}`,
         `**Extraction Cost:** $${result.totalCostUsd}`,
         '',
-        '### Lessons',
+        '### Extracted Insights',
         '',
       ];
 
@@ -217,7 +450,8 @@ export function registerCompoundTools(server: McpServer): void {
 
       logger.info('Compound extract complete', {
         lessonsExtracted: result.lessons.length,
-        newLessonsAdded: newLessons,
+        totalAdded,
+        mergeResult,
         qualityScore: result.qualityScore,
         cost: result.totalCostUsd,
       });
