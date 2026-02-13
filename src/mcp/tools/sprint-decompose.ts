@@ -97,7 +97,9 @@ function loadKnowledgeContext(): string {
       if (patternNames) {
         sections.push(`Established patterns: ${patternNames}`);
       }
-    } catch { /* skip */ }
+    } catch (error) {
+      logger.error('Failed to parse patterns.json', { error: String(error) });
+    }
   }
 
   // Load recent lessons for anti-patterns
@@ -109,7 +111,9 @@ function loadKnowledgeContext(): string {
       if (recentLessons.length > 0) {
         sections.push(`Recent lessons: ${recentLessons.join('; ')}`);
       }
-    } catch { /* skip */ }
+    } catch (error) {
+      logger.error('Failed to parse lessons.json', { error: String(error) });
+    }
   }
 
   return sections.length > 0 ? '\n\n' + sections.join('\n') : '';
@@ -143,7 +147,12 @@ Task decomposition rules:
 Use the task_decomposition tool to submit your structured result.`;
 
 function sanitizeForPrompt(input: string): string {
-  return input.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return input
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/`/g, "'")
+    .replace(/\n/g, ' ')
+    .trim();
 }
 
 const DecompositionSchema = z.object({

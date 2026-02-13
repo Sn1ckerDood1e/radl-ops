@@ -72,6 +72,17 @@ interface Pattern {
   example?: string;
 }
 
+/** Validate branch name to prevent command injection */
+function validateBranchName(branch: string): string {
+  if (!/^[a-zA-Z0-9/_.-]+$/.test(branch)) {
+    throw new Error(`Invalid branch name: contains forbidden characters`);
+  }
+  if (branch.includes('..')) {
+    throw new Error(`Invalid branch name: cannot contain '..'`);
+  }
+  return branch;
+}
+
 function loadPatterns(): Pattern[] {
   const config = getConfig();
   const path = `${config.knowledgeDir}/patterns.json`;
@@ -79,20 +90,27 @@ function loadPatterns(): Pattern[] {
   try {
     const data = JSON.parse(readFileSync(path, 'utf-8'));
     return data.patterns || [];
-  } catch {
+  } catch (error) {
+    logger.error('Failed to parse patterns.json', { error: String(error) });
     return [];
   }
 }
 
 function getGitDiff(baseBranch: string): string {
+  const safeBranch = validateBranchName(baseBranch);
   const config = getConfig();
   try {
-    return execSync(`git diff ${baseBranch}...HEAD -- '*.ts' '*.tsx'`, {
+    const raw = execSync(`git diff ${safeBranch}...HEAD -- '*.ts' '*.tsx'`, {
       encoding: 'utf-8',
       cwd: config.radlDir,
       timeout: 30000,
       maxBuffer: 1024 * 1024, // 1MB max
-    }).slice(0, 50000); // Cap at 50k chars for context window
+    });
+    const truncated = raw.slice(0, 50000);
+    if (raw.length > 50000) {
+      logger.warn('Git diff truncated', { original: raw.length, truncatedTo: 50000 });
+    }
+    return truncated;
   } catch (error) {
     logger.error('Failed to get git diff', { error: String(error) });
     return '';
@@ -100,15 +118,17 @@ function getGitDiff(baseBranch: string): string {
 }
 
 function getChangedFiles(baseBranch: string): string[] {
+  const safeBranch = validateBranchName(baseBranch);
   const config = getConfig();
   try {
-    const output = execSync(`git diff --name-only ${baseBranch}...HEAD -- '*.ts' '*.tsx'`, {
+    const output = execSync(`git diff --name-only ${safeBranch}...HEAD -- '*.ts' '*.tsx'`, {
       encoding: 'utf-8',
       cwd: config.radlDir,
       timeout: 10000,
     });
     return output.trim().split('\n').filter(Boolean);
-  } catch {
+  } catch (error) {
+    logger.error('Failed to get changed files', { error: String(error) });
     return [];
   }
 }

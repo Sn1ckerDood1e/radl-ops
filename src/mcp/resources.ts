@@ -95,8 +95,10 @@ export function registerResources(server: McpServer, registry: ToolRegistry): vo
         ? { error, branch: branch || '', sprintOutput: sprintOutput || '' }
         : { branch, sprintOutput };
 
-      // Cache the result
-      sprintCache = { data, timestamp: now };
+      // Only cache successful results — don't mask transient errors
+      if (!error) {
+        sprintCache = { data, timestamp: now };
+      }
 
       return {
         contents: [{
