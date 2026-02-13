@@ -126,6 +126,7 @@ export function registerMonitoringTools(server: McpServer): void {
 
       const allHealthy = Object.values(results).every(r => r.status === 'healthy');
       const anyDown = Object.values(results).some(r => r.status === 'down');
+      const anyDegraded = Object.values(results).some(r => r.status === 'degraded');
       const overall = anyDown ? 'issues_detected' : allHealthy ? 'all_healthy' : 'degraded';
 
       logger.info('MCP health check completed', { overall });
@@ -136,7 +137,17 @@ export function registerMonitoringTools(server: McpServer): void {
         lines.push(`${icon} ${name}: ${result.message}`);
       }
 
-      return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
+      return {
+        content: [{ type: 'text' as const, text: lines.join('\n') }],
+        structuredContent: {
+          overall,
+          allHealthy,
+          anyDown,
+          anyDegraded,
+          services: results,
+          checkedAt: new Date().toISOString(),
+        },
+      };
     })
   );
 }

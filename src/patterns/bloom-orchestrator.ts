@@ -141,7 +141,8 @@ ${unresolvedBlockers.map(b => `- ${b.description}`).join('\n') || 'None'}`;
 function buildStagePrompt(
   stageName: string,
   sprintText: string,
-  priorOutputs: Record<string, string>
+  priorOutputs: Record<string, string>,
+  existingKnowledge?: string
 ): string {
   const priorContext = Object.entries(priorOutputs)
     .map(([stage, output]) => `## ${stage} output\n${output}`)
@@ -167,11 +168,11 @@ Provide a structured analysis. Be specific about what happened and why.`;
 
 ${priorContext}
 
-For each insight:
+${existingKnowledge ? `## Existing Knowledge Base (avoid duplicates, build on these)\n\n${existingKnowledge}\n\n` : ''}For each insight:
 - State the lesson clearly and specifically (not generic advice)
 - Categorize as: pattern (reusable approach), lesson (mistake to avoid), decision (choice made and why), estimation (timing insight), or blocker (obstacle pattern)
 - Rate confidence 1-10 (how generalizable is this beyond this one sprint?)
-
+${existingKnowledge ? '- AVOID generating insights that duplicate the existing knowledge base above\n- BUILD ON existing patterns/lessons when sprint data adds new nuance\n' : ''}
 Generate 5-15 candidate insights. Quality over quantity.`;
 
     case 'rollout':
@@ -270,7 +271,8 @@ async function callStage(
  * Run the Bloom compound learning pipeline on sprint data.
  */
 export async function runBloomPipeline(
-  sprintData: SprintData
+  sprintData: SprintData,
+  existingKnowledge?: string
 ): Promise<CompoundResult> {
   const sprintText = formatSprintData(sprintData);
   const stageOutputs: Record<string, string> = {};
@@ -280,6 +282,7 @@ export async function runBloomPipeline(
     phase: sprintData.phase,
     title: sprintData.title,
     tasks: sprintData.completedTasks.length,
+    hasExistingKnowledge: !!existingKnowledge,
   });
 
   // Run stages sequentially — each sees prior outputs
@@ -287,7 +290,7 @@ export async function runBloomPipeline(
   const structuredOutputs: Record<string, unknown> = {};
 
   for (const stage of STAGES) {
-    const prompt = buildStagePrompt(stage.name, sprintText, stageOutputs);
+    const prompt = buildStagePrompt(stage.name, sprintText, stageOutputs, existingKnowledge);
 
     try {
       const result = await callStage(stage, prompt);

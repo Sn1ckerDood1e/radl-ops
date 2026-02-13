@@ -17,6 +17,7 @@ import { withErrorTracking } from '../with-error-tracking.js';
 import { setCurrentSprintPhase } from '../../models/token-tracker.js';
 import type { TeamRun, TeamRunStore } from '../../types/index.js';
 import { getConfig } from '../../config/paths.js';
+import { notifySprintChanged } from '../resources.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -185,7 +186,24 @@ export function registerSprintTools(server: McpServer): void {
         : '';
 
       const output = runSprint(['status']);
-      return { content: [{ type: 'text' as const, text: `Branch: ${branch}${branchWarning}\n${output}` }] };
+      const statusText = `Branch: ${branch}${branchWarning}\n${output}`;
+
+      // Parse sprint output for structured content (best-effort)
+      const phaseMatch = output.match(/Phase:\s*(.+)/i);
+      const titleMatch = output.match(/Title:\s*(.+)/i);
+      const statusMatch = output.match(/Status:\s*(.+)/i);
+
+      return {
+        content: [{ type: 'text' as const, text: statusText }],
+        structuredContent: {
+          branch,
+          onProtectedBranch: branch === 'main' || branch === 'master',
+          phase: phaseMatch?.[1]?.trim(),
+          title: titleMatch?.[1]?.trim(),
+          status: statusMatch?.[1]?.trim(),
+          rawOutput: output,
+        },
+      };
     })
   );
 
@@ -231,6 +249,8 @@ export function registerSprintTools(server: McpServer): void {
 
       const teamSuggestion = getTeamSuggestion(title, task_count, loadTeamRuns());
 
+      notifySprintChanged();
+
       return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}` }] };
     })
   );
@@ -247,6 +267,7 @@ export function registerSprintTools(server: McpServer): void {
       const args = ['progress', message];
       if (notify) args.push('--notify');
       const output = runSprint(args);
+      notifySprintChanged();
       return { content: [{ type: 'text' as const, text: output }] };
     })
   );
@@ -338,6 +359,8 @@ export function registerSprintTools(server: McpServer): void {
         teamNote = `\nTeam run tracked: ${team_used.recipe} recipe, ${team_used.teammateCount} teammates, outcome: ${team_used.outcome}`;
         logger.info('Team run tracked', { id: nextId, recipe: team_used.recipe, outcome: team_used.outcome });
       }
+
+      notifySprintChanged();
 
       return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}` }] };
     })

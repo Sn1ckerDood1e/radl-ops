@@ -15,6 +15,7 @@ import { logger } from '../config/logger.js';
 interface ToolResult {
   [key: string]: unknown;
   content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
 }
 
 /**
@@ -54,6 +55,7 @@ export function withErrorTracking<T>(
               `Last error: ${msg}\n\n` +
               `Do NOT retry. Explain what failed and ask the user for guidance.`,
           }],
+          isError: true,
         };
       }
 
@@ -62,6 +64,7 @@ export function withErrorTracking<T>(
           type: 'text' as const,
           text: `**ERROR** (strike ${count}/3): ${toolName} failed\n${msg}`,
         }],
+        isError: true,
       };
     }
   };

@@ -140,7 +140,11 @@ export function registerKnowledgeTools(server: McpServer): void {
 
       // If no query, return all entries (existing behavior)
       if (!query) {
-        return { content: [{ type: 'text' as const, text: formatAll(queryType) }] };
+        const { text, structured } = formatAll(queryType);
+        return {
+          content: [{ type: 'text' as const, text }],
+          structuredContent: structured,
+        };
       }
 
       // Keyword search mode
@@ -210,6 +214,12 @@ export function registerKnowledgeTools(server: McpServer): void {
             type: 'text' as const,
             text: `No results for '${query}'. Try broader keywords or omit the query to see all entries.`,
           }],
+          structuredContent: {
+            query,
+            type: queryType,
+            totalMatches: 0,
+            results: [],
+          },
         };
       }
 
@@ -224,7 +234,19 @@ export function registerKnowledgeTools(server: McpServer): void {
       }
 
       logger.info('Knowledge searched', { query, type: queryType, matches: scored.length });
-      return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
+      return {
+        content: [{ type: 'text' as const, text: lines.join('\n') }],
+        structuredContent: {
+          query,
+          type: queryType,
+          totalMatches: scored.length,
+          results: top.map(entry => ({
+            type: entry.type,
+            score: entry.score,
+            text: entry.text,
+          })),
+        },
+      };
     })
   );
 }
@@ -232,8 +254,9 @@ export function registerKnowledgeTools(server: McpServer): void {
 /**
  * Format all entries without search filtering (original behavior)
  */
-function formatAll(queryType: string): string {
+function formatAll(queryType: string): { text: string; structured: Record<string, unknown> } {
   const lines: string[] = [];
+  const structured: Record<string, unknown> = { type: queryType };
 
   if (queryType === 'all' || queryType === 'patterns') {
     const data = loadJson<{ patterns: Pattern[] }>('patterns.json');
@@ -247,6 +270,7 @@ function formatAll(queryType: string): string {
       }
       lines.push('');
     }
+    structured.patterns = patterns;
   }
 
   if (queryType === 'all' || queryType === 'lessons') {
@@ -261,6 +285,7 @@ function formatAll(queryType: string): string {
       }
       lines.push('');
     }
+    structured.lessons = lessons;
   }
 
   if (queryType === 'all' || queryType === 'decisions') {
@@ -275,6 +300,7 @@ function formatAll(queryType: string): string {
       }
       lines.push('');
     }
+    structured.decisions = decisions;
   }
 
   // Always include deferred items in "all" view
@@ -288,6 +314,7 @@ function formatAll(queryType: string): string {
       }
       lines.push('');
     }
+    structured.deferredItems = items;
   }
 
   // Show team runs in "all" or "team-runs" view
@@ -302,8 +329,9 @@ function formatAll(queryType: string): string {
       }
       lines.push('');
     }
+    structured.teamRuns = runs;
   }
 
   logger.info('Knowledge queried', { type: queryType });
-  return lines.join('\n');
+  return { text: lines.join('\n'), structured };
 }
