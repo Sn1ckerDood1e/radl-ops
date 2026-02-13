@@ -88,14 +88,17 @@ function loadKnowledgeContext(): string {
   const config = getConfig();
   const sections: string[] = [];
 
-  // Load recent patterns for context
+  // Load patterns with descriptions (not just names)
   const patternsPath = `${config.knowledgeDir}/patterns.json`;
   if (existsSync(patternsPath)) {
     try {
       const data = JSON.parse(readFileSync(patternsPath, 'utf-8'));
-      const patternNames = (data.patterns || []).map((p: { name: string }) => p.name).join(', ');
-      if (patternNames) {
-        sections.push(`Established patterns: ${patternNames}`);
+      const patterns = (data.patterns || []) as Array<{ name: string; description: string }>;
+      if (patterns.length > 0) {
+        sections.push('Established patterns (MUST follow):');
+        for (const p of patterns) {
+          sections.push(`  - ${p.name}: ${p.description}`);
+        }
       }
     } catch (error) {
       logger.error('Failed to parse patterns.json', { error: String(error) });
@@ -107,14 +110,55 @@ function loadKnowledgeContext(): string {
   if (existsSync(lessonsPath)) {
     try {
       const data = JSON.parse(readFileSync(lessonsPath, 'utf-8'));
-      const recentLessons = (data.lessons || []).slice(-5).map((l: { learning: string }) => l.learning);
+      const recentLessons = (data.lessons || []).slice(-10) as Array<{ learning: string; situation: string }>;
       if (recentLessons.length > 0) {
-        sections.push(`Recent lessons: ${recentLessons.join('; ')}`);
+        sections.push('Recent lessons (avoid these mistakes):');
+        for (const l of recentLessons) {
+          sections.push(`  - ${l.learning}`);
+        }
       }
     } catch (error) {
       logger.error('Failed to parse lessons.json', { error: String(error) });
     }
   }
+
+  // Load decisions for architectural context
+  const decisionsPath = `${config.knowledgeDir}/decisions.json`;
+  if (existsSync(decisionsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(decisionsPath, 'utf-8'));
+      const decisions = (data.decisions || []).slice(-5) as Array<{ title: string; context: string }>;
+      if (decisions.length > 0) {
+        sections.push('Recent architectural decisions:');
+        for (const d of decisions) {
+          sections.push(`  - ${d.title}`);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to parse decisions.json', { error: String(error) });
+    }
+  }
+
+  // Load deferred items (potential scope to include or avoid)
+  const deferredPath = `${config.knowledgeDir}/deferred.json`;
+  if (existsSync(deferredPath)) {
+    try {
+      const data = JSON.parse(readFileSync(deferredPath, 'utf-8'));
+      const unresolved = ((data.items || []) as Array<{ title: string; resolved: boolean }>)
+        .filter(i => !i.resolved);
+      if (unresolved.length > 0) {
+        sections.push(`Deferred items (${unresolved.length} unresolved — consider if this sprint addresses any):`);
+        for (const item of unresolved.slice(0, 5)) {
+          sections.push(`  - ${item.title}`);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to parse deferred.json', { error: String(error) });
+    }
+  }
+
+  // Load estimation calibration data
+  sections.push('Estimation calibration: Actual time runs ~50% of estimated. Apply 0.5x multiplier to wall-clock estimates.');
 
   return sections.length > 0 ? '\n\n' + sections.join('\n') : '';
 }

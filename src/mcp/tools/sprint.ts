@@ -10,7 +10,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
-import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
@@ -18,6 +19,8 @@ import { setCurrentSprintPhase } from '../../models/token-tracker.js';
 import type { TeamRun, TeamRunStore } from '../../types/index.js';
 import { getConfig } from '../../config/paths.js';
 import { notifySprintChanged } from '../resources.js';
+import { runBloomPipeline } from '../../patterns/bloom-orchestrator.js';
+import type { SprintData } from '../../patterns/bloom-orchestrator.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -173,6 +176,54 @@ function getTeamSuggestion(
   return lines.join('\n');
 }
 
+function normalizeSprintData(raw: Record<string, unknown>): SprintData {
+  return {
+    phase: String(raw.phase ?? 'Unknown'),
+    title: String(raw.title ?? 'Unknown'),
+    status: String(raw.status ?? 'Unknown'),
+    completedTasks: Array.isArray(raw.completedTasks) ? raw.completedTasks : [],
+    blockers: Array.isArray(raw.blockers) ? raw.blockers : [],
+    estimate: String(raw.estimate ?? 'Unknown'),
+    actual: String(raw.actualTime ?? raw.actual ?? 'Unknown'),
+  };
+}
+
+function loadExistingKnowledgeForExtract(knowledgeDir: string): string {
+  const sections: string[] = [];
+
+  const patternsPath = join(knowledgeDir, 'patterns.json');
+  if (existsSync(patternsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(patternsPath, 'utf-8'));
+      const names = (data.patterns || []).slice(0, 15).map((p: { name: string; description: string }) =>
+        `- ${p.name}: ${p.description}`
+      );
+      if (names.length > 0) {
+        sections.push('## Existing Patterns', ...names, '');
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  const lessonsPath = join(knowledgeDir, 'lessons.json');
+  if (existsSync(lessonsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(lessonsPath, 'utf-8'));
+      const items = (data.lessons || []).slice(-15).map((l: { situation: string; learning: string }) =>
+        `- ${l.situation}: ${l.learning}`
+      );
+      if (items.length > 0) {
+        sections.push('## Existing Lessons', ...items, '');
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return sections.join('\n');
+}
+
 export function registerSprintTools(server: McpServer): void {
   server.tool(
     'sprint_status',
@@ -274,7 +325,7 @@ export function registerSprintTools(server: McpServer): void {
 
   server.tool(
     'sprint_complete',
-    'Complete the current sprint. Triggers compound learning extraction and Slack notification. Optionally tracks deferred items.',
+    'Complete the current sprint. Auto-extracts compound learnings via Bloom pipeline, sends Slack notification, and optionally tracks deferred items and team usage.',
     {
       commit: z.string().min(1).max(100).describe('Commit hash of the final commit'),
       actual_time: z.string().min(1).max(50).describe('Actual time taken (e.g., "1.5 hours")'),
@@ -293,9 +344,11 @@ export function registerSprintTools(server: McpServer): void {
         outcome: z.enum(['success', 'partial', 'failed']),
         lessonsLearned: z.string().max(500).optional(),
       }).optional().describe('Track agent team usage for performance memory'),
+      auto_extract: z.boolean().optional().default(true)
+        .describe('Auto-run compound learning extraction via Bloom pipeline (default: true)'),
     },
     { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used }) => {
+    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used, auto_extract }) => {
       const output = runSprint(['complete', commit, actual_time]);
 
       // Clear sprint phase tag for cost tracking
@@ -362,7 +415,75 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}` }] };
+      // Auto-extract compound learnings via Bloom pipeline
+      let extractNote = '';
+      if (auto_extract !== false) {
+        try {
+          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+          const knowledgeDir = getConfig().knowledgeDir;
+
+          // Find sprint data (check archive first, then current)
+          let sprintData: SprintData | null = null;
+          const archiveDir = join(sprintDir, 'archive');
+
+          if (existsSync(archiveDir)) {
+            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
+
+            if (files.length > 0) {
+              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
+              sprintData = normalizeSprintData(raw);
+            }
+          }
+
+          if (!sprintData) {
+            const currentPath = join(sprintDir, 'current.json');
+            if (existsSync(currentPath)) {
+              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
+              sprintData = normalizeSprintData(raw);
+            }
+          }
+
+          if (sprintData) {
+            // Load existing knowledge for dedup context
+            const existingKnowledge = loadExistingKnowledgeForExtract(knowledgeDir);
+
+            const bloomResult = await runBloomPipeline(sprintData, existingKnowledge);
+
+            // Save compound file
+            const compoundDir = join(knowledgeDir, 'compounds');
+            if (!existsSync(compoundDir)) {
+              mkdirSync(compoundDir, { recursive: true });
+            }
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+            const compoundFile = join(compoundDir, `bloom-${timestamp}.json`);
+            writeFileSync(compoundFile, JSON.stringify({
+              extractedAt: new Date().toISOString(),
+              method: 'bloom-pipeline-auto',
+              sprintPhase: bloomResult.sprintPhase,
+              sprintTitle: bloomResult.sprintTitle,
+              qualityScore: bloomResult.qualityScore,
+              lessons: bloomResult.lessons,
+              totalCostUsd: bloomResult.totalCostUsd,
+            }, null, 2));
+
+            extractNote = `\nCompound extract: ${bloomResult.lessons.length} lessons (quality: ${bloomResult.qualityScore}/10, cost: $${bloomResult.totalCostUsd})`;
+            logger.info('Auto compound extract completed', {
+              lessons: bloomResult.lessons.length,
+              quality: bloomResult.qualityScore,
+              cost: bloomResult.totalCostUsd,
+            });
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          extractNote = `\nCompound extract: skipped (${msg})`;
+          logger.warn('Auto compound extract failed', { error: msg });
+        }
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}` }] };
     })
   );
 
