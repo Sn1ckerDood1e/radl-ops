@@ -266,18 +266,35 @@ function groupIntoWaves(tasks: readonly DecomposedTask[]): ParallelWave[] {
 }
 
 function buildExecutionPlan(decomposition: Decomposition): ExecutionPlan {
-  const waves = groupIntoWaves(decomposition.tasks);
+  const implementationWaves = groupIntoWaves(decomposition.tasks);
+
+  // Insert review checkpoint after each implementation wave with 2+ tasks
+  const waves: ParallelWave[] = [];
+  let waveNum = 1;
+  for (const wave of implementationWaves) {
+    waves.push({ ...wave, waveNumber: waveNum++ });
+    if (wave.tasks.length >= 2) {
+      waves.push({
+        waveNumber: waveNum++,
+        tasks: [],
+        fileConflicts: [],
+        hasConflicts: false,
+        isReviewCheckpoint: true,
+      });
+    }
+  }
+
   const rawEstimate = decomposition.tasks.reduce((sum, t) => sum + t.estimateMinutes, 0);
   const calibratedEstimate = Math.round(rawEstimate * ESTIMATION_CALIBRATION_FACTOR);
 
   // Recommend team if any wave has 3+ tasks
-  const maxWaveSize = Math.max(...waves.map(w => w.tasks.length), 0);
+  const maxWaveSize = Math.max(...implementationWaves.map(w => w.tasks.length), 0);
   const recommendTeam = maxWaveSize >= 3;
 
   const strategy: 'sequential' | 'parallel' | 'mixed' =
-    waves.length === 1 && waves[0].tasks.length === decomposition.tasks.length
+    implementationWaves.length === 1 && implementationWaves[0].tasks.length === decomposition.tasks.length
       ? 'parallel'
-      : waves.every(w => w.tasks.length === 1)
+      : implementationWaves.every(w => w.tasks.length === 1)
         ? 'sequential'
         : 'mixed';
 
@@ -288,6 +305,121 @@ function buildExecutionPlan(decomposition: Decomposition): ExecutionPlan {
     recommendTeam,
     strategy,
   };
+}
+
+// ============================================
+// Validation & Warnings
+// ============================================
+
+interface TaskFileViolation {
+  taskId: number;
+  taskTitle: string;
+  fileCount: number;
+  maxFiles: number;
+}
+
+function validateTaskFileCounts(
+  decomposition: Decomposition,
+  maxFiles = 5,
+): TaskFileViolation[] {
+  return decomposition.tasks
+    .filter(t => t.files.length > maxFiles)
+    .map(t => ({
+      taskId: t.id,
+      taskTitle: t.title,
+      fileCount: t.files.length,
+      maxFiles,
+    }));
+}
+
+function autoSplitOversizedTasks(
+  decomposition: Decomposition,
+  maxFiles = 5,
+): Decomposition {
+  const newTasks: DecomposedTask[] = [];
+  let nextId = Math.max(...decomposition.tasks.map(t => t.id), 0) + 1;
+
+  for (const task of decomposition.tasks) {
+    if (task.files.length <= maxFiles) {
+      newTasks.push(task);
+      continue;
+    }
+
+    const chunkCount = Math.ceil(task.files.length / 4);
+    let prevSubId: number | null = null;
+
+    for (let i = 0; i < chunkCount; i++) {
+      const chunk = task.files.slice(i * 4, (i + 1) * 4);
+      const subId = i === 0 ? task.id : nextId++;
+      const subTask: DecomposedTask = {
+        ...task,
+        id: subId,
+        title: chunkCount > 1 ? `${task.title} (part ${i + 1}/${chunkCount})` : task.title,
+        activeForm: task.activeForm,
+        files: chunk,
+        dependsOn: prevSubId !== null
+          ? [...task.dependsOn, prevSubId]
+          : task.dependsOn,
+        estimateMinutes: Math.ceil(task.estimateMinutes / chunkCount),
+      };
+      newTasks.push(subTask);
+      prevSubId = subId;
+    }
+  }
+
+  return {
+    ...decomposition,
+    tasks: newTasks,
+  };
+}
+
+interface DataFlowWarning {
+  taskId: number;
+  taskTitle: string;
+  schemaFiles: string[];
+  message: string;
+}
+
+function checkDataFlowCoverage(decomposition: Decomposition): DataFlowWarning[] {
+  const warnings: DataFlowWarning[] = [];
+  const allFiles = decomposition.tasks.flatMap(t => t.files);
+
+  for (const task of decomposition.tasks) {
+    const hasSchemaFile = task.files.some(f =>
+      f.includes('schema.prisma') ||
+      f.includes('migrations/') ||
+      task.type === 'migration'
+    );
+
+    if (!hasSchemaFile) continue;
+
+    // Check if any task covers an API route handler
+    const hasApiHandler = allFiles.some(f =>
+      f.includes('/api/') && f.includes('route.ts')
+    );
+
+    if (!hasApiHandler) {
+      const schemaFiles = task.files.filter(f =>
+        f.includes('schema.prisma') || f.includes('migrations/')
+      );
+      warnings.push({
+        taskId: task.id,
+        taskTitle: task.title,
+        schemaFiles,
+        message: 'Schema/migration changes detected but no API route handler in any task. Ensure the new fields are processed by the API layer.',
+      });
+    }
+  }
+
+  return warnings;
+}
+
+function checkTestCoverage(decomposition: Decomposition): string | null {
+  const hasTestTask = decomposition.tasks.some(t => t.type === 'test');
+  if (!hasTestTask) {
+    return 'WARNING: No test tasks in decomposition. Consider adding tests for new functionality.';
+  }
+  return null;
 }
 
 // ============================================
@@ -313,6 +445,32 @@ function formatConductorOutput(result: ConductorResult): string {
   lines.push(`**Rationale:** ${result.decomposition.rationale}`);
   lines.push(`**Team recommendation:** ${result.decomposition.teamRecommendation}`);
   lines.push('');
+
+  // Validation warnings
+  const fileViolations = validateTaskFileCounts(result.decomposition);
+  if (fileViolations.length > 0) {
+    lines.push('**FILE COUNT WARNINGS:**');
+    for (const v of fileViolations) {
+      lines.push(`  - Task #${v.taskId} "${v.taskTitle}": ${v.fileCount} files (max ${v.maxFiles}). Consider splitting.`);
+    }
+    lines.push('');
+  }
+
+  const dataFlowWarnings = checkDataFlowCoverage(result.decomposition);
+  if (dataFlowWarnings.length > 0) {
+    lines.push('**DATA FLOW WARNINGS:**');
+    for (const w of dataFlowWarnings) {
+      lines.push(`  - Task #${w.taskId} "${w.taskTitle}": ${w.message}`);
+    }
+    lines.push('');
+  }
+
+  const testWarning = checkTestCoverage(result.decomposition);
+  if (testWarning) {
+    lines.push(`**${testWarning}**`);
+    lines.push('');
+  }
+
   lines.push('| # | Title | Type | Files | Depends On | Est |');
   lines.push('|---|-------|------|-------|------------|-----|');
 
@@ -354,6 +512,17 @@ function formatConductorOutput(result: ConductorResult): string {
   lines.push('');
 
   for (const wave of result.executionPlan.waves) {
+    if (wave.isReviewCheckpoint) {
+      lines.push(`### Wave ${wave.waveNumber} — REVIEW CHECKPOINT`);
+      lines.push('Run incremental code-reviewer + security-reviewer on committed changes before proceeding.');
+      lines.push('```');
+      lines.push('Task(subagent_type="code-reviewer", run_in_background=true, model="sonnet", prompt="Review committed changes")');
+      lines.push('Task(subagent_type="security-reviewer", run_in_background=true, model="sonnet", prompt="Security review committed changes")');
+      lines.push('```');
+      lines.push('');
+      continue;
+    }
+
     const taskList = wave.tasks.map(t => `#${t.id} ${t.title}`).join(', ');
     lines.push(`### Wave ${wave.waveNumber} (${wave.tasks.length} task${wave.tasks.length > 1 ? 's' : ''})`);
     lines.push(`Tasks: ${taskList}`);
@@ -561,6 +730,10 @@ export {
   loadKnowledgeContext,
   buildSpecPrompt,
   formatConductorOutput,
+  validateTaskFileCounts,
+  autoSplitOversizedTasks,
+  checkDataFlowCoverage,
+  checkTestCoverage,
   ESTIMATION_CALIBRATION_FACTOR,
 };
 

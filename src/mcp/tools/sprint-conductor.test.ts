@@ -666,4 +666,211 @@ describe('Sprint Conductor Tool', () => {
       expect(sanitizeForPrompt('line1\nline2\nline3')).toBe('line1 line2 line3');
     });
   });
+
+  describe('validateTaskFileCounts', () => {
+    it('detects tasks exceeding file limit', async () => {
+      const { validateTaskFileCounts } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Big task', description: '', activeForm: '', type: 'feature' as const,
+          files: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts'],
+          dependsOn: [], estimateMinutes: 30,
+        }, {
+          id: 2, title: 'Small task', description: '', activeForm: '', type: 'feature' as const,
+          files: ['g.ts'], dependsOn: [], estimateMinutes: 10,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 40, teamRecommendation: '',
+      };
+
+      const violations = validateTaskFileCounts(decomposition, 5);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].taskId).toBe(1);
+      expect(violations[0].fileCount).toBe(6);
+    });
+
+    it('returns empty for valid tasks', async () => {
+      const { validateTaskFileCounts } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Ok task', description: '', activeForm: '', type: 'feature' as const,
+          files: ['a.ts', 'b.ts'], dependsOn: [], estimateMinutes: 20,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 20, teamRecommendation: '',
+      };
+
+      expect(validateTaskFileCounts(decomposition)).toHaveLength(0);
+    });
+  });
+
+  describe('autoSplitOversizedTasks', () => {
+    it('splits oversized tasks into sub-tasks', async () => {
+      const { autoSplitOversizedTasks } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Big task', description: 'desc', activeForm: 'Working',
+          type: 'feature' as const,
+          files: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts', 'h.ts'],
+          dependsOn: [], estimateMinutes: 60,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 60, teamRecommendation: '',
+      };
+
+      const result = autoSplitOversizedTasks(decomposition, 5);
+      expect(result.tasks.length).toBe(2); // ceil(8/4) = 2 chunks
+      expect(result.tasks[0].files).toHaveLength(4);
+      expect(result.tasks[1].files).toHaveLength(4);
+    });
+
+    it('preserves dependency chain between sub-tasks', async () => {
+      const { autoSplitOversizedTasks } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Big task', description: 'desc', activeForm: 'Working',
+          type: 'feature' as const,
+          files: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts', 'h.ts'],
+          dependsOn: [], estimateMinutes: 60,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 60, teamRecommendation: '',
+      };
+
+      const result = autoSplitOversizedTasks(decomposition, 5);
+      // Second sub-task should depend on first
+      expect(result.tasks[1].dependsOn).toContain(result.tasks[0].id);
+    });
+
+    it('no-op when all tasks are valid', async () => {
+      const { autoSplitOversizedTasks } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Small', description: '', activeForm: '', type: 'feature' as const,
+          files: ['a.ts', 'b.ts'], dependsOn: [], estimateMinutes: 15,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 15, teamRecommendation: '',
+      };
+
+      const result = autoSplitOversizedTasks(decomposition, 5);
+      expect(result.tasks).toHaveLength(1);
+      expect(result.tasks[0].title).toBe('Small');
+    });
+  });
+
+  describe('checkDataFlowCoverage', () => {
+    it('flags schema tasks without API handlers', async () => {
+      const { checkDataFlowCoverage } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Add migration', description: '', activeForm: '',
+          type: 'migration' as const,
+          files: ['prisma/schema.prisma', 'prisma/migrations/001.sql'],
+          dependsOn: [], estimateMinutes: 15,
+        }, {
+          id: 2, title: 'Add UI', description: '', activeForm: '',
+          type: 'feature' as const,
+          files: ['src/components/form.tsx'],
+          dependsOn: [1], estimateMinutes: 30,
+        }],
+        executionStrategy: 'mixed' as const,
+        rationale: '', totalEstimateMinutes: 45, teamRecommendation: '',
+      };
+
+      const warnings = checkDataFlowCoverage(decomposition);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].message).toContain('API route handler');
+    });
+
+    it('no warnings when API handler exists', async () => {
+      const { checkDataFlowCoverage } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Migration', description: '', activeForm: '',
+          type: 'migration' as const,
+          files: ['prisma/schema.prisma'],
+          dependsOn: [], estimateMinutes: 15,
+        }, {
+          id: 2, title: 'API', description: '', activeForm: '',
+          type: 'feature' as const,
+          files: ['src/app/api/things/route.ts'],
+          dependsOn: [1], estimateMinutes: 20,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 35, teamRecommendation: '',
+      };
+
+      expect(checkDataFlowCoverage(decomposition)).toHaveLength(0);
+    });
+  });
+
+  describe('checkTestCoverage', () => {
+    it('warns when no test tasks exist', async () => {
+      const { checkTestCoverage } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Feature', description: '', activeForm: '',
+          type: 'feature' as const, files: ['a.ts'], dependsOn: [], estimateMinutes: 30,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 30, teamRecommendation: '',
+      };
+
+      expect(checkTestCoverage(decomposition)).toContain('WARNING');
+    });
+
+    it('returns null when test task exists', async () => {
+      const { checkTestCoverage } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [{
+          id: 1, title: 'Feature', description: '', activeForm: '',
+          type: 'feature' as const, files: ['a.ts'], dependsOn: [], estimateMinutes: 30,
+        }, {
+          id: 2, title: 'Tests', description: '', activeForm: '',
+          type: 'test' as const, files: ['a.test.ts'], dependsOn: [1], estimateMinutes: 20,
+        }],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 50, teamRecommendation: '',
+      };
+
+      expect(checkTestCoverage(decomposition)).toBeNull();
+    });
+  });
+
+  describe('buildExecutionPlan review checkpoints', () => {
+    it('inserts review checkpoints after multi-task waves', async () => {
+      const { buildExecutionPlan } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [
+          { id: 1, title: 'A', description: '', activeForm: '', type: 'feature' as const, files: ['a.ts'], dependsOn: [], estimateMinutes: 20 },
+          { id: 2, title: 'B', description: '', activeForm: '', type: 'feature' as const, files: ['b.ts'], dependsOn: [], estimateMinutes: 20 },
+          { id: 3, title: 'C', description: '', activeForm: '', type: 'test' as const, files: ['c.ts'], dependsOn: [1, 2], estimateMinutes: 15 },
+        ],
+        executionStrategy: 'mixed' as const,
+        rationale: '', totalEstimateMinutes: 55, teamRecommendation: '',
+      };
+
+      const plan = buildExecutionPlan(decomposition);
+      const reviewWaves = plan.waves.filter(w => w.isReviewCheckpoint);
+      expect(reviewWaves.length).toBeGreaterThanOrEqual(1);
+      expect(reviewWaves[0].tasks).toHaveLength(0);
+    });
+
+    it('does not insert checkpoint after single-task waves', async () => {
+      const { buildExecutionPlan } = await import('./sprint-conductor.js');
+      const decomposition = {
+        tasks: [
+          { id: 1, title: 'A', description: '', activeForm: '', type: 'feature' as const, files: ['a.ts'], dependsOn: [], estimateMinutes: 20 },
+          { id: 2, title: 'B', description: '', activeForm: '', type: 'feature' as const, files: ['b.ts'], dependsOn: [1], estimateMinutes: 20 },
+        ],
+        executionStrategy: 'sequential' as const,
+        rationale: '', totalEstimateMinutes: 40, teamRecommendation: '',
+      };
+
+      const plan = buildExecutionPlan(decomposition);
+      const reviewWaves = plan.waves.filter(w => w.isReviewCheckpoint);
+      expect(reviewWaves).toHaveLength(0);
+    });
+  });
 });
