@@ -52,6 +52,7 @@ import { registerPreFlightTools } from './tools/pre-flight.js';
 import { registerSpotCheckTools } from './tools/spot-check.js';
 import { registerDeferredLifecycleTools } from './tools/deferred-lifecycle.js';
 import { registerRetrospectiveTools } from './tools/retrospective.js';
+import { registerPrioritizeTools } from './tools/prioritize.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -89,6 +90,7 @@ registerPreFlightTools(server);
 registerSpotCheckTools(server);
 registerDeferredLifecycleTools(server);
 registerRetrospectiveTools(server);
+registerPrioritizeTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
