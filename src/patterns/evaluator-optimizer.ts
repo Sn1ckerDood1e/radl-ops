@@ -16,6 +16,7 @@ import { getRoute, calculateCost } from '../models/router.js';
 import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
+import { withRetry } from '../utils/retry.js';
 
 /**
  * Tool definition for structured evaluation output.
@@ -143,11 +144,14 @@ export async function runEvalOptLoop(
     // Step 1: Generate
     let genResponse: Anthropic.Message;
     try {
-      genResponse = await getAnthropicClient().messages.create({
-        model: generatorRoute.model,
-        max_tokens: generatorRoute.maxTokens,
-        messages: [{ role: 'user', content: currentPrompt }],
-      });
+      genResponse = await withRetry(
+        () => getAnthropicClient().messages.create({
+          model: generatorRoute.model,
+          max_tokens: generatorRoute.maxTokens,
+          messages: [{ role: 'user', content: currentPrompt }],
+        }),
+        { maxRetries: 3, baseDelayMs: 1000 },
+      );
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Generator API call failed', { iteration, error: msg });
@@ -181,14 +185,17 @@ export async function runEvalOptLoop(
 
     let evalResponse: Anthropic.Message;
     try {
-      evalResponse = await getAnthropicClient().messages.create({
-        model: evaluatorRoute.model,
-        max_tokens: evaluatorRoute.maxTokens,
-        system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: evalUserMessage }],
-        tools: [EVAL_RESULT_TOOL],
-        tool_choice: { type: 'tool', name: 'evaluation_result' },
-      });
+      evalResponse = await withRetry(
+        () => getAnthropicClient().messages.create({
+          model: evaluatorRoute.model,
+          max_tokens: evaluatorRoute.maxTokens,
+          system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: evalUserMessage }],
+          tools: [EVAL_RESULT_TOOL],
+          tool_choice: { type: 'tool', name: 'evaluation_result' },
+        }),
+        { maxRetries: 3, baseDelayMs: 1000 },
+      );
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Evaluator API call failed', { iteration, error: msg });

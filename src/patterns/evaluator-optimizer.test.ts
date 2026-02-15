@@ -18,6 +18,11 @@ vi.mock('../config/logger.js', () => ({
   },
 }));
 
+// Mock withRetry to pass through without retrying (retry logic tested in retry.test.ts)
+vi.mock('../utils/retry.js', () => ({
+  withRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
+}));
+
 import { runEvalOptLoop } from './evaluator-optimizer.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import type { EvalOptConfig } from './evaluator-optimizer.js';
