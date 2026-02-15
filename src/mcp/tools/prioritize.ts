@@ -248,8 +248,8 @@ export function registerPrioritizeTools(server: McpServer): void {
     'auto_prioritize',
     'Score and rank deferred items by age, effort, impact, frequency, and blocking potential. Returns top N items with factor breakdown.',
     {
-      top_n: z.number().default(10)
-        .describe('Number of top items to return (default: 10)'),
+      top_n: z.number().int().min(1).max(100).default(10)
+        .describe('Number of top items to return (1-100, default: 10)'),
     },
     { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     withErrorTracking('auto_prioritize', async ({ top_n }) => {

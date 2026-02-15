@@ -106,7 +106,8 @@ export function generateTestSkeleton(criteria: AcceptanceCriterion[], title: str
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/^-|-$/g, '')
+    .substring(0, 100);
 
   const filePath = `e2e/${slug}.spec.ts`;
 
@@ -196,8 +197,7 @@ export function formatCriteriaList(criteria: AcceptanceCriterion[]): string {
   const byType = new Map<CriterionType, AcceptanceCriterion[]>();
   for (const c of criteria) {
     const list = byType.get(c.type) ?? [];
-    list.push(c);
-    byType.set(c.type, list);
+    byType.set(c.type, [...list, c]);
   }
 
   const lines: string[] = [
