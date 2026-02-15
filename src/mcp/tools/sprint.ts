@@ -21,6 +21,7 @@ import { getConfig } from '../../config/paths.js';
 import { notifySprintChanged } from '../resources.js';
 import { runBloomPipeline } from '../../patterns/bloom-orchestrator.js';
 import type { SprintData } from '../../patterns/bloom-orchestrator.js';
+import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport } from './shared/plan-store.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -505,7 +506,30 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}` }] };
+      // Plan traceability report
+      let traceabilityNote = '';
+      try {
+        const latestPlan = loadLatestPlan();
+        if (latestPlan) {
+          // Get git log commits for the sprint branch
+          const commitLog = execSync('git log --oneline --format="%s" HEAD~20..HEAD 2>/dev/null || true', {
+            encoding: 'utf-8',
+            cwd: getConfig().radlDir,
+            timeout: 5000,
+          }).trim();
+
+          if (commitLog) {
+            const commits = commitLog.split('\n').filter(Boolean);
+            const matched = matchCommitsToTasks(latestPlan, commits);
+            savePlan(matched);
+            traceabilityNote = `\n\n${formatTraceabilityReport(matched)}`;
+          }
+        }
+      } catch (error) {
+        logger.warn('Plan traceability report failed', { error: String(error) });
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}` }] };
     })
   );
 
