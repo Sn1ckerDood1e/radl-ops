@@ -53,6 +53,7 @@ import { registerSpotCheckTools } from './tools/spot-check.js';
 import { registerDeferredLifecycleTools } from './tools/deferred-lifecycle.js';
 import { registerRetrospectiveTools } from './tools/retrospective.js';
 import { registerPrioritizeTools } from './tools/prioritize.js';
+import { registerSpecVerifyTools } from './tools/spec-verify.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -91,6 +92,7 @@ registerSpotCheckTools(server);
 registerDeferredLifecycleTools(server);
 registerRetrospectiveTools(server);
 registerPrioritizeTools(server);
+registerSpecVerifyTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

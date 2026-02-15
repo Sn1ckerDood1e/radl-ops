@@ -35,7 +35,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'iron_laws', 'cost_report', 'knowledge_query', 'verify', 'team_recipe', 'audit_triage',
       'sprint_advisor', 'review_pipeline', 'sprint_decompose', 'verify_patterns',
       'sprint_conductor', 'verify_data_flow', 'pre_flight_check', 'spot_check_diff', 'deferred_triage',
-      'sprint_retrospective', 'auto_prioritize',
+      'sprint_retrospective', 'auto_prioritize', 'spec_to_tests',
     ],
     defaultEnabled: true,
   },
