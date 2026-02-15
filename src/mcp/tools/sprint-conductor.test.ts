@@ -27,6 +27,15 @@ vi.mock('../with-error-tracking.js', () => ({
   withErrorTracking: vi.fn((_name: string, handler: Function) => handler),
 }));
 
+vi.mock('./shared/estimation.js', () => ({
+  getCalibrationFactor: vi.fn(() => 0.5),
+}));
+
+vi.mock('./shared/plan-store.js', () => ({
+  createPlanFromDecomposition: vi.fn(() => ({ id: 'test', tasks: [] })),
+  savePlan: vi.fn(),
+}));
+
 // Module-level mock functions (same pattern as drift-detection.test.ts)
 const mockGetRoute = vi.fn();
 const mockCalculateCost = vi.fn();
@@ -434,7 +443,7 @@ describe('Sprint Conductor Tool', () => {
     });
 
     it('applies estimation calibration factor', async () => {
-      const { buildExecutionPlan, ESTIMATION_CALIBRATION_FACTOR } = await import('./sprint-conductor.js');
+      const { buildExecutionPlan } = await import('./sprint-conductor.js');
 
       const decomposition = {
         tasks: [
@@ -450,7 +459,7 @@ describe('Sprint Conductor Tool', () => {
       const plan = buildExecutionPlan(decomposition);
 
       expect(plan.totalEstimateMinutes).toBe(100); // 60 + 40
-      expect(plan.calibratedEstimateMinutes).toBe(Math.round(100 * ESTIMATION_CALIBRATION_FACTOR));
+      expect(plan.calibratedEstimateMinutes).toBe(50); // 100 * 0.5 (mocked)
     });
 
     it('recommends team when wave has 3+ tasks', async () => {
