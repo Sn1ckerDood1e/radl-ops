@@ -576,7 +576,18 @@ function formatConductorOutput(result: ConductorResult): string {
   lines.push('```');
   lines.push('');
 
-  // Section 5: Cost
+  // Section 5: Verification
+  lines.push('## 5. Verification');
+  lines.push('');
+  lines.push('After implementation, generate test skeletons from this spec:');
+  lines.push('```');
+  lines.push('mcp__radl-ops__spec_to_tests({ spec: "<paste spec from Section 1>", title: "<feature title>" })');
+  lines.push('```');
+  lines.push('');
+  lines.push('> **Sprint is not complete until all generated tests pass.**');
+  lines.push('');
+
+  // Section 6: Cost
   lines.push('---');
   lines.push(`_Total AI cost: $${result.totalCostUsd} | Tasks: ${result.decomposition.tasks.length} | Waves: ${result.executionPlan.waves.length}_`);
 
