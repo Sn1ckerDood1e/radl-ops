@@ -36,6 +36,7 @@ import type {
 import { formatAgentDispatchSection } from './shared/agent-validation.js';
 import { withRetry } from '../../utils/retry.js';
 import { createPlanFromDecomposition, savePlan } from './shared/plan-store.js';
+import { getCalibrationFactor } from './shared/estimation.js';
 
 // ============================================
 // Types
@@ -77,7 +78,10 @@ interface ConductorResult {
 // Constants
 // ============================================
 
-const ESTIMATION_CALIBRATION_FACTOR = 0.5;
+/** Dynamic calibration — uses learned model if 3+ data points, otherwise 0.5 */
+function getEstimationCalibrationFactor(): number {
+  return getCalibrationFactor();
+}
 
 // ============================================
 // Helpers
@@ -288,7 +292,7 @@ function buildExecutionPlan(decomposition: Decomposition): ExecutionPlan {
   }
 
   const rawEstimate = decomposition.tasks.reduce((sum, t) => sum + t.estimateMinutes, 0);
-  const calibratedEstimate = Math.round(rawEstimate * ESTIMATION_CALIBRATION_FACTOR);
+  const calibratedEstimate = Math.round(rawEstimate * getEstimationCalibrationFactor());
 
   // Recommend team if any wave has 3+ tasks
   const maxWaveSize = Math.max(...implementationWaves.map(w => w.tasks.length), 0);
@@ -508,7 +512,7 @@ function formatConductorOutput(result: ConductorResult): string {
   lines.push('');
   lines.push(`**Strategy:** ${result.executionPlan.strategy}`);
   lines.push(`**Raw estimate:** ${result.executionPlan.totalEstimateMinutes} minutes`);
-  lines.push(`**Calibrated estimate:** ${result.executionPlan.calibratedEstimateMinutes} minutes (x${ESTIMATION_CALIBRATION_FACTOR} historical factor)`);
+  lines.push(`**Calibrated estimate:** ${result.executionPlan.calibratedEstimateMinutes} minutes (x${getEstimationCalibrationFactor()} historical factor)`);
   if (result.executionPlan.recommendTeam) {
     lines.push('**Recommendation:** Use agent team for parallel execution');
   }
@@ -753,7 +757,7 @@ export {
   autoSplitOversizedTasks,
   checkDataFlowCoverage,
   checkTestCoverage,
-  ESTIMATION_CALIBRATION_FACTOR,
+  getEstimationCalibrationFactor,
 };
 
 // Re-export from shared module for backward compatibility
