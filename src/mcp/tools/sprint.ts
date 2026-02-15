@@ -176,6 +176,27 @@ function getTeamSuggestion(
   return lines.join('\n');
 }
 
+function getDeferredTriageSummary(): string {
+  const store = loadDeferred();
+  const unresolved = (store.items || []).filter(i => !i.resolved);
+  if (unresolved.length === 0) return '';
+
+  // Sort by date ascending (oldest first)
+  const sorted = [...unresolved].sort((a, b) =>
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  const now = new Date();
+  const oldest = sorted.slice(0, 3).map(item => {
+    const ageDays = Math.floor(
+      (now.getTime() - new Date(item.date).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return `  - [${item.effort}] ${item.title} (${ageDays}d old, from ${item.sprintPhase})`;
+  });
+
+  return `\nDeferred triage (${unresolved.length} unresolved, oldest 3):\n${oldest.join('\n')}`;
+}
+
 function normalizeSprintData(raw: Record<string, unknown>): SprintData {
   return {
     phase: String(raw.phase ?? 'Unknown'),
@@ -299,10 +320,11 @@ export function registerSprintTools(server: McpServer): void {
         : `Task plan: ${task_count} tasks\n`;
 
       const teamSuggestion = getTeamSuggestion(title, task_count, loadTeamRuns());
+      const deferredTriage = getDeferredTriageSummary();
 
       notifySprintChanged();
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}` }] };
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}` }] };
     })
   );
 
