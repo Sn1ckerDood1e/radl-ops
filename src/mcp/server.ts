@@ -56,6 +56,9 @@ import { registerPrioritizeTools } from './tools/prioritize.js';
 import { registerSpecVerifyTools } from './tools/spec-verify.js';
 import { registerCrystallizationTools } from './tools/crystallization.js';
 import { registerImmuneSystemTools } from './tools/immune-system.js';
+import { registerCausalGraphTools } from './tools/causal-graph.js';
+import { registerInverseBloomTools } from './tools/inverse-bloom.js';
+import { registerQualityRatchetTools } from './tools/quality-ratchet.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -97,6 +100,9 @@ registerPrioritizeTools(server);
 registerSpecVerifyTools(server);
 registerCrystallizationTools(server);
 registerImmuneSystemTools(server);
+registerCausalGraphTools(server);
+registerInverseBloomTools(server);
+registerQualityRatchetTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

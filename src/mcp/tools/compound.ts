@@ -132,6 +132,7 @@ interface MergeResult {
   decisionsAdded: number;
   estimationsAdded: number;
   blockersAdded: number;
+  causalAdded: number;
 }
 
 function mergePattern(content: string): { name: string; description: string } {
@@ -166,6 +167,7 @@ function mergeIntoKnowledge(lessons: CategorizedLesson[], phase: string): MergeR
     decisionsAdded: 0,
     estimationsAdded: 0,
     blockersAdded: 0,
+    causalAdded: 0,
   };
 
   // Route each lesson to the appropriate knowledge store
@@ -261,6 +263,74 @@ function mergeIntoKnowledge(lessons: CategorizedLesson[], phase: string): MergeR
 
         writeFileSync(deferredPath, JSON.stringify(deferredFile, null, 2));
         result.blockersAdded++;
+        break;
+      }
+
+      case 'causal': {
+        // Parse "decision -> outcome" patterns from the lesson content
+        const arrowParts = lesson.content.split(' -> ');
+        if (arrowParts.length >= 2) {
+          const causalGraphPath = join(knowledgeDir, 'causal-graph.json');
+
+          interface CausalGraphFile {
+            nodes: Array<{ id: string; type: string; label: string; sprint: string; date: string }>;
+            edges: Array<{ from: string; to: string; strength: number; evidence: string }>;
+          }
+
+          const causalGraph: CausalGraphFile = existsSync(causalGraphPath)
+            ? JSON.parse(readFileSync(causalGraphPath, 'utf-8'))
+            : { nodes: [], edges: [] };
+
+          const sanitizedPhase = phase.toLowerCase().replace(/\s+/g, '').replace(/\./g, '');
+          const decisionIndex = causalGraph.nodes.filter(n => n.type === 'decision' && n.id.includes(sanitizedPhase)).length + 1;
+          const outcomeIndex = causalGraph.nodes.filter(n => n.type === 'outcome' && n.id.includes(sanitizedPhase)).length + 1;
+
+          const decisionId = `d-${sanitizedPhase}-${decisionIndex}`;
+          const outcomeId = `o-${sanitizedPhase}-${outcomeIndex}`;
+
+          const decisionLabel = arrowParts[0].trim();
+          const outcomeLabel = arrowParts.slice(1).join(' -> ').trim();
+          const now = new Date().toISOString();
+
+          // Check for duplicate node IDs
+          const decisionExists = causalGraph.nodes.some(n => n.id === decisionId);
+          const outcomeExists = causalGraph.nodes.some(n => n.id === outcomeId);
+
+          if (!decisionExists) {
+            causalGraph.nodes.push({
+              id: decisionId,
+              type: 'decision',
+              label: decisionLabel,
+              sprint: phase,
+              date: now,
+            });
+          }
+
+          if (!outcomeExists) {
+            causalGraph.nodes.push({
+              id: outcomeId,
+              type: 'outcome',
+              label: outcomeLabel,
+              sprint: phase,
+              date: now,
+            });
+          }
+
+          const edgeKey = `${decisionId}::${outcomeId}`;
+          const edgeExists = causalGraph.edges.some(e => `${e.from}::${e.to}` === edgeKey);
+
+          if (!edgeExists) {
+            causalGraph.edges.push({
+              from: decisionId,
+              to: outcomeId,
+              strength: 5,
+              evidence: lesson.content,
+            });
+          }
+
+          writeFileSync(causalGraphPath, JSON.stringify(causalGraph, null, 2));
+          result.causalAdded++;
+        }
         break;
       }
 
@@ -433,7 +503,7 @@ export function registerCompoundTools(server: McpServer): void {
       // Format output
       const totalAdded = mergeResult.lessonsAdded + mergeResult.patternsAdded +
                          mergeResult.decisionsAdded + mergeResult.estimationsAdded +
-                         mergeResult.blockersAdded;
+                         mergeResult.blockersAdded + mergeResult.causalAdded;
 
       const lines: string[] = [
         `## Compound Extract: ${sprint.data.phase} — ${sprint.data.title}`,
@@ -446,6 +516,7 @@ export function registerCompoundTools(server: McpServer): void {
         `  - Lessons: ${mergeResult.lessonsAdded}`,
         `  - Estimations: ${mergeResult.estimationsAdded}`,
         `  - Blockers: ${mergeResult.blockersAdded}`,
+        `  - Causal: ${mergeResult.causalAdded}`,
         `**Extraction Cost:** $${result.totalCostUsd}`,
         '',
         '### Extracted Insights',

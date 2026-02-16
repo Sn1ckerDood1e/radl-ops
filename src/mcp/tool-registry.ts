@@ -38,6 +38,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'sprint_retrospective', 'auto_prioritize', 'spec_to_tests',
       'crystallize_propose', 'crystallize_approve', 'crystallize_demote', 'crystallize_list',
       'antibody_create', 'antibody_list', 'antibody_disable',
+      'causal_extract', 'causal_query', 'inverse_bloom',
+      'trust_report', 'trust_record',
     ],
     defaultEnabled: true,
   },
