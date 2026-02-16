@@ -40,6 +40,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'antibody_create', 'antibody_list', 'antibody_disable',
       'causal_extract', 'causal_query', 'inverse_bloom',
       'trust_report', 'trust_record',
+      'speculative_validate', 'cognitive_load',
     ],
     defaultEnabled: true,
   },
