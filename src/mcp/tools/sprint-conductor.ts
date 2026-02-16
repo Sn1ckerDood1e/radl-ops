@@ -144,7 +144,7 @@ function loadKnowledgeContext(): KnowledgeContext {
     }
   }
 
-  const estimationsPath = `${config.knowledgeDir}/estimations.json`;
+  const estimationsPath = `${config.knowledgeDir}/estimation-data.json`;
   if (existsSync(estimationsPath)) {
     try {
       const data = JSON.parse(readFileSync(estimationsPath, 'utf-8'));
@@ -152,7 +152,7 @@ function loadKnowledgeContext(): KnowledgeContext {
         result.estimations = `Historical estimation calibration: estimates run ${Math.round(data.calibrationFactor * 100)}% of predicted`;
       }
     } catch (error) {
-      logger.error('Failed to parse estimations.json', { error: String(error) });
+      logger.error('Failed to parse estimation-data.json', { error: String(error) });
     }
   }
 

@@ -5,14 +5,14 @@
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 26 tools across 3 groups (core, content, advanced) with annotations
+ * - Tools: 48 tools across 3 groups (core, content, advanced) with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
  * Tool groups (dynamic loading):
- * - core: always enabled (sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight)
+ * - core: always enabled (sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight, immune system, crystallization, causal graphs, inverse bloom, speculative validation, cognitive load, quality ratchet)
  * - content: disabled by default, enable with enable_tools (briefing, social, roadmap)
- * - advanced: disabled by default, enable with enable_tools (eval-opt, compound)
+ * - advanced: disabled by default, enable with enable_tools (eval-opt, compound, tool-forge, counterfactual)
  *
  * IMPORTANT: Set RADL_OPS_MODE before any imports that use logger/tracker.
  */
