@@ -56,7 +56,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     name: 'advanced',
     description: 'Eval-opt content generation (multi-model quality loop), compound learning extraction (Bloom pipeline)',
-    toolNames: ['eval_opt_generate', 'compound_extract'],
+    toolNames: ['eval_opt_generate', 'compound_extract', 'tool_forge', 'counterfactual_analyze'],
     defaultEnabled: false,
   },
 ];

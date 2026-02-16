@@ -61,6 +61,8 @@ import { registerInverseBloomTools } from './tools/inverse-bloom.js';
 import { registerQualityRatchetTools } from './tools/quality-ratchet.js';
 import { registerSpeculativeValidateTools } from './tools/speculative-validate.js';
 import { registerCognitiveLoadTools } from './tools/cognitive-load.js';
+import { registerToolForgeTools } from './tools/tool-forge.js';
+import { registerCounterfactualTools } from './tools/counterfactual.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -107,6 +109,8 @@ registerInverseBloomTools(server);
 registerQualityRatchetTools(server);
 registerSpeculativeValidateTools(server);
 registerCognitiveLoadTools(server);
+registerToolForgeTools(server);
+registerCounterfactualTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
