@@ -5,14 +5,14 @@
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 26 tools across 3 groups (core, content, advanced) with annotations
+ * - Tools: 48 tools across 3 groups (core, content, advanced) with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
  * Tool groups (dynamic loading):
- * - core: always enabled (sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight)
+ * - core: always enabled (sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight, immune system, crystallization, causal graphs, inverse bloom, speculative validation, cognitive load, quality ratchet)
  * - content: disabled by default, enable with enable_tools (briefing, social, roadmap)
- * - advanced: disabled by default, enable with enable_tools (eval-opt, compound)
+ * - advanced: disabled by default, enable with enable_tools (eval-opt, compound, tool-forge, counterfactual)
  *
  * IMPORTANT: Set RADL_OPS_MODE before any imports that use logger/tracker.
  */
@@ -54,6 +54,15 @@ import { registerDeferredLifecycleTools } from './tools/deferred-lifecycle.js';
 import { registerRetrospectiveTools } from './tools/retrospective.js';
 import { registerPrioritizeTools } from './tools/prioritize.js';
 import { registerSpecVerifyTools } from './tools/spec-verify.js';
+import { registerCrystallizationTools } from './tools/crystallization.js';
+import { registerImmuneSystemTools } from './tools/immune-system.js';
+import { registerCausalGraphTools } from './tools/causal-graph.js';
+import { registerInverseBloomTools } from './tools/inverse-bloom.js';
+import { registerQualityRatchetTools } from './tools/quality-ratchet.js';
+import { registerSpeculativeValidateTools } from './tools/speculative-validate.js';
+import { registerCognitiveLoadTools } from './tools/cognitive-load.js';
+import { registerToolForgeTools } from './tools/tool-forge.js';
+import { registerCounterfactualTools } from './tools/counterfactual.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -93,6 +102,15 @@ registerDeferredLifecycleTools(server);
 registerRetrospectiveTools(server);
 registerPrioritizeTools(server);
 registerSpecVerifyTools(server);
+registerCrystallizationTools(server);
+registerImmuneSystemTools(server);
+registerCausalGraphTools(server);
+registerInverseBloomTools(server);
+registerQualityRatchetTools(server);
+registerSpeculativeValidateTools(server);
+registerCognitiveLoadTools(server);
+registerToolForgeTools(server);
+registerCounterfactualTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

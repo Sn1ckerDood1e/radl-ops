@@ -12,9 +12,9 @@ Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups 
 
 | Group | Default | Tools |
 |-------|---------|-------|
-| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check |
+| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load |
 | **content** | Disabled | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
-| **advanced** | Disabled | eval_opt_generate, compound_extract |
+| **advanced** | Disabled | eval_opt_generate, compound_extract, tool_forge, counterfactual_analyze |
 
 To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content", action: "enable" })`
 
@@ -46,8 +46,29 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `sprint_conductor` | core | Full sprint orchestration: knowledge → eval-opt spec → decompose → execution plan |
 | `verify_data_flow` | core | Zero-cost field lifecycle check (Schema→Migration→Validation→API→Client) |
 | `pre_flight_check` | core | Zero-cost pre-push verification (branch, sprint, clean tree, typecheck, secrets) |
+| `spot_check_diff` | core | AI spot-check of git diffs for common mistakes |
+| `deferred_triage` | core | Manage deferred tech debt items lifecycle |
+| `sprint_retrospective` | core | AI-powered sprint retrospective analysis |
+| `auto_prioritize` | core | AI-prioritize deferred items by impact/effort |
+| `spec_to_tests` | core | Generate test specs from acceptance criteria |
+| `crystallize_propose` | core | Propose checks from high-frequency lessons (Haiku) |
+| `crystallize_approve` | core | Approve a proposed crystallized check |
+| `crystallize_demote` | core | Demote a crystallized check with reason |
+| `crystallize_list` | core | List crystallized checks by status |
+| `antibody_create` | core | Create antibody from bug description (Haiku) |
+| `antibody_list` | core | List active/all antibodies |
+| `antibody_disable` | core | Deactivate an antibody |
+| `causal_extract` | core | Extract decision→outcome pairs from sprint data (Haiku) |
+| `causal_query` | core | Query causal graph by node or keywords (zero-cost BFS) |
+| `inverse_bloom` | core | Zero-cost knowledge injection for sprint tasks |
+| `trust_report` | core | Zero-cost analytics per domain (success rate, override rate) |
+| `trust_record` | core | Record decision outcome for quality ratchet |
+| `speculative_validate` | core | Zero-cost pre-validation against knowledge base (5 checks) |
+| `cognitive_load` | core | Zero-cost context window overflow prediction |
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
 | `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
+| `tool_forge` | advanced | Generate MCP tool code from crystallized checks or antibodies (Sonnet) |
+| `counterfactual_analyze` | advanced | Analyze alternative sprint outcomes with causal context (Sonnet) |
 
 ## MCP Resources
 
@@ -77,10 +98,20 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 
 ```
 Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
-                                    ├── tools (26 tools, 3 groups, with annotations)
+                                    ├── tools (48 tools, 3 groups, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
-                                    ├── sprint conductor (knowledge → eval-opt spec → decompose → execution plan)
+                                    ├── sprint conductor (knowledge → inverse bloom → speculative validate → plan)
+                                    ├── closed-loop intelligence:
+                                    │   ├── immune system (antibody_create/list/disable)
+                                    │   ├── crystallization (propose/approve/demote/list)
+                                    │   ├── causal graphs (extract/query)
+                                    │   ├── inverse bloom (zero-cost knowledge injection)
+                                    │   ├── speculative validation (5 zero-cost pre-checks)
+                                    │   ├── cognitive load prediction (overflow forecasting)
+                                    │   ├── quality ratchet (trust_report/trust_record)
+                                    │   ├── tool forge (Sonnet code gen from checks)
+                                    │   └── counterfactual analysis (alternative outcome reasoning)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
                                     ├── social tools (Sonnet + Radl brand context)
                                     ├── monitoring tools (HTTP health checks)
