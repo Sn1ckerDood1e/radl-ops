@@ -54,6 +54,8 @@ import { registerDeferredLifecycleTools } from './tools/deferred-lifecycle.js';
 import { registerRetrospectiveTools } from './tools/retrospective.js';
 import { registerPrioritizeTools } from './tools/prioritize.js';
 import { registerSpecVerifyTools } from './tools/spec-verify.js';
+import { registerCrystallizationTools } from './tools/crystallization.js';
+import { registerImmuneSystemTools } from './tools/immune-system.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -93,6 +95,8 @@ registerDeferredLifecycleTools(server);
 registerRetrospectiveTools(server);
 registerPrioritizeTools(server);
 registerSpecVerifyTools(server);
+registerCrystallizationTools(server);
+registerImmuneSystemTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

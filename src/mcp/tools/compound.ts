@@ -84,6 +84,8 @@ interface LessonsFile {
     situation: string;
     learning: string;
     date: string;
+    frequency?: number;
+    lastSeenAt?: string;
   }>;
 }
 
@@ -270,20 +272,29 @@ function mergeIntoKnowledge(lessons: CategorizedLesson[], phase: string): MergeR
           ? JSON.parse(readFileSync(lessonsPath, 'utf-8'))
           : { lessons: [] };
 
-        // Check for duplicates
-        const isDuplicate = lessonsFile.lessons.some(
+        // Check for duplicates — if found, increment frequency instead of skipping
+        const existingLesson = lessonsFile.lessons.find(
           l => l.learning.includes(lesson.content.substring(0, 50)) ||
                lesson.content.includes(l.learning.substring(0, 50))
         );
-        if (isDuplicate) break;
+
+        if (existingLesson) {
+          existingLesson.frequency = (existingLesson.frequency ?? 1) + 1;
+          existingLesson.lastSeenAt = new Date().toISOString();
+          writeFileSync(lessonsPath, JSON.stringify(lessonsFile, null, 2));
+          break;
+        }
 
         const nextId = lessonsFile.lessons.reduce((max, l) => Math.max(max, l.id), 0) + 1;
+        const now = new Date().toISOString();
 
         lessonsFile.lessons.push({
           id: nextId,
           situation: `[${lesson.category}] ${phase}`,
           learning: lesson.content,
-          date: new Date().toISOString(),
+          date: now,
+          frequency: 1,
+          lastSeenAt: now,
         });
 
         writeFileSync(lessonsPath, JSON.stringify(lessonsFile, null, 2));

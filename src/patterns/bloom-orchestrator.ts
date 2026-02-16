@@ -35,7 +35,7 @@ const ROLLOUT_TOOL: Anthropic.Tool = {
           properties: {
             category: {
               type: 'string',
-              enum: ['pattern', 'lesson', 'decision', 'estimation', 'blocker'],
+              enum: ['pattern', 'lesson', 'decision', 'estimation', 'blocker', 'causal'],
             },
             content: { type: 'string', description: 'Clear, actionable statement' },
             confidence: { type: 'number', description: 'Confidence score 1-10' },
@@ -82,7 +82,7 @@ export interface SprintData {
 }
 
 export interface CategorizedLesson {
-  category: 'pattern' | 'lesson' | 'decision' | 'estimation' | 'blocker';
+  category: 'pattern' | 'lesson' | 'decision' | 'estimation' | 'blocker' | 'causal';
   content: string;
   confidence: number; // 0-10
 }

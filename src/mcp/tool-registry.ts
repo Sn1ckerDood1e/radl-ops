@@ -36,6 +36,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'sprint_advisor', 'review_pipeline', 'sprint_decompose', 'verify_patterns',
       'sprint_conductor', 'verify_data_flow', 'pre_flight_check', 'spot_check_diff', 'deferred_triage',
       'sprint_retrospective', 'auto_prioritize', 'spec_to_tests',
+      'crystallize_propose', 'crystallize_approve', 'crystallize_demote', 'crystallize_list',
+      'antibody_create', 'antibody_list', 'antibody_disable',
     ],
     defaultEnabled: true,
   },
