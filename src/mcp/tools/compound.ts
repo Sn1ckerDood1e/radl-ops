@@ -33,27 +33,26 @@ function ensureDirs(): void {
 }
 
 function findLatestSprint(): { path: string; data: SprintData } | null {
-  // Try archive first
-  const archiveDir = join(getSprintDir(), 'archive');
-  if (existsSync(archiveDir)) {
-    try {
-      const files = readdirSync(archiveDir)
-        .filter(f => f.endsWith('.json'))
-        .sort()
-        .reverse();
+  const sprintDir = getSprintDir();
 
-      if (files.length > 0) {
-        const filePath = join(archiveDir, files[0]);
-        const data = JSON.parse(readFileSync(filePath, 'utf-8'));
-        return { path: filePath, data: normalizeSprintData(data) };
-      }
-    } catch (error) {
-      logger.warn('Failed to read sprint archive', { error: String(error) });
+  // Check completed-*.json files directly in sprint dir
+  try {
+    const files = readdirSync(sprintDir)
+      .filter(f => f.startsWith('completed-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+
+    if (files.length > 0) {
+      const filePath = join(sprintDir, files[0]);
+      const data = JSON.parse(readFileSync(filePath, 'utf-8'));
+      return { path: filePath, data: normalizeSprintData(data) };
     }
+  } catch (error) {
+    logger.warn('Failed to read completed sprints', { error: String(error) });
   }
 
   // Fall back to current sprint
-  const currentPath = join(getSprintDir(), 'current.json');
+  const currentPath = join(sprintDir, 'current.json');
   if (existsSync(currentPath)) {
     try {
       const data = JSON.parse(readFileSync(currentPath, 'utf-8'));

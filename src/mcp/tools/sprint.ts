@@ -10,7 +10,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
@@ -211,6 +211,28 @@ function normalizeSprintData(raw: Record<string, unknown>): SprintData {
     estimate: String(raw.estimate ?? 'Unknown'),
     actual: String(raw.actualTime ?? raw.actual ?? 'Unknown'),
   };
+}
+
+function findCompletedSprintData(sprintDir: string): Record<string, unknown> | null {
+  // Check completed-*.json files directly in sprint dir
+  try {
+    const files = readdirSync(sprintDir)
+      .filter(f => f.startsWith('completed-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+    if (files.length > 0) {
+      return JSON.parse(readFileSync(join(sprintDir, files[0]), 'utf-8'));
+    }
+  } catch { /* non-fatal */ }
+
+  // Fall back to current.json
+  const currentPath = join(sprintDir, 'current.json');
+  if (existsSync(currentPath)) {
+    try {
+      return JSON.parse(readFileSync(currentPath, 'utf-8'));
+    } catch { /* non-fatal */ }
+  }
+  return null;
 }
 
 function loadExistingKnowledgeForExtract(knowledgeDir: string): string {
@@ -551,29 +573,9 @@ export function registerSprintTools(server: McpServer): void {
           const sprintDir = join(getConfig().radlDir, '.planning/sprints');
           const knowledgeDir = getConfig().knowledgeDir;
 
-          // Find sprint data (check archive first, then current)
-          let sprintData: SprintData | null = null;
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
-
-          if (!sprintData) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
+          // Find sprint data (completed-*.json files in sprint dir)
+          const raw = findCompletedSprintData(sprintDir);
+          const sprintData = raw ? normalizeSprintData(raw) : null;
 
           if (sprintData) {
             // Load existing knowledge for dedup context
@@ -616,28 +618,8 @@ export function registerSprintTools(server: McpServer): void {
       if (auto_extract !== false) {
         try {
           const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          let sprintData: SprintData | null = null;
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
-
-          if (!sprintData) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
+          const causalRaw = findCompletedSprintData(sprintDir);
+          const sprintData = causalRaw ? normalizeSprintData(causalRaw) : null;
 
           if (sprintData) {
             const causalResult = await extractCausalPairs({
@@ -664,28 +646,8 @@ export function registerSprintTools(server: McpServer): void {
         // 1. Estimation accuracy
         try {
           const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          let estimate = '';
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              estimate = String(raw.estimate ?? '');
-            }
-          }
-
-          if (!estimate) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              estimate = String(raw.estimate ?? '');
-            }
-          }
+          const estimateRaw = findCompletedSprintData(sprintDir);
+          const estimate = estimateRaw ? String(estimateRaw.estimate ?? '') : '';
 
           if (estimate && actual_time) {
             const estimateMinutes = parseTimeToMinutes(estimate);
@@ -742,28 +704,8 @@ export function registerSprintTools(server: McpServer): void {
       if (auto_extract !== false) {
         try {
           const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          let taskCount = 0;
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              taskCount = Array.isArray(raw.completedTasks) ? raw.completedTasks.length : 0;
-            }
-          }
-
-          if (taskCount === 0) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              taskCount = Array.isArray(raw.completedTasks) ? raw.completedTasks.length : 0;
-            }
-          }
+          const cogRaw = findCompletedSprintData(sprintDir);
+          const taskCount = cogRaw && Array.isArray(cogRaw.completedTasks) ? cogRaw.completedTasks.length : 0;
 
           const phaseMatch = output.match(/Phase\s+[\d.]+/i);
           const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
