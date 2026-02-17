@@ -33,6 +33,7 @@ export interface StoredPlan {
   createdAt: string;
   tasks: PlannedTask[];
   unplannedCommits: string[];
+  validationWarnings?: string[];
 }
 
 // ============================================

@@ -12,6 +12,7 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   renameSync: vi.fn(),
+  unlinkSync: vi.fn(),
 }));
 
 vi.mock('../../config/logger.js', () => ({
@@ -261,6 +262,8 @@ describe('Sprint Conductor Tool', () => {
     it('loads knowledge context from patterns, lessons, deferred', async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readFileSync)
+        // First read: checkpoint file (loadCheckpoint reads this, no matching featureHash → returns null)
+        .mockReturnValueOnce('{}')
         .mockReturnValueOnce(JSON.stringify({
           patterns: [
             { name: 'CSRF headers', description: 'All fetch calls must include CSRF headers' },
