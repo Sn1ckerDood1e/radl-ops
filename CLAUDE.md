@@ -33,7 +33,7 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `sprint_status` | core | Current sprint state |
 | `sprint_start` | core | Start a new sprint (Slack notification) |
 | `sprint_progress` | core | Record task completion |
-| `sprint_complete` | core | Complete sprint, auto-extract compound learnings via Bloom pipeline |
+| `sprint_complete` | core | Complete sprint, auto-extract compound learnings via Bloom pipeline, compare validation warnings, record trust decisions |
 | `cost_report` | core | API costs from radl-ops internal Claude calls |
 | `knowledge_query` | core | Query compound learnings (patterns, lessons, decisions) |
 | `iron_laws` | core | List all iron laws and current branch status |
@@ -43,7 +43,7 @@ To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content",
 | `review_pipeline` | core | Complete review workflow: recipe + triage template + orchestration checklist |
 | `sprint_decompose` | core | Auto-decompose sprint into structured tasks with AI (Haiku). Returns TaskCreate-ready JSON |
 | `verify_patterns` | core | Check git diffs against knowledge base patterns. Detects drift before PR |
-| `sprint_conductor` | core | Full sprint orchestration: knowledge → eval-opt spec → decompose → execution plan |
+| `sprint_conductor` | core | Full sprint orchestration: knowledge → inverse bloom → speculative validate → checkpointed plan |
 | `verify_data_flow` | core | Zero-cost field lifecycle check (Schema→Migration→Validation→API→Client) |
 | `pre_flight_check` | core | Zero-cost pre-push verification (branch, sprint, clean tree, typecheck, secrets) |
 | `spot_check_diff` | core | AI spot-check of git diffs for common mistakes |
@@ -98,24 +98,36 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 
 ```
 Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
-                                    ├── tools (48 tools, 3 groups, with annotations)
+                                    ├── tools (48 tools, 3 groups + 1 meta, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
-                                    ├── sprint conductor (knowledge → inverse bloom → speculative validate → plan)
-                                    ├── closed-loop intelligence:
-                                    │   ├── immune system (antibody_create/list/disable)
-                                    │   ├── crystallization (propose/approve/demote/list)
-                                    │   ├── causal graphs (extract/query)
-                                    │   ├── inverse bloom (zero-cost knowledge injection)
+                                    ├── sprint conductor:
+                                    │   ├── knowledge loading (patterns, lessons, deferred, estimation)
+                                    │   ├── eval-opt spec (Sonnet generates, Opus evaluates)
+                                    │   ├── task decomposition (Haiku, forced tool_use)
+                                    │   ├── inverse bloom enrichment (time-decay weighted knowledge)
                                     │   ├── speculative validation (5 zero-cost pre-checks)
-                                    │   ├── cognitive load prediction (overflow forecasting)
-                                    │   ├── quality ratchet (trust_report/trust_record)
+                                    │   ├── step-level checkpointing (SHA256 feature hash)
+                                    │   └── plan traceability (commit-to-task matching)
+                                    ├── closed-loop intelligence:
+                                    │   ├── immune system (antibodies with chain matching)
+                                    │   ├── crystallization (propose/approve/demote/list)
+                                    │   ├── causal graphs (extract/query with BFS traversal)
+                                    │   ├── inverse bloom (30-day half-life time decay)
+                                    │   ├── speculative validation (5 zero-cost pre-checks)
+                                    │   ├── cognitive load prediction (overflow forecasting + calibration)
+                                    │   ├── quality ratchet (trust_report/trust_record per domain)
+                                    │   ├── task verification (Antfarm verify-then-retry protocol)
+                                    │   ├── validation follow-up (sprint_complete warning comparison)
                                     │   ├── tool forge (Sonnet code gen from checks)
                                     │   └── counterfactual analysis (alternative outcome reasoning)
+                                    ├── knowledge infrastructure:
+                                    │   ├── FTS5 BM25 search (better-sqlite3, embedding-ready)
+                                    │   └── MITRE ATLAS threat model (knowledge/threats.yaml)
+                                    ├── sprint tools (auto compound extract + trust decisions)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
-                                    ├── social tools (Sonnet + Radl brand context)
+                                    ├── social tools (Sonnet + Radl brand context + withRetry)
                                     ├── monitoring tools (HTTP health checks)
-                                    ├── sprint tools (wrap sprint.sh, auto compound extract)
                                     ├── team recipes (8 recipes)
                                     ├── sprint advisor + decompose (AI task planning)
                                     ├── review pipeline (chained review → triage → tracking)
@@ -238,6 +250,34 @@ Briefings use eval-opt loop: Haiku generates, Sonnet evaluates (quality threshol
 Eval-opt uses structured outputs (tool_use + forced tool_choice) for reliable JSON parsing.
 Eval-opt tracks all iteration attempts and uses prompt caching for evaluation criteria.
 Bloom pipeline uses structured outputs for rollout (lessons array) and judgment (quality score) stages.
+
+## Intelligence Architecture (Phase 80)
+
+### Sprint Conductor Pipeline
+1. **Knowledge loading** — patterns, lessons, deferred items, estimation calibration
+2. **Eval-opt spec** — Sonnet generates, Opus evaluates (quality threshold 8/10)
+3. **Haiku decomposition** — forced `tool_use` for structured task output
+4. **Inverse bloom** — enriches tasks with time-decay weighted knowledge (30-day half-life)
+5. **Speculative validation** — 5 zero-cost pre-checks against knowledge base
+6. **Step checkpointing** — SHA256 feature hash enables resume after context loss
+7. **Plan save** — traceability report matches commits to planned tasks at `sprint_complete`
+
+### Closed-Loop Feedback
+- `sprint_complete` auto-records trust decisions: estimation accuracy, bloom quality, validation warning follow-up
+- `sprint_complete` auto-extracts causal pairs and records cognitive calibration
+- Antibodies increment `catches` when matched during speculative validation
+- Crystallized checks increment `catches` when matched
+- Validation warnings are compared at sprint end: FIXED/PARTIAL/OPEN/REVIEW, recorded as `speculative_validation` trust domain
+
+### Knowledge Search
+- FTS5 BM25 hybrid search via `better-sqlite3` (src/knowledge/fts-index.ts)
+- Embedding-ready interface for future vector similarity
+- Time-decay scoring: 30-day half-life for inverse bloom relevance
+
+### Agent Patterns
+- **Antfarm pattern**: Read-only agents with KEY:VALUE structured output (see `~/.claude/agents/*-readonly.md`)
+- **Task verification**: verify → parse → retry loop with criteria injection
+- **Agent output parser**: Extracts KEY:VALUE pairs from structured agent responses
 
 ## Agent Teams
 

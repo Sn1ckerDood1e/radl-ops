@@ -18,8 +18,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
-import { matchAntibodies, loadAntibodies } from './immune-system.js';
-import { matchCrystallizedChecks, loadCrystallized } from './crystallization.js';
+import { matchAntibodies, loadAntibodies, saveAntibodies } from './immune-system.js';
+import { matchCrystallizedChecks, loadCrystallized, saveCrystallized } from './crystallization.js';
 import { findRelevantCauses, loadCausalGraph } from './causal-graph.js';
 
 // ============================================
@@ -134,6 +134,7 @@ function checkAntibodies(tasks: ValidationTask[]): AntibodyMatch[] {
   }
 
   const matches: AntibodyMatch[] = [];
+  const matchedIds = new Set<number>();
 
   for (const task of tasks) {
     const searchText = `${task.title} ${task.description} ${(task.files ?? []).join(' ')}`;
@@ -146,7 +147,18 @@ function checkAntibodies(tasks: ValidationTask[]): AntibodyMatch[] {
         trigger: ab.trigger,
         check: ab.check,
       });
+      matchedIds.add(ab.id);
     }
+  }
+
+  // Increment catches on matched antibodies
+  if (matchedIds.size > 0) {
+    const updatedStore = {
+      antibodies: store.antibodies.map(ab =>
+        matchedIds.has(ab.id) ? { ...ab, catches: ab.catches + 1 } : ab
+      ),
+    };
+    saveAntibodies(updatedStore);
   }
 
   return matches;
@@ -172,6 +184,7 @@ function checkCrystallized(tasks: ValidationTask[]): CrystallizedMatch[] {
   }
 
   const matches: CrystallizedMatch[] = [];
+  const matchedIds = new Set<number>();
 
   for (const task of tasks) {
     const searchText = `${task.title} ${task.description} ${(task.files ?? []).join(' ')}`;
@@ -184,7 +197,18 @@ function checkCrystallized(tasks: ValidationTask[]): CrystallizedMatch[] {
         trigger: check.trigger,
         check: check.check,
       });
+      matchedIds.add(check.id);
     }
+  }
+
+  // Increment catches on matched crystallized checks
+  if (matchedIds.size > 0) {
+    const updatedCrystallized = {
+      checks: crystallized.checks.map(c =>
+        matchedIds.has(c.id) ? { ...c, catches: c.catches + 1 } : c
+      ),
+    };
+    saveCrystallized(updatedCrystallized);
   }
 
   return matches;

@@ -241,6 +241,47 @@ export function checkFalsePositiveRates(
   return flagged;
 }
 
+/**
+ * Record a trust decision programmatically (for auto-recording at sprint boundaries).
+ * Used by sprint_complete to auto-record estimation accuracy and bloom quality.
+ */
+export function recordTrustDecision(params: {
+  domain: string;
+  decision: string;
+  aiRecommended: string;
+  humanOverride: boolean;
+  outcome: 'success' | 'failure' | 'partial';
+  sprint: string;
+}): TrustDecision {
+  const ledger = loadTrustLedger();
+  const nextId = ledger.decisions.reduce((max, d) => Math.max(max, d.id), 0) + 1;
+
+  const newDecision: TrustDecision = {
+    id: nextId,
+    domain: params.domain,
+    decision: params.decision,
+    aiRecommended: params.aiRecommended,
+    humanOverride: params.humanOverride,
+    outcome: params.outcome,
+    sprint: params.sprint,
+    recordedAt: new Date().toISOString(),
+  };
+
+  const updatedLedger: TrustLedger = {
+    decisions: [...ledger.decisions, newDecision],
+  };
+  saveTrustLedger(updatedLedger);
+
+  logger.info('Trust decision auto-recorded', {
+    id: nextId,
+    domain: params.domain,
+    outcome: params.outcome,
+    sprint: params.sprint,
+  });
+
+  return newDecision;
+}
+
 function getAllDomains(decisions: TrustDecision[]): string[] {
   const domainSet = new Set<string>();
   for (const d of decisions) {

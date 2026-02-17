@@ -316,6 +316,95 @@ function mergeGraphData(
 }
 
 // ============================================
+// Exportable Core Logic (for auto-invocation)
+// ============================================
+
+/**
+ * Extract causal pairs from sprint data programmatically.
+ * This is the core logic that the MCP tool wraps, accepting sprint data
+ * and returning merge stats. Used by sprint_complete for auto-extraction.
+ */
+export async function extractCausalPairs(sprintData: {
+  phase: string;
+  title: string;
+  completedTasks?: unknown[];
+  blockers?: unknown[];
+  estimate?: string;
+  actual?: string;
+}): Promise<{ nodesAdded: number; edgesAdded: number; cost: number }> {
+  const sprintText = formatSprintForPrompt({
+    phase: sprintData.phase,
+    title: sprintData.title,
+    status: 'completed',
+    completedTasks: sprintData.completedTasks,
+    blockers: sprintData.blockers,
+    estimate: sprintData.estimate,
+    actual: sprintData.actual,
+  });
+
+  const existingGraph = loadCausalGraph();
+
+  let existingContext = '';
+  if (existingGraph.nodes.length > 0) {
+    const recentNodes = existingGraph.nodes.slice(-20);
+    existingContext = '\n\nExisting nodes in the graph (avoid duplicating these):\n' +
+      recentNodes.map(n => `- [${n.type}] ${n.label} (${n.id})`).join('\n');
+  }
+
+  const route = getRoute('spot_check');
+
+  const response = await withRetry(
+    () => getAnthropicClient().messages.create({
+      model: route.model,
+      max_tokens: route.maxTokens,
+      system: CAUSAL_EXTRACT_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: `Analyze this sprint data and extract causal relationships:\n\n${sprintText}${existingContext}`,
+      }],
+      tools: [CAUSAL_EXTRACT_TOOL],
+      tool_choice: { type: 'tool', name: 'submit_causal_graph' },
+    }),
+    { maxRetries: 2, baseDelayMs: 1000 },
+  );
+
+  const cost = calculateCost(
+    route.model,
+    response.usage.input_tokens,
+    response.usage.output_tokens,
+  );
+
+  trackUsage(
+    route.model,
+    response.usage.input_tokens,
+    response.usage.output_tokens,
+    'spot_check',
+    'causal-extract-auto',
+  );
+
+  const extracted = parseExtractResponse(response);
+
+  if (extracted.nodes.length === 0) {
+    return { nodesAdded: 0, edgesAdded: 0, cost };
+  }
+
+  const { graph: updatedGraph, nodesAdded, edgesAdded } = mergeGraphData(
+    existingGraph,
+    extracted,
+  );
+
+  saveCausalGraph(updatedGraph);
+
+  logger.info('Causal auto-extract complete', {
+    nodesAdded,
+    edgesAdded,
+    cost,
+  });
+
+  return { nodesAdded, edgesAdded, cost };
+}
+
+// ============================================
 // BFS Graph Traversal (Zero-Cost)
 // ============================================
 

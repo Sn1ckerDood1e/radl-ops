@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execSync, execFileSync } from 'child_process';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
+import { recordTrustDecision } from './quality-ratchet.js';
 
 // Mock child_process to avoid running actual commands
 vi.mock('child_process', () => ({
@@ -28,6 +29,37 @@ vi.mock('../../config/logger.js', () => ({
 
 vi.mock('../with-error-tracking.js', () => ({
   withErrorTracking: vi.fn((_name: string, handler: Function) => handler),
+}));
+
+vi.mock('./quality-ratchet.js', () => ({
+  recordTrustDecision: vi.fn(),
+}));
+
+vi.mock('./cognitive-load.js', () => ({
+  recordCognitiveCalibration: vi.fn(),
+}));
+
+vi.mock('./causal-graph.js', () => ({
+  extractCausalPairs: vi.fn().mockResolvedValue({ pairs: 0 }),
+}));
+
+vi.mock('../../models/token-tracker.js', () => ({
+  setCurrentSprintPhase: vi.fn(),
+}));
+
+vi.mock('../resources.js', () => ({
+  notifySprintChanged: vi.fn(),
+}));
+
+vi.mock('../../patterns/bloom-orchestrator.js', () => ({
+  runBloomPipeline: vi.fn(),
+}));
+
+vi.mock('./shared/plan-store.js', () => ({
+  loadLatestPlan: vi.fn().mockReturnValue(null),
+  matchCommitsToTasks: vi.fn(),
+  savePlan: vi.fn(),
+  formatTraceabilityReport: vi.fn().mockReturnValue(''),
 }));
 
 // Test iron law integration directly
@@ -526,5 +558,132 @@ describe('Sprint Tools - Deferred Items', () => {
     const writtenJson = JSON.parse(vi.mocked(writeFileSync).mock.calls[0][1] as string);
     expect(writtenJson.items[0].id).toBe(1);
     expect(result.content[0].text).toContain('Deferred items: 1');
+  });
+});
+
+describe('Sprint Tools - Validation Warning Comparison', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns empty string when plan has no validation warnings', async () => {
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({}, '/tmp/test', 'Phase 80');
+    expect(result).toBe('');
+  });
+
+  it('returns empty string when validationWarnings array is empty', async () => {
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({ validationWarnings: [] }, '/tmp/test', 'Phase 80');
+    expect(result).toBe('');
+  });
+
+  it('marks data-flow warning as FIXED when all missing layers are in diff', async () => {
+    vi.mocked(execSync).mockReturnValueOnce(
+      'src/app/api/test/route.ts\nsrc/components/test/form.tsx\n'
+    );
+
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({
+      validationWarnings: [
+        '[HIGH] data-flow-coverage: Prisma schema changes detected but missing: api-handler, client-component',
+      ],
+    }, '/tmp/test', 'Phase 80');
+
+    expect(result).toContain('FIXED');
+    expect(result).toContain('Addressed:** 1');
+    expect(recordTrustDecision).toHaveBeenCalledWith(expect.objectContaining({
+      domain: 'speculative_validation',
+      outcome: 'success',
+      sprint: 'Phase 80',
+    }));
+  });
+
+  it('marks warning as PARTIAL when some layers are in diff', async () => {
+    vi.mocked(execSync).mockReturnValueOnce(
+      'src/app/api/test/route.ts\n'
+    );
+
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({
+      validationWarnings: [
+        '[CRITICAL] data-flow-coverage: Prisma schema changes detected but missing: api-handler, client-component',
+      ],
+    }, '/tmp/test', 'Phase 80');
+
+    expect(result).toContain('PARTIAL');
+    expect(result).toContain('1/2 layers');
+  });
+
+  it('marks warning as OPEN when no layers are in diff', async () => {
+    vi.mocked(execSync).mockReturnValueOnce(
+      'prisma/schema.prisma\n'
+    );
+
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({
+      validationWarnings: [
+        '[HIGH] data-flow-coverage: Prisma schema changes detected but missing: api-handler, client-component',
+      ],
+    }, '/tmp/test', 'Phase 80');
+
+    expect(result).toContain('OPEN');
+    expect(recordTrustDecision).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'failure',
+    }));
+  });
+
+  it('marks non-data-flow warnings as REVIEW', async () => {
+    vi.mocked(execSync).mockReturnValueOnce('src/app/api/test/route.ts\n');
+
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({
+      validationWarnings: [
+        '[HIGH] antibody-match: Antibody #3: Missing team scope in query',
+      ],
+    }, '/tmp/test', 'Phase 80');
+
+    expect(result).toContain('REVIEW');
+  });
+
+  it('returns empty string when git diff fails', async () => {
+    vi.mocked(execSync).mockImplementationOnce(() => { throw new Error('git error'); });
+
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({
+      validationWarnings: ['[HIGH] some warning'],
+    }, '/tmp/test', 'Phase 80');
+
+    expect(result).toBe('');
+  });
+
+  it('handles multiple warnings with mixed results', async () => {
+    vi.mocked(execSync).mockReturnValueOnce(
+      'src/app/api/test/route.ts\nsrc/lib/validations/test.ts\nsrc/components/test.tsx\n'
+    );
+
+    const { compareValidationWarnings } = await import('./sprint.js');
+
+    const result = compareValidationWarnings({
+      validationWarnings: [
+        '[HIGH] data-flow-coverage: Prisma changes but missing: api-handler, validation, client-component',
+        '[MEDIUM] crystallized-check: Check #5: Always validate inputs',
+      ],
+    }, '/tmp/test', 'Phase 80');
+
+    expect(result).toContain('FIXED');
+    expect(result).toContain('REVIEW');
+    expect(result).toContain('Pre-sprint warnings:** 2');
+    expect(recordTrustDecision).toHaveBeenCalledWith(expect.objectContaining({
+      decision: '1/2 warnings addressed',
+      outcome: 'partial',
+    }));
   });
 });

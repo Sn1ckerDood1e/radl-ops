@@ -32,6 +32,11 @@ logs/
 briefings/
 training/
 
+# SQLite databases (FTS5 index)
+knowledge/*.db
+knowledge/*.db-journal
+knowledge/*.db-wal
+
 # Test coverage
 coverage/
 

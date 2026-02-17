@@ -1,0 +1,252 @@
+# MITRE ATLAS Threat Model for Radl-Ops
+# Structured threat analysis following OpenClaw Trust patterns.
+# Used by speculative_validate to surface warnings when sprint
+# descriptions match known attack vectors.
+
+version: "1.0"
+last_updated: "2026-02-17"
+
+# ============================================
+# Threats
+# ============================================
+
+threats:
+  - id: T-KNOW-001
+    name: Knowledge Poisoning
+    category: data_integrity
+    description: >
+      Malicious or incorrect lessons injected into the knowledge base
+      via compound extraction. Poisoned knowledge propagates to future
+      sprints via inverse bloom, causing systematic bad decisions.
+    attack_vector: ["compound_extract", "knowledge files", "bloom pipeline"]
+    impact: high
+    likelihood: low
+    risk: P1
+    mitigations:
+      - Bloom pipeline judgment stage (quality score filter)
+      - Quality ratchet trust tracking
+      - Human review of extracted lessons
+    keywords: ["knowledge", "lesson", "pattern", "compound", "poison"]
+
+  - id: T-KNOW-002
+    name: Antibody False Positive Cascade
+    category: availability
+    description: >
+      An antibody with broad trigger keywords fires on every sprint,
+      generating noise that masks real issues. Developers learn to
+      ignore all antibody warnings, defeating the immune system.
+    attack_vector: ["antibody_create", "broad keywords"]
+    impact: medium
+    likelihood: medium
+    risk: P1
+    mitigations:
+      - Quality ratchet false positive monitoring (30% threshold)
+      - antibody_disable for high FP rate
+      - Crystallization demotion path
+    keywords: ["antibody", "false positive", "trigger", "keyword", "noise"]
+
+  - id: T-SPRINT-001
+    name: Conductor Prompt Injection
+    category: integrity
+    description: >
+      Feature description passed to sprint_conductor contains prompt
+      injection that manipulates the eval-opt spec generation or
+      decomposition, producing a plan that bypasses safety checks.
+    attack_vector: ["sprint_conductor", "feature description", "context"]
+    impact: high
+    likelihood: low
+    risk: P2
+    mitigations:
+      - Input sanitization in conductor
+      - Speculative validation as independent check
+      - Human plan approval before execution
+    keywords: ["conductor", "injection", "prompt", "feature", "spec"]
+
+  - id: T-SPRINT-002
+    name: Hook Tampering
+    category: integrity
+    description: >
+      Modification of hook scripts in scripts/hooks/ to disable
+      safety checks (branch guard, pre-flight, sprint guard).
+      Allows direct pushes to main or commits without tracking.
+    attack_vector: ["scripts/hooks/", "settings.json"]
+    impact: critical
+    likelihood: low
+    risk: P1
+    mitigations:
+      - Iron law enforcement (independent of hooks)
+      - Git diff review on hook file changes
+      - Pre-commit hook integrity check
+    keywords: ["hook", "guard", "tamper", "bypass", "disable"]
+
+  - id: T-COST-001
+    name: API Cost Exhaustion
+    category: availability
+    description: >
+      Runaway AI calls (e.g., eval-opt loop with low threshold,
+      repeated tool_forge calls, or Bloom pipeline retries) exhaust
+      the API budget. Daily cost alerts may not fire fast enough.
+    attack_vector: ["eval-opt loop", "tool_forge", "bloom pipeline"]
+    impact: medium
+    likelihood: medium
+    risk: P2
+    mitigations:
+      - Token tracker with per-sprint cost caps
+      - Cost report tool for visibility
+      - Daily cost alert cron job
+      - Eval-opt max iterations limit
+    keywords: ["cost", "api", "exhaustion", "budget", "token", "expensive"]
+
+  - id: T-SUPPLY-001
+    name: Tool Forge Code Execution
+    category: integrity
+    description: >
+      tool_forge generates TypeScript code from AI. If auto-registered
+      (bypassing human review), the generated code could contain
+      malicious logic, data exfiltration, or security bypasses.
+    attack_vector: ["tool_forge", "generated code", "auto-register"]
+    impact: critical
+    likelihood: low
+    risk: P1
+    mitigations:
+      - Tool forge output is markdown only (no auto-register)
+      - Human review required before registration
+      - Generated code goes through normal PR review
+    keywords: ["forge", "generate", "code", "register", "tool"]
+
+# ============================================
+# Attack Chains
+# ============================================
+
+attack_chains:
+  - id: AC-001
+    name: Knowledge Poisoning -> Bug Propagation
+    description: >
+      Poisoned lesson enters knowledge base -> inverse bloom surfaces it
+      in future sprints -> developers follow bad advice -> systematic bugs.
+    threats: [T-KNOW-001]
+    steps:
+      - "Inject incorrect lesson via compound_extract"
+      - "Lesson passes Bloom judgment (score >= 7)"
+      - "inverse_bloom matches lesson to future task"
+      - "Developer follows incorrect guidance"
+      - "Bug appears in production"
+    risk: P1
+
+  - id: AC-002
+    name: Sprint Injection -> Code Execution
+    description: >
+      Prompt injection in feature description -> conductor generates
+      malicious plan -> plan bypasses safety checks -> bad code merged.
+    threats: [T-SPRINT-001]
+    steps:
+      - "Craft feature description with injection payload"
+      - "Conductor passes to eval-opt without sanitization"
+      - "Spec includes instructions to bypass checks"
+      - "Decomposition creates tasks that disable safeguards"
+      - "Human approves without reading carefully"
+    risk: P2
+
+  - id: AC-003
+    name: Cost Exhaustion -> Service Degradation
+    description: >
+      Runaway AI calls drain API budget -> rate limits kick in ->
+      sprint tools become unavailable -> workflow disrupted.
+    threats: [T-COST-001]
+    steps:
+      - "Trigger high-iteration eval-opt loop"
+      - "API costs spike above daily threshold"
+      - "Rate limits activated by provider"
+      - "Sprint tools return errors"
+      - "Development workflow blocked"
+    risk: P2
+
+# ============================================
+# Trust Boundaries
+# ============================================
+
+trust_boundaries:
+  - id: TB-001
+    name: MCP Transport
+    description: stdio/JSON-RPC between Claude Code and radl-ops server
+    data_flows: ["tool calls", "tool results", "resource reads"]
+    protections: ["JSON-RPC schema validation", "Zod input validation"]
+
+  - id: TB-002
+    name: Knowledge Store
+    description: JSON files in knowledge/ directory
+    data_flows: ["patterns", "lessons", "decisions", "antibodies", "crystallized"]
+    protections: ["File permissions", "JSON schema validation", "Bloom quality filter"]
+
+  - id: TB-003
+    name: External API
+    description: Anthropic Claude API calls
+    data_flows: ["prompts", "completions", "tool_use responses"]
+    protections: ["API key in env var", "withRetry for transient errors", "Token tracking"]
+
+  - id: TB-004
+    name: Git Operations
+    description: Git commands executed via hooks and sprint tools
+    data_flows: ["commits", "pushes", "branch operations"]
+    protections: ["Iron laws", "Branch guard hook", "Pre-flight check"]
+
+  - id: TB-005
+    name: Hook Execution
+    description: Shell scripts executed at lifecycle events
+    data_flows: ["sprint state", "git status", "knowledge context"]
+    protections: ["File permissions", "Non-destructive by design", "Read-only for SessionStart"]
+
+# ============================================
+# Data Flows
+# ============================================
+
+data_flows:
+  - id: DF-001
+    name: Sprint Data -> Knowledge
+    source: sprint_complete
+    destination: knowledge files
+    data: ["lessons", "patterns", "causal pairs"]
+    protections: ["Bloom quality filter", "Trust recording"]
+
+  - id: DF-002
+    name: Knowledge -> Sprint Planning
+    source: knowledge files
+    destination: sprint_conductor
+    data: ["patterns", "lessons", "antibodies"]
+    protections: ["Inverse bloom scoring", "Time decay", "FTS5 ranking"]
+
+  - id: DF-003
+    name: Sprint Plan -> Validation
+    source: sprint_conductor
+    destination: speculative_validate
+    data: ["decomposed tasks", "file lists"]
+    protections: ["5 independent checks", "Antibody matching", "Crystallized matching"]
+
+  - id: DF-004
+    name: Code Changes -> Review
+    source: git diff
+    destination: review agents
+    data: ["file diffs", "commit messages"]
+    protections: ["Pre-flight check", "Spot check diff", "Verify patterns"]
+
+  - id: DF-005
+    name: AI Responses -> Cost Tracking
+    source: Anthropic API
+    destination: token tracker
+    data: ["input tokens", "output tokens", "model", "task type"]
+    protections: ["Per-sprint cost caps", "Daily cost alerts", "Cost report visibility"]
+
+# ============================================
+# Risk Matrix
+# ============================================
+
+risk_matrix:
+  P0:
+    description: "Immediate action required"
+    threats: []
+  P1:
+    description: "Address in current sprint or next"
+    threats: [T-KNOW-001, T-KNOW-002, T-SPRINT-002, T-SUPPLY-001]
+  P2:
+    description: "Track and address when convenient"
+    threats: [T-SPRINT-001, T-COST-001]

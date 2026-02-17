@@ -22,6 +22,9 @@ import { notifySprintChanged } from '../resources.js';
 import { runBloomPipeline } from '../../patterns/bloom-orchestrator.js';
 import type { SprintData } from '../../patterns/bloom-orchestrator.js';
 import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport } from './shared/plan-store.js';
+import { extractCausalPairs } from './causal-graph.js';
+import { recordTrustDecision } from './quality-ratchet.js';
+import { recordCognitiveCalibration } from './cognitive-load.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -245,6 +248,109 @@ function loadExistingKnowledgeForExtract(knowledgeDir: string): string {
 
   return sections.join('\n');
 }
+
+/**
+ * Compare validation warnings from the plan against actual git changes.
+ * Returns a report of which warnings appear addressed and records a trust decision.
+ */
+function compareValidationWarnings(
+  plan: { validationWarnings?: string[] },
+  radlDir: string,
+  sprintPhase: string,
+): string {
+  if (!plan.validationWarnings || plan.validationWarnings.length === 0) {
+    return '';
+  }
+
+  const warnings = plan.validationWarnings;
+
+  // Get files changed on this branch vs main
+  let changedFiles: string[];
+  try {
+    const diffStat = execSync('git diff main...HEAD --name-only 2>/dev/null || true', {
+      encoding: 'utf-8',
+      cwd: radlDir,
+      timeout: 5000,
+    }).trim();
+    changedFiles = diffStat.split('\n').filter(Boolean);
+  } catch {
+    return '';
+  }
+
+  if (changedFiles.length === 0) return '';
+
+  // For each warning, check if the flagged category was addressed
+  const layerPatterns: Record<string, string[]> = {
+    'migration': ['supabase/migrations/', 'prisma/migrations/'],
+    'validation': ['src/lib/validations/'],
+    'api-handler': ['src/app/api/'],
+    'client-component': ['src/components/', 'src/app/('],
+  };
+
+  let addressed = 0;
+  const details: string[] = [];
+
+  for (const warning of warnings) {
+    // Extract missing layers from data-flow-coverage warnings
+    const missingMatch = warning.match(/missing:\s*(.+)/i);
+    if (missingMatch) {
+      const missingLayers = missingMatch[1].split(',').map(l => l.trim());
+      const fixed = missingLayers.filter(layer => {
+        const patterns = layerPatterns[layer];
+        if (!patterns) return false;
+        return changedFiles.some(f => patterns.some(p => f.includes(p)));
+      });
+
+      if (fixed.length === missingLayers.length) {
+        addressed++;
+        details.push(`  [FIXED] ${warning.substring(0, 80)}`);
+      } else if (fixed.length > 0) {
+        details.push(`  [PARTIAL] ${warning.substring(0, 80)} (${fixed.length}/${missingLayers.length} layers)`);
+      } else {
+        details.push(`  [OPEN] ${warning.substring(0, 80)}`);
+      }
+    } else {
+      // For non-data-flow warnings, mark as not determinable
+      details.push(`  [REVIEW] ${warning.substring(0, 80)}`);
+    }
+  }
+
+  // Record trust decision for speculative validation accuracy
+  const outcome = addressed === warnings.length
+    ? 'success'
+    : addressed > 0
+      ? 'partial'
+      : 'failure';
+
+  recordTrustDecision({
+    domain: 'speculative_validation',
+    decision: `${addressed}/${warnings.length} warnings addressed`,
+    aiRecommended: `${warnings.length} pre-sprint warnings flagged`,
+    humanOverride: false,
+    outcome,
+    sprint: sprintPhase,
+  });
+
+  const lines = [
+    `\n### Validation Warning Follow-up`,
+    `**Pre-sprint warnings:** ${warnings.length} | **Addressed:** ${addressed}`,
+    ...details,
+  ];
+
+  return lines.join('\n');
+}
+
+function parseTimeToMinutes(timeStr: string): number {
+  const hourMatch = timeStr.match(/(\d+(?:\.\d+)?)\s*h/i);
+  const minMatch = timeStr.match(/(\d+)\s*m/i);
+  let total = 0;
+  if (hourMatch) total += parseFloat(hourMatch[1]) * 60;
+  if (minMatch) total += parseInt(minMatch[1], 10);
+  return total;
+}
+
+// Exported for testing
+export { compareValidationWarnings };
 
 export function registerSprintTools(server: McpServer): void {
   server.tool(
@@ -506,8 +612,175 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      // Plan traceability report
+      // Auto-invoke causal extraction
+      if (auto_extract !== false) {
+        try {
+          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+          let sprintData: SprintData | null = null;
+          const archiveDir = join(sprintDir, 'archive');
+
+          if (existsSync(archiveDir)) {
+            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
+
+            if (files.length > 0) {
+              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
+              sprintData = normalizeSprintData(raw);
+            }
+          }
+
+          if (!sprintData) {
+            const currentPath = join(sprintDir, 'current.json');
+            if (existsSync(currentPath)) {
+              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
+              sprintData = normalizeSprintData(raw);
+            }
+          }
+
+          if (sprintData) {
+            const causalResult = await extractCausalPairs({
+              phase: sprintData.phase,
+              title: sprintData.title,
+              completedTasks: sprintData.completedTasks,
+              blockers: sprintData.blockers,
+              estimate: sprintData.estimate,
+              actual: actual_time,
+            });
+            logger.info('Auto causal extraction complete', causalResult);
+          }
+        } catch (error) {
+          logger.warn('Auto causal extraction failed (non-fatal)', { error: String(error) });
+        }
+      }
+
+      // Auto-record trust decisions at sprint boundaries
+      if (auto_extract !== false) {
+        // Parse sprint phase from output
+        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
+        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+
+        // 1. Estimation accuracy
+        try {
+          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+          let estimate = '';
+          const archiveDir = join(sprintDir, 'archive');
+
+          if (existsSync(archiveDir)) {
+            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
+
+            if (files.length > 0) {
+              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
+              estimate = String(raw.estimate ?? '');
+            }
+          }
+
+          if (!estimate) {
+            const currentPath = join(sprintDir, 'current.json');
+            if (existsSync(currentPath)) {
+              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
+              estimate = String(raw.estimate ?? '');
+            }
+          }
+
+          if (estimate && actual_time) {
+            const estimateMinutes = parseTimeToMinutes(estimate);
+            const actualMinutes = parseTimeToMinutes(actual_time);
+            if (estimateMinutes > 0 && actualMinutes > 0) {
+              const ratio = actualMinutes / estimateMinutes;
+              const outcome = (ratio >= 0.7 && ratio <= 1.3) ? 'success' : (ratio >= 0.4 && ratio <= 1.6) ? 'partial' : 'failure';
+              recordTrustDecision({
+                domain: 'estimation',
+                decision: `Actual: ${actual_time}`,
+                aiRecommended: `Estimated: ${estimate}`,
+                humanOverride: false,
+                outcome,
+                sprint: sprintPhase,
+              });
+            }
+          }
+        } catch (error) {
+          logger.warn('Trust recording for estimation failed (non-fatal)', { error: String(error) });
+        }
+
+        // 2. Bloom quality (if bloom ran)
+        try {
+          const knowledgeDir = getConfig().knowledgeDir;
+          const compoundDir = join(knowledgeDir, 'compounds');
+          if (existsSync(compoundDir)) {
+            const files = execSync(`ls -1 "${compoundDir}" 2>/dev/null || true`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+            }).trim().split('\n').filter(f => f.startsWith('bloom-') && f.endsWith('.json')).sort().reverse();
+
+            if (files.length > 0) {
+              const latestBloom = JSON.parse(readFileSync(join(compoundDir, files[0]), 'utf-8'));
+              const qualityScore = latestBloom.qualityScore ?? 0;
+              if (qualityScore > 0) {
+                const outcome = qualityScore >= 7 ? 'success' : qualityScore >= 5 ? 'partial' : 'failure';
+                recordTrustDecision({
+                  domain: 'bloom-extraction',
+                  decision: `Quality score: ${qualityScore}/10`,
+                  aiRecommended: 'Target: 7/10',
+                  humanOverride: false,
+                  outcome,
+                  sprint: sprintPhase,
+                });
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn('Trust recording for bloom quality failed (non-fatal)', { error: String(error) });
+        }
+      }
+
+      // Auto-record cognitive load calibration
+      if (auto_extract !== false) {
+        try {
+          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+          let taskCount = 0;
+          const archiveDir = join(sprintDir, 'archive');
+
+          if (existsSync(archiveDir)) {
+            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
+
+            if (files.length > 0) {
+              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
+              taskCount = Array.isArray(raw.completedTasks) ? raw.completedTasks.length : 0;
+            }
+          }
+
+          if (taskCount === 0) {
+            const currentPath = join(sprintDir, 'current.json');
+            if (existsSync(currentPath)) {
+              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
+              taskCount = Array.isArray(raw.completedTasks) ? raw.completedTasks.length : 0;
+            }
+          }
+
+          const phaseMatch = output.match(/Phase\s+[\d.]+/i);
+          const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+
+          recordCognitiveCalibration({
+            sprint: sprintPhase,
+            taskCount,
+            contextUsagePercent: 50, // Default estimate; can be refined later
+          });
+        } catch (error) {
+          logger.warn('Cognitive calibration recording failed (non-fatal)', { error: String(error) });
+        }
+      }
+
+      // Plan traceability report + validation warning comparison
       let traceabilityNote = '';
+      let validationNote = '';
       try {
         const latestPlan = loadLatestPlan();
         if (latestPlan) {
@@ -524,12 +797,17 @@ export function registerSprintTools(server: McpServer): void {
             savePlan(matched);
             traceabilityNote = `\n\n${formatTraceabilityReport(matched)}`;
           }
+
+          // Compare validation warnings against actual changes
+          const phaseMatch = output.match(/Phase\s+[\d.]+/i);
+          const phase = phaseMatch ? phaseMatch[0] : 'Unknown';
+          validationNote = compareValidationWarnings(latestPlan, getConfig().radlDir, phase);
         }
       } catch (error) {
         logger.warn('Plan traceability report failed', { error: String(error) });
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}` }] };
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}` }] };
     })
   );
 
