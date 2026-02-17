@@ -16,6 +16,7 @@ import { getRoute, calculateCost } from '../models/router.js';
 import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
+import { withRetry } from '../utils/retry.js';
 
 /**
  * Tool definitions for structured output stages.
@@ -99,6 +100,7 @@ export interface CompoundResult {
   };
   sprintPhase: string;
   sprintTitle: string;
+  failedAtStage?: string;
 }
 
 interface StageConfig {
@@ -109,12 +111,14 @@ interface StageConfig {
   tool?: Anthropic.Tool;
 }
 
-const STAGES: StageConfig[] = [
-  { name: 'understanding', model: 'claude-haiku-4-5-20251001', maxTokens: 2048 },
-  { name: 'ideation', model: 'claude-sonnet-4-5-20250929', maxTokens: 4096 },
-  { name: 'rollout', model: 'claude-haiku-4-5-20251001', maxTokens: 2048, tool: ROLLOUT_TOOL },
-  { name: 'judgment', model: 'claude-sonnet-4-5-20250929', maxTokens: 2048, tool: JUDGMENT_TOOL },
-];
+function getStages(): StageConfig[] {
+  return [
+    { name: 'understanding', model: getRoute('spot_check').model, maxTokens: 2048 },
+    { name: 'ideation', model: getRoute('review').model, maxTokens: 4096 },
+    { name: 'rollout', model: getRoute('spot_check').model, maxTokens: 2048, tool: ROLLOUT_TOOL },
+    { name: 'judgment', model: getRoute('review').model, maxTokens: 2048, tool: JUDGMENT_TOOL },
+  ];
+}
 
 function formatSprintData(data: SprintData): string {
   const tasks = data.completedTasks.map(t =>
@@ -225,7 +229,10 @@ async function callStage(
     requestParams.tool_choice = { type: 'tool', name: stage.tool.name };
   }
 
-  const response = await client.messages.create(requestParams);
+  const response = await withRetry(
+    () => client.messages.create(requestParams),
+    { maxRetries: 2, baseDelayMs: 1000 },
+  );
 
   const cost = calculateCost(
     stage.model,
@@ -288,8 +295,9 @@ export async function runBloomPipeline(
   // Run stages sequentially — each sees prior outputs
   // Structured stages (rollout, judgment) return toolInput for direct parsing
   const structuredOutputs: Record<string, unknown> = {};
+  let failedAtStage: string | undefined;
 
-  for (const stage of STAGES) {
+  for (const stage of getStages()) {
     const prompt = buildStagePrompt(stage.name, sprintText, stageOutputs, existingKnowledge);
 
     try {
@@ -309,8 +317,34 @@ export async function runBloomPipeline(
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       logger.error(`Bloom stage failed: ${stage.name}`, { error: msg });
-      stageOutputs[stage.name] = `ERROR: ${msg}`;
+      failedAtStage = stage.name;
+      break;
     }
+  }
+
+  // If pipeline failed early, return with quality 0
+  const completedStages = Object.keys(stageOutputs).length;
+  if (failedAtStage || completedStages < 4) {
+    logger.warn('Bloom pipeline short-circuited', {
+      failedAtStage,
+      completedStages,
+      totalCost: totalCost.toFixed(6),
+    });
+
+    return {
+      lessons: [],
+      qualityScore: 0,
+      totalCostUsd: Math.round(totalCost * 1_000_000) / 1_000_000,
+      stageOutputs: {
+        understanding: stageOutputs.understanding ?? '',
+        ideation: stageOutputs.ideation ?? '',
+        rollout: stageOutputs.rollout ?? '',
+        judgment: stageOutputs.judgment ?? '',
+      },
+      sprintPhase: sprintData.phase,
+      sprintTitle: sprintData.title,
+      failedAtStage,
+    };
   }
 
   // Parse rollout output — prefer structured tool input, fall back to regex
