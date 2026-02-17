@@ -9,8 +9,11 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { logger } from '../../config/logger.js';
+import { getConfig } from '../../config/paths.js';
 
 /** Approximate context window size in tokens */
 const CONTEXT_WINDOW_TOKENS = 200_000;
@@ -234,6 +237,71 @@ function formatReport(result: CognitiveLoadResult): string {
   lines.push(`**Recommendation:** ${result.recommendation}`);
 
   return lines.join('\n');
+}
+
+// ============================================
+// Calibration Recording
+// ============================================
+
+interface CalibrationEntry {
+  date: string;
+  sprint: string;
+  taskCount: number;
+  contextUsagePercent: number;
+  actualTokensUsed?: number;
+}
+
+interface CalibrationData {
+  entries: CalibrationEntry[];
+}
+
+function getCalibrationPath(): string {
+  const dir = getConfig().knowledgeDir;
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  return join(dir, 'cognitive-calibration.json');
+}
+
+function loadCalibrationData(): CalibrationData {
+  const path = getCalibrationPath();
+  if (!existsSync(path)) return { entries: [] };
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as CalibrationData;
+  } catch {
+    return { entries: [] };
+  }
+}
+
+/**
+ * Record cognitive calibration data at sprint completion.
+ * Over time, this data can be used to adjust TOKEN_ESTIMATES_BY_TYPE.
+ */
+export function recordCognitiveCalibration(params: {
+  sprint: string;
+  taskCount: number;
+  contextUsagePercent: number;
+}): void {
+  const data = loadCalibrationData();
+
+  const entry: CalibrationEntry = {
+    date: new Date().toISOString(),
+    sprint: params.sprint,
+    taskCount: params.taskCount,
+    contextUsagePercent: params.contextUsagePercent,
+  };
+
+  const updated: CalibrationData = {
+    entries: [...data.entries, entry],
+  };
+
+  writeFileSync(getCalibrationPath(), JSON.stringify(updated, null, 2));
+
+  logger.info('Cognitive calibration recorded', {
+    sprint: params.sprint,
+    taskCount: params.taskCount,
+    contextUsagePercent: params.contextUsagePercent,
+  });
 }
 
 export function registerCognitiveLoadTools(server: McpServer): void {
