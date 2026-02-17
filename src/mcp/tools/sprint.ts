@@ -229,14 +229,18 @@ function findCompletedSprintData(sprintDir: string): Record<string, unknown> | n
       }
       return JSON.parse(readFileSync(candidate, 'utf-8'));
     }
-  } catch { /* non-fatal */ }
+  } catch (error) {
+    logger.warn('Failed to read completed sprints', { error: String(error) });
+  }
 
   // Fall back to current.json
   const currentPath = join(sprintDir, 'current.json');
   if (existsSync(currentPath)) {
     try {
       return JSON.parse(readFileSync(currentPath, 'utf-8'));
-    } catch { /* non-fatal */ }
+    } catch (error) {
+      logger.warn('Failed to read current sprint', { error: String(error) });
+    }
   }
   return null;
 }
@@ -583,16 +587,20 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
+      // Shared state for auto_extract blocks (hoist to avoid repeated filesystem reads)
+      const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+      const completedRaw = auto_extract !== false ? findCompletedSprintData(sprintDir) : null;
+      const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
+      const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);
+      const sprintPhase = sprintPhaseMatch ? sprintPhaseMatch[0] : 'Unknown';
+
       // Auto-extract compound learnings via Bloom pipeline
       let extractNote = '';
       if (auto_extract !== false) {
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
           const knowledgeDir = getConfig().knowledgeDir;
 
-          // Find sprint data (completed-*.json files in sprint dir)
-          const raw = findCompletedSprintData(sprintDir);
-          const sprintData = raw ? normalizeSprintData(raw) : null;
+          const sprintData = completedSprintData;
 
           if (sprintData) {
             // Load existing knowledge for dedup context
@@ -634,9 +642,7 @@ export function registerSprintTools(server: McpServer): void {
       // Auto-invoke causal extraction
       if (auto_extract !== false) {
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          const causalRaw = findCompletedSprintData(sprintDir);
-          const sprintData = causalRaw ? normalizeSprintData(causalRaw) : null;
+          const sprintData = completedSprintData;
 
           if (sprintData) {
             const causalResult = await extractCausalPairs({
@@ -656,15 +662,9 @@ export function registerSprintTools(server: McpServer): void {
 
       // Auto-record trust decisions at sprint boundaries
       if (auto_extract !== false) {
-        // Parse sprint phase from output
-        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
-
         // 1. Estimation accuracy
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          const estimateRaw = findCompletedSprintData(sprintDir);
-          const estimate = estimateRaw ? String(estimateRaw.estimate ?? '') : '';
+          const estimate = completedRaw ? String(completedRaw.estimate ?? '') : '';
 
           if (estimate && actual_time) {
             const estimateMinutes = parseTimeToMinutes(estimate);
@@ -718,12 +718,7 @@ export function registerSprintTools(server: McpServer): void {
       // Auto-record cognitive load calibration
       if (auto_extract !== false) {
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          const cogRaw = findCompletedSprintData(sprintDir);
-          const taskCount = cogRaw && Array.isArray(cogRaw.completedTasks) ? cogRaw.completedTasks.length : 0;
-
-          const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-          const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+          const taskCount = completedRaw && Array.isArray(completedRaw.completedTasks) ? completedRaw.completedTasks.length : 0;
 
           recordCognitiveCalibration({
             sprint: sprintPhase,
@@ -756,9 +751,7 @@ export function registerSprintTools(server: McpServer): void {
           }
 
           // Compare validation warnings against actual changes
-          const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-          const phase = phaseMatch ? phaseMatch[0] : 'Unknown';
-          validationNote = compareValidationWarnings(latestPlan, getConfig().radlDir, phase);
+          validationNote = compareValidationWarnings(latestPlan, getConfig().radlDir, sprintPhase);
         }
       } catch (error) {
         logger.warn('Plan traceability report failed', { error: String(error) });
