@@ -13,7 +13,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../config/logger.js';
 import { getConfig } from '../../config/paths.js';
@@ -32,26 +32,38 @@ interface Pattern {
   name: string;
   description: string;
   category?: string;
+  date?: string;
+  lastMatched?: string;
 }
 
 interface Lesson {
   situation: string;
   learning: string;
   frequency?: number;
+  date?: string;
+  lastMatched?: string;
 }
 
 interface Antibody {
+  id: number;
   trigger: string;
   triggerKeywords: string[];
   check: string;
   active: boolean;
+  catches: number;
+  createdAt: string;
+  lastMatched?: string;
 }
 
 interface CrystallizedCheck {
+  id: number;
   trigger: string;
   triggerKeywords: string[];
   check: string;
   status: string;
+  catches: number;
+  proposedAt: string;
+  lastMatched?: string;
 }
 
 interface CausalNode {
@@ -59,6 +71,8 @@ interface CausalNode {
   type: string;
   label: string;
   sprint?: string;
+  date?: string;
+  lastMatched?: string;
 }
 
 interface CausalEdge {
@@ -116,6 +130,17 @@ function loadJsonSafe<T>(filename: string): T | null {
 // ============================================
 
 /**
+ * Apply exponential time decay with 30-day half-life.
+ * Returns multiplier between 0.2 (floor) and 1.0 (fresh).
+ */
+function timeDecay(dateStr: string | undefined, halfLifeDays = 30): number {
+  if (!dateStr) return 1.0; // No date means treat as fresh
+
+  const ageDays = (Date.now() - new Date(dateStr).getTime()) / 86_400_000;
+  return Math.max(0.2, Math.exp(-0.693 * ageDays / halfLifeDays));
+}
+
+/**
  * Tokenize a string into lowercase words with stopwords removed.
  * Splits on non-alphanumeric characters, filters short words and stopwords.
  */
@@ -171,8 +196,10 @@ function scorePatterns(taskTokens: Set<string>): ScoredItem[] {
 
   const items: ScoredItem[] = [];
   for (const p of data.patterns) {
-    const score = countTextOverlap([p.name, p.description], taskTokens);
-    if (score > 0) {
+    const rawScore = countTextOverlap([p.name, p.description], taskTokens);
+    if (rawScore > 0) {
+      const decay = timeDecay(p.date);
+      const score = rawScore * decay;
       items.push({
         source: 'Pattern',
         item: p.name,
@@ -190,8 +217,10 @@ function scoreLessons(taskTokens: Set<string>): ScoredItem[] {
 
   const items: ScoredItem[] = [];
   for (const l of data.lessons) {
-    const score = countTextOverlap([l.situation, l.learning], taskTokens);
-    if (score > 0) {
+    const rawScore = countTextOverlap([l.situation, l.learning], taskTokens);
+    if (rawScore > 0) {
+      const decay = timeDecay(l.date);
+      const score = rawScore * decay;
       items.push({
         source: 'Lesson',
         item: l.situation,
@@ -208,18 +237,24 @@ function scoreAntibodies(taskTokens: Set<string>): ScoredItem[] {
   if (!data?.antibodies) return [];
 
   const items: ScoredItem[] = [];
+  const matchedIds: number[] = [];
+
   for (const ab of data.antibodies) {
     if (!ab.active) continue;
-    const score = countKeywordOverlap(ab.triggerKeywords, taskTokens);
-    if (score > 0) {
+    const rawScore = countKeywordOverlap(ab.triggerKeywords, taskTokens);
+    if (rawScore > 0) {
+      const decay = timeDecay(ab.createdAt);
+      const score = rawScore * decay;
       items.push({
         source: 'Antibody',
         item: ab.trigger,
         score,
         displayText: `**[Antibody]** ${ab.trigger}: ${ab.check}`,
       });
+      matchedIds.push(ab.id);
     }
   }
+
   return items;
 }
 
@@ -228,18 +263,24 @@ function scoreCrystallized(taskTokens: Set<string>): ScoredItem[] {
   if (!data?.checks) return [];
 
   const items: ScoredItem[] = [];
+  const matchedIds: number[] = [];
+
   for (const c of data.checks) {
     if (c.status !== 'active') continue;
-    const score = countKeywordOverlap(c.triggerKeywords, taskTokens);
-    if (score > 0) {
+    const rawScore = countKeywordOverlap(c.triggerKeywords, taskTokens);
+    if (rawScore > 0) {
+      const decay = timeDecay(c.proposedAt);
+      const score = rawScore * decay;
       items.push({
         source: 'Crystallized',
         item: c.trigger,
         score,
         displayText: `**[Crystallized]** ${c.trigger}: ${c.check}`,
       });
+      matchedIds.push(c.id);
     }
   }
+
   return items;
 }
 
@@ -249,8 +290,10 @@ function scoreCausalNodes(taskTokens: Set<string>): ScoredItem[] {
 
   const items: ScoredItem[] = [];
   for (const node of data.nodes) {
-    const score = countTextOverlap([node.label], taskTokens);
-    if (score > 0) {
+    const rawScore = countTextOverlap([node.label], taskTokens);
+    if (rawScore > 0) {
+      const decay = timeDecay(node.date);
+      const score = rawScore * decay;
       const sprintInfo = node.sprint ? ` (${node.sprint})` : '';
       items.push({
         source: 'CausalNode',
@@ -279,6 +322,10 @@ export function runInverseBloom(
 ): InverseBloomResult[] {
   const results: InverseBloomResult[] = [];
 
+  // Track all matched antibody and crystallized IDs across all tasks
+  const allMatchedAntibodyIds = new Set<number>();
+  const allMatchedCrystallizedIds = new Set<number>();
+
   for (const task of tasks) {
     const taskText = [
       task.title,
@@ -302,6 +349,21 @@ export function runInverseBloom(
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_ITEMS_PER_TASK);
 
+    // Collect matched IDs from top items
+    for (const item of topItems) {
+      if (item.source === 'Antibody') {
+        // Find the antibody by trigger text to get its ID
+        const data = loadJsonSafe<{ antibodies: Antibody[] }>('antibodies.json');
+        const ab = data?.antibodies.find(a => a.trigger === item.item);
+        if (ab) allMatchedAntibodyIds.add(ab.id);
+      } else if (item.source === 'Crystallized') {
+        // Find the check by trigger text to get its ID
+        const data = loadJsonSafe<{ checks: CrystallizedCheck[] }>('crystallized.json');
+        const check = data?.checks.find(c => c.trigger === item.item);
+        if (check) allMatchedCrystallizedIds.add(check.id);
+      }
+    }
+
     // Build the "Watch out for" section
     const sectionLines: string[] = [];
     if (topItems.length > 0) {
@@ -323,6 +385,40 @@ export function runInverseBloom(
         score: item.score,
       })),
     });
+  }
+
+  // Increment catches and update lastMatched for antibodies
+  if (allMatchedAntibodyIds.size > 0) {
+    const antibodiesData = loadJsonSafe<{ antibodies: Antibody[] }>('antibodies.json');
+    if (antibodiesData?.antibodies) {
+      const now = new Date().toISOString();
+      const updated = {
+        antibodies: antibodiesData.antibodies.map(ab =>
+          allMatchedAntibodyIds.has(ab.id)
+            ? { ...ab, catches: ab.catches + 1, lastMatched: now }
+            : ab
+        ),
+      };
+      const filePath = join(getConfig().knowledgeDir, 'antibodies.json');
+      writeFileSync(filePath, JSON.stringify(updated, null, 2));
+    }
+  }
+
+  // Increment catches and update lastMatched for crystallized checks
+  if (allMatchedCrystallizedIds.size > 0) {
+    const crystallizedData = loadJsonSafe<{ checks: CrystallizedCheck[] }>('crystallized.json');
+    if (crystallizedData?.checks) {
+      const now = new Date().toISOString();
+      const updated = {
+        checks: crystallizedData.checks.map(c =>
+          allMatchedCrystallizedIds.has(c.id)
+            ? { ...c, catches: c.catches + 1, lastMatched: now }
+            : c
+        ),
+      };
+      const filePath = join(getConfig().knowledgeDir, 'crystallized.json');
+      writeFileSync(filePath, JSON.stringify(updated, null, 2));
+    }
   }
 
   return results;

@@ -19,16 +19,20 @@ vi.mock('../with-error-tracking.js', () => ({
 
 const mockLoadAntibodies = vi.fn();
 const mockMatchAntibodies = vi.fn();
+const mockSaveAntibodies = vi.fn();
 vi.mock('./immune-system.js', () => ({
   loadAntibodies: mockLoadAntibodies,
   matchAntibodies: mockMatchAntibodies,
+  saveAntibodies: mockSaveAntibodies,
 }));
 
 const mockLoadCrystallized = vi.fn();
 const mockMatchCrystallizedChecks = vi.fn();
+const mockSaveCrystallized = vi.fn();
 vi.mock('./crystallization.js', () => ({
   loadCrystallized: mockLoadCrystallized,
   matchCrystallizedChecks: mockMatchCrystallizedChecks,
+  saveCrystallized: mockSaveCrystallized,
 }));
 
 const mockLoadCausalGraph = vi.fn();

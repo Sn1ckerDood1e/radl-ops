@@ -42,6 +42,10 @@ export interface Antibody {
   falsePositiveRate: number;
   active: boolean;
   createdAt: string;
+  /** IDs of antibodies that form a compound pattern with this one */
+  chainWith?: number[];
+  /** Human-readable name for the compound chain */
+  chainName?: string;
 }
 
 interface AntibodyStore {
@@ -164,6 +168,61 @@ export function matchAntibodies(text: string, antibodies: Antibody[]): Antibody[
 
     return matchCount >= 2;
   });
+}
+
+/**
+ * Detect compound antibody chains: when 2+ chain-linked antibodies fire
+ * on the same text, it indicates a compound risk pattern. Returns chain
+ * warnings with elevated severity.
+ */
+export interface ChainWarning {
+  chainName: string;
+  antibodyIds: number[];
+  triggers: string[];
+  severity: 'critical';
+  message: string;
+}
+
+export function matchAntibodyChains(
+  text: string,
+  antibodies: Antibody[],
+): ChainWarning[] {
+  // First, get all individually matched antibodies
+  const matched = matchAntibodies(text, antibodies);
+  if (matched.length < 2) return [];
+
+  const matchedIds = new Set(matched.map(a => a.id));
+  const warnings: ChainWarning[] = [];
+  const processedChains = new Set<string>();
+
+  for (const ab of matched) {
+    if (!ab.chainWith || ab.chainWith.length === 0) continue;
+
+    // Check if any chain partners also matched
+    const chainPartners = ab.chainWith.filter(id => matchedIds.has(id));
+    if (chainPartners.length === 0) continue;
+
+    // Build the full chain (this antibody + partners)
+    const chainIds = [ab.id, ...chainPartners].sort();
+    const chainKey = chainIds.join(',');
+
+    // Skip if we already processed this chain
+    if (processedChains.has(chainKey)) continue;
+    processedChains.add(chainKey);
+
+    const chainAntibodies = antibodies.filter(a => chainIds.includes(a.id));
+    const chainName = ab.chainName ?? chainAntibodies.map(a => a.trigger).join(' + ');
+
+    warnings.push({
+      chainName,
+      antibodyIds: chainIds,
+      triggers: chainAntibodies.map(a => a.trigger),
+      severity: 'critical',
+      message: `Compound pattern detected: ${chainName}. Multiple related antibodies fired simultaneously, indicating a multi-step failure risk. Antibodies: ${chainIds.map(id => `#${id}`).join(', ')}`,
+    });
+  }
+
+  return warnings;
 }
 
 /**

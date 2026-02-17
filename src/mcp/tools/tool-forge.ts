@@ -10,8 +10,9 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { logger } from '../../config/logger.js';
@@ -338,9 +339,11 @@ export function registerToolForgeTools(server: McpServer): void {
       source_type: z.enum(['crystallized', 'antibody']).describe('Source type'),
       source_id: z.number().int().min(1).describe('ID of the source check or antibody'),
       tool_name: z.string().optional().describe('Optional custom tool name'),
+      write_files: z.boolean().optional().default(false)
+        .describe('Write generated .ts and .test.ts to src/mcp/tools/generated/ and run tsc --noEmit to verify'),
     },
     { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    withErrorTracking('tool_forge', async ({ source_type, source_id, tool_name }) => {
+    withErrorTracking('tool_forge', async ({ source_type, source_id, tool_name, write_files }) => {
       // 1. Load source
       const source = source_type === 'crystallized'
         ? loadCrystallizedSource(source_id)
@@ -385,8 +388,54 @@ export function registerToolForgeTools(server: McpServer): void {
         costUsd,
       };
 
-      // 5. Format output
-      const output = formatForgeOutput(result);
+      // 5. Optionally write files to disk and run compilation check
+      let writeStatus = '';
+      if (write_files) {
+        try {
+          const generatedDir = resolve(__dirname, 'generated');
+          await mkdir(generatedDir, { recursive: true });
+
+          const toolPath = resolve(generatedDir, `${toolName}.ts`);
+          const testPath = resolve(generatedDir, `${toolName}.test.ts`);
+
+          await writeFile(toolPath, toolCode, 'utf-8');
+          await writeFile(testPath, testCode, 'utf-8');
+
+          // Run tsc --noEmit to verify compilation
+          let compileStatus = 'unknown';
+          try {
+            execFileSync('npx', ['tsc', '--noEmit'], {
+              cwd: resolve(__dirname, '../../..'),
+              timeout: 30000,
+              stdio: 'pipe',
+            });
+            compileStatus = 'pass';
+          } catch (tscError) {
+            const stderr = tscError instanceof Error && 'stderr' in tscError
+              ? String((tscError as { stderr: unknown }).stderr)
+              : String(tscError);
+            compileStatus = `fail: ${stderr.slice(0, 500)}`;
+          }
+
+          writeStatus = `\n\n### File Write Results\n\n` +
+            `- **Tool:** \`${toolPath}\`\n` +
+            `- **Test:** \`${testPath}\`\n` +
+            `- **Compilation:** ${compileStatus}\n` +
+            `\n_Files written to generated/ directory. Do NOT auto-register._`;
+
+          logger.info('Tool forge files written', {
+            toolPath,
+            testPath,
+            compileStatus,
+          });
+        } catch (writeError) {
+          writeStatus = `\n\n### File Write Failed\n\n${String(writeError)}`;
+          logger.warn('Tool forge file write failed', { error: String(writeError) });
+        }
+      }
+
+      // 6. Format output
+      const output = formatForgeOutput(result) + writeStatus;
 
       logger.info('Tool forge complete', {
         toolName,
@@ -395,6 +444,7 @@ export function registerToolForgeTools(server: McpServer): void {
         cost: costUsd,
         toolCodeLength: toolCode.length,
         testCodeLength: testCode.length,
+        filesWritten: !!write_files,
       });
 
       return {
