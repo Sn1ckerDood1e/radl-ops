@@ -11,7 +11,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
@@ -222,7 +222,12 @@ function findCompletedSprintData(sprintDir: string): Record<string, unknown> | n
       .sort()
       .reverse();
     if (files.length > 0) {
-      return JSON.parse(readFileSync(join(sprintDir, files[0]), 'utf-8'));
+      const candidate = resolve(join(sprintDir, files[0]));
+      if (!candidate.startsWith(resolve(sprintDir) + '/')) {
+        logger.warn('Path traversal attempt in sprint dir', { file: files[0] });
+        return null;
+      }
+      return JSON.parse(readFileSync(candidate, 'utf-8'));
     }
   } catch { /* non-fatal */ }
 
@@ -686,10 +691,8 @@ export function registerSprintTools(server: McpServer): void {
           const knowledgeDir = getConfig().knowledgeDir;
           const compoundDir = join(knowledgeDir, 'compounds');
           if (existsSync(compoundDir)) {
-            const files = execSync(`ls -1 "${compoundDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.startsWith('bloom-') && f.endsWith('.json')).sort().reverse();
+            const files = readdirSync(compoundDir)
+              .filter(f => f.startsWith('bloom-') && f.endsWith('.json')).sort().reverse();
 
             if (files.length > 0) {
               const latestBloom = JSON.parse(readFileSync(join(compoundDir, files[0]), 'utf-8'));

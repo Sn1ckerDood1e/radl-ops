@@ -7,7 +7,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, renameSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { logger } from '../../config/logger.js';
@@ -47,7 +47,10 @@ export function loadFindings(): ReviewFinding[] {
 
 function saveFindings(findings: ReviewFinding[]): void {
   const store: ReviewStore = { findings };
-  writeFileSync(getStorePath(), JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  const targetPath = getStorePath();
+  const tmpPath = `${targetPath}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, targetPath);
 }
 
 export function recordFindings(findings: ReviewFinding[]): void {
