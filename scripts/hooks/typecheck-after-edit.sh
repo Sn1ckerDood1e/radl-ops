@@ -20,4 +20,11 @@ if echo "$FILE_PATH" | grep -qE '\.tsx?$'; then
   fi
 fi
 
+# Check if Prisma schema was modified
+if echo "$FILE_PATH" | grep -q 'prisma/schema.prisma'; then
+  echo "Prisma schema modified. Run verify_data_flow MCP tool for new fields:"
+  echo "  verify_data_flow({ field: 'fieldName', model: 'ModelName' })"
+  echo "  Zero cost (\$0) — prevents silent data loss (Phase 69 class of bug)."
+fi
+
 exit 0
