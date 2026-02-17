@@ -25,6 +25,7 @@ import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport
 import { extractCausalPairs } from './causal-graph.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
+import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -444,6 +445,9 @@ export function registerSprintTools(server: McpServer): void {
       // Tag all subsequent API calls with this sprint phase
       setCurrentSprintPhase(phase);
 
+      // Clear previous review findings for new sprint
+      clearFindings();
+
       const taskAdvisory = (!task_count || task_count === 0)
         ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
         : `Task plan: ${task_count} tasks\n`;
@@ -749,7 +753,22 @@ export function registerSprintTools(server: McpServer): void {
         logger.warn('Plan traceability report failed', { error: String(error) });
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}` }] };
+      // Review gate check
+      let reviewNote = '';
+      const findings = loadFindings();
+      const hasReviews = findings.length > 0;
+      const taskCountMatch = output.match(/(\d+)\s+tasks?\s+completed/i);
+      const completedTaskCount = taskCountMatch ? parseInt(taskCountMatch[1], 10) : 0;
+      if (completedTaskCount >= 3 && !hasReviews && !team_used?.recipe?.includes('review')) {
+        reviewNote = '\nREVIEW WARNING: Sprint had ' + completedTaskCount +
+          ' tasks but no reviews recorded. Run code-reviewer + security-reviewer before merging.';
+      }
+      const unresolved = checkUnresolved();
+      if (unresolved.critical > 0 || unresolved.high > 0) {
+        reviewNote += `\nUNRESOLVED FINDINGS: ${unresolved.critical} CRITICAL, ${unresolved.high} HIGH — address before merging.`;
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}` }] };
     })
   );
 
