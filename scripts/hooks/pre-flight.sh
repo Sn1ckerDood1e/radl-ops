@@ -15,15 +15,27 @@ INPUT=$(cat)
 # Extract command from JSON
 COMMAND=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('command',''))" 2>/dev/null || echo "")
 
-# Only trigger on git push commands
-if ! echo "$COMMAND" | grep -qE 'git\s+push'; then
+# Trigger on git push or gh pr create commands
+IS_PUSH=false
+IS_PR=false
+if echo "$COMMAND" | grep -qE 'git\s+push'; then
+  IS_PUSH=true
+elif echo "$COMMAND" | grep -qE 'gh\s+(pr|pull-request)\s+create'; then
+  IS_PR=true
+fi
+
+if [ "$IS_PUSH" = false ] && [ "$IS_PR" = false ]; then
   exit 0
 fi
 
 RADL_DIR="/home/hb/radl"
 SPRINT_DIR="$RADL_DIR/.planning/sprints"
 
-echo "PRE-PUSH FLIGHT CHECK:"
+if [ "$IS_PR" = true ]; then
+  echo "PR CREATION FLIGHT CHECK:"
+else
+  echo "PRE-PUSH FLIGHT CHECK:"
+fi
 
 PASS=true
 
@@ -67,5 +79,9 @@ if [ "$PASS" = false ]; then
 fi
 
 echo ""
-echo "All checks passed. Proceeding with push."
+if [ "$IS_PR" = true ]; then
+  echo "All checks passed. TIP: Run pre_flight_check MCP tool for full verification (includes typecheck)."
+else
+  echo "All checks passed. Proceeding with push."
+fi
 exit 0

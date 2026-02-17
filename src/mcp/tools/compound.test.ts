@@ -78,16 +78,16 @@ describe('Compound Merge System', () => {
       // Mock sprint data exists
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         if (pathStr.includes('current.json')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-80.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase80.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-80.json') || pathStr.includes('current.json')) {
+        if (pathStr.includes('completed-phase80.json') || pathStr.includes('current.json')) {
           return JSON.stringify({
             phase: 'Phase 80',
             title: 'Test Sprint',
@@ -266,13 +266,13 @@ describe('Compound Merge System', () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         if (pathStr.includes('current.json')) return true;
         if (pathStr.includes('patterns.json')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-79.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase79.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
@@ -375,16 +375,16 @@ describe('Compound Merge System', () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         if (pathStr.includes('lessons.json')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-79.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase79.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-79.json')) {
+        if (pathStr.includes('completed-phase79.json')) {
           return JSON.stringify({
             phase: 'Phase 79',
             title: 'Test',
@@ -492,16 +492,16 @@ describe('Compound Merge System', () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         if (pathStr.includes('causal-graph.json')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-80.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase80.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-80.json')) {
+        if (pathStr.includes('completed-phase80.json')) {
           return JSON.stringify({
             phase: 'Phase 80',
             title: 'Test',
@@ -640,15 +640,15 @@ describe('Compound Merge System', () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-80.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase80.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-80.json')) {
+        if (pathStr.includes('completed-phase80.json')) {
           return JSON.stringify({
             phase: 'Phase 80',
             title: 'Test',
@@ -753,15 +753,15 @@ describe('Compound Merge System', () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-80.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase80.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-80.json')) {
+        if (pathStr.includes('completed-phase80.json')) {
           return JSON.stringify({
             phase: 'Phase 80',
             title: 'Test',
@@ -851,16 +851,16 @@ describe('Compound Merge System', () => {
     beforeEach(() => {
       vi.mocked(existsSync).mockImplementation((path: PathLike) => {
         const pathStr = String(path);
-        if (pathStr.includes('archive')) return true;
+        if (pathStr.endsWith('/sprints')) return true;
         if (pathStr.includes('patterns.json')) return true;
         return false;
       });
 
-      vi.mocked(readdirSync).mockReturnValue(['phase-80.json'] as any);
+      vi.mocked(readdirSync).mockReturnValue(['completed-phase80.json'] as any);
 
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-80.json')) {
+        if (pathStr.includes('completed-phase80.json')) {
           return JSON.stringify({
             phase: 'Phase 80',
             title: 'Test',
@@ -916,7 +916,7 @@ describe('Compound Merge System', () => {
     it('counts correctly when some categories have duplicates', async () => {
       vi.mocked(readFileSync).mockImplementation((path: PathOrFileDescriptor) => {
         const pathStr = String(path);
-        if (pathStr.includes('phase-80.json')) {
+        if (pathStr.includes('completed-phase80.json')) {
           return JSON.stringify({
             phase: 'Phase 80',
             title: 'Test',

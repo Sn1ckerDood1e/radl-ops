@@ -63,6 +63,7 @@ import { registerSpeculativeValidateTools } from './tools/speculative-validate.j
 import { registerCognitiveLoadTools } from './tools/cognitive-load.js';
 import { registerToolForgeTools } from './tools/tool-forge.js';
 import { registerCounterfactualTools } from './tools/counterfactual.js';
+import { registerReviewTrackerTools } from './tools/review-tracker.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -111,6 +112,7 @@ registerSpeculativeValidateTools(server);
 registerCognitiveLoadTools(server);
 registerToolForgeTools(server);
 registerCounterfactualTools(server);
+registerReviewTrackerTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

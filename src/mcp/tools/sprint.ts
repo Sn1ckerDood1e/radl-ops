@@ -10,8 +10,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execFileSync, execSync } from 'child_process';
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { join, resolve } from 'path';
 import { logger } from '../../config/logger.js';
 import { checkIronLaws, getIronLaws } from '../../guardrails/iron-laws.js';
 import { withErrorTracking } from '../with-error-tracking.js';
@@ -25,6 +25,7 @@ import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport
 import { extractCausalPairs } from './causal-graph.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
+import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -211,6 +212,37 @@ function normalizeSprintData(raw: Record<string, unknown>): SprintData {
     estimate: String(raw.estimate ?? 'Unknown'),
     actual: String(raw.actualTime ?? raw.actual ?? 'Unknown'),
   };
+}
+
+function findCompletedSprintData(sprintDir: string): Record<string, unknown> | null {
+  // Check completed-*.json files directly in sprint dir
+  try {
+    const files = readdirSync(sprintDir)
+      .filter(f => f.startsWith('completed-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+    if (files.length > 0) {
+      const candidate = resolve(join(sprintDir, files[0]));
+      if (!candidate.startsWith(resolve(sprintDir) + '/')) {
+        logger.warn('Path traversal attempt in sprint dir', { file: files[0] });
+        return null;
+      }
+      return JSON.parse(readFileSync(candidate, 'utf-8'));
+    }
+  } catch (error) {
+    logger.warn('Failed to read completed sprints', { error: String(error) });
+  }
+
+  // Fall back to current.json
+  const currentPath = join(sprintDir, 'current.json');
+  if (existsSync(currentPath)) {
+    try {
+      return JSON.parse(readFileSync(currentPath, 'utf-8'));
+    } catch (error) {
+      logger.warn('Failed to read current sprint', { error: String(error) });
+    }
+  }
+  return null;
 }
 
 function loadExistingKnowledgeForExtract(knowledgeDir: string): string {
@@ -422,6 +454,9 @@ export function registerSprintTools(server: McpServer): void {
       // Tag all subsequent API calls with this sprint phase
       setCurrentSprintPhase(phase);
 
+      // Clear previous review findings for new sprint
+      clearFindings();
+
       const taskAdvisory = (!task_count || task_count === 0)
         ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
         : `Task plan: ${task_count} tasks\n`;
@@ -429,9 +464,17 @@ export function registerSprintTools(server: McpServer): void {
       const teamSuggestion = getTeamSuggestion(title, task_count, loadTeamRuns());
       const deferredTriage = getDeferredTriageSummary();
 
+      let cognitiveAdvisory = '';
+      if (task_count && task_count >= 5) {
+        cognitiveAdvisory = '\nCONTEXT BUDGET: Run cognitive_load MCP tool — ' + task_count +
+          ' tasks may exceed context window. Predict compaction timing before starting.';
+      } else if (task_count && task_count >= 3) {
+        cognitiveAdvisory = '\nTIP: Run cognitive_load MCP tool to predict context window usage.';
+      }
+
       notifySprintChanged();
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}` }] };
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}` }] };
     })
   );
 
@@ -544,36 +587,20 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
+      // Shared state for auto_extract blocks (hoist to avoid repeated filesystem reads)
+      const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+      const completedRaw = auto_extract !== false ? findCompletedSprintData(sprintDir) : null;
+      const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
+      const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);
+      const sprintPhase = sprintPhaseMatch ? sprintPhaseMatch[0] : 'Unknown';
+
       // Auto-extract compound learnings via Bloom pipeline
       let extractNote = '';
       if (auto_extract !== false) {
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
           const knowledgeDir = getConfig().knowledgeDir;
 
-          // Find sprint data (check archive first, then current)
-          let sprintData: SprintData | null = null;
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
-
-          if (!sprintData) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
+          const sprintData = completedSprintData;
 
           if (sprintData) {
             // Load existing knowledge for dedup context
@@ -615,29 +642,7 @@ export function registerSprintTools(server: McpServer): void {
       // Auto-invoke causal extraction
       if (auto_extract !== false) {
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          let sprintData: SprintData | null = null;
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
-
-          if (!sprintData) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              sprintData = normalizeSprintData(raw);
-            }
-          }
+          const sprintData = completedSprintData;
 
           if (sprintData) {
             const causalResult = await extractCausalPairs({
@@ -657,35 +662,9 @@ export function registerSprintTools(server: McpServer): void {
 
       // Auto-record trust decisions at sprint boundaries
       if (auto_extract !== false) {
-        // Parse sprint phase from output
-        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
-
         // 1. Estimation accuracy
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          let estimate = '';
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              estimate = String(raw.estimate ?? '');
-            }
-          }
-
-          if (!estimate) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              estimate = String(raw.estimate ?? '');
-            }
-          }
+          const estimate = completedRaw ? String(completedRaw.estimate ?? '') : '';
 
           if (estimate && actual_time) {
             const estimateMinutes = parseTimeToMinutes(estimate);
@@ -712,10 +691,8 @@ export function registerSprintTools(server: McpServer): void {
           const knowledgeDir = getConfig().knowledgeDir;
           const compoundDir = join(knowledgeDir, 'compounds');
           if (existsSync(compoundDir)) {
-            const files = execSync(`ls -1 "${compoundDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.startsWith('bloom-') && f.endsWith('.json')).sort().reverse();
+            const files = readdirSync(compoundDir)
+              .filter(f => f.startsWith('bloom-') && f.endsWith('.json')).sort().reverse();
 
             if (files.length > 0) {
               const latestBloom = JSON.parse(readFileSync(join(compoundDir, files[0]), 'utf-8'));
@@ -741,32 +718,7 @@ export function registerSprintTools(server: McpServer): void {
       // Auto-record cognitive load calibration
       if (auto_extract !== false) {
         try {
-          const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-          let taskCount = 0;
-          const archiveDir = join(sprintDir, 'archive');
-
-          if (existsSync(archiveDir)) {
-            const files = execSync(`ls -1 "${archiveDir}" 2>/dev/null || true`, {
-              encoding: 'utf-8',
-              timeout: 5000,
-            }).trim().split('\n').filter(f => f.endsWith('.json')).sort().reverse();
-
-            if (files.length > 0) {
-              const raw = JSON.parse(readFileSync(join(archiveDir, files[0]), 'utf-8'));
-              taskCount = Array.isArray(raw.completedTasks) ? raw.completedTasks.length : 0;
-            }
-          }
-
-          if (taskCount === 0) {
-            const currentPath = join(sprintDir, 'current.json');
-            if (existsSync(currentPath)) {
-              const raw = JSON.parse(readFileSync(currentPath, 'utf-8'));
-              taskCount = Array.isArray(raw.completedTasks) ? raw.completedTasks.length : 0;
-            }
-          }
-
-          const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-          const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+          const taskCount = completedRaw && Array.isArray(completedRaw.completedTasks) ? completedRaw.completedTasks.length : 0;
 
           recordCognitiveCalibration({
             sprint: sprintPhase,
@@ -799,15 +751,28 @@ export function registerSprintTools(server: McpServer): void {
           }
 
           // Compare validation warnings against actual changes
-          const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-          const phase = phaseMatch ? phaseMatch[0] : 'Unknown';
-          validationNote = compareValidationWarnings(latestPlan, getConfig().radlDir, phase);
+          validationNote = compareValidationWarnings(latestPlan, getConfig().radlDir, sprintPhase);
         }
       } catch (error) {
         logger.warn('Plan traceability report failed', { error: String(error) });
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}` }] };
+      // Review gate check
+      let reviewNote = '';
+      const findings = loadFindings();
+      const hasReviews = findings.length > 0;
+      const taskCountMatch = output.match(/(\d+)\s+tasks?\s+completed/i);
+      const completedTaskCount = taskCountMatch ? parseInt(taskCountMatch[1], 10) : 0;
+      if (completedTaskCount >= 3 && !hasReviews && !team_used?.recipe?.includes('review')) {
+        reviewNote = '\nREVIEW WARNING: Sprint had ' + completedTaskCount +
+          ' tasks but no reviews recorded. Run code-reviewer + security-reviewer before merging.';
+      }
+      const unresolved = checkUnresolved();
+      if (unresolved.critical > 0 || unresolved.high > 0) {
+        reviewNote += `\nUNRESOLVED FINDINGS: ${unresolved.critical} CRITICAL, ${unresolved.high} HIGH — address before merging.`;
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}` }] };
     })
   );
 
