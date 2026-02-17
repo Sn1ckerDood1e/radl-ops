@@ -43,6 +43,7 @@ import {
   saveCheckpoint,
   clearCheckpoint,
 } from './shared/conductor-checkpoint.js';
+import { formatVerificationSection } from './shared/task-verifier.js';
 
 // ============================================
 // Types
@@ -592,6 +593,8 @@ function formatConductorOutput(result: ConductorResult): string {
   lines.push('```');
   lines.push('');
   lines.push('> **Sprint is not complete until all generated tests pass.**');
+  lines.push('');
+  lines.push(formatVerificationSection());
   lines.push('');
 
   // Section 6: Validation Warnings (from speculative validation)
