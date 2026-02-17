@@ -455,9 +455,17 @@ export function registerSprintTools(server: McpServer): void {
       const teamSuggestion = getTeamSuggestion(title, task_count, loadTeamRuns());
       const deferredTriage = getDeferredTriageSummary();
 
+      let cognitiveAdvisory = '';
+      if (task_count && task_count >= 5) {
+        cognitiveAdvisory = '\nCONTEXT BUDGET: Run cognitive_load MCP tool — ' + task_count +
+          ' tasks may exceed context window. Predict compaction timing before starting.';
+      } else if (task_count && task_count >= 3) {
+        cognitiveAdvisory = '\nTIP: Run cognitive_load MCP tool to predict context window usage.';
+      }
+
       notifySprintChanged();
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}` }] };
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}` }] };
     })
   );
 
