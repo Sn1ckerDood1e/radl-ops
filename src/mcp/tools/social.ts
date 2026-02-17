@@ -14,6 +14,7 @@ import { getRoute } from '../../models/router.js';
 import { trackUsage } from '../../models/token-tracker.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
+import { withRetry } from '../../utils/retry.js';
 
 const RADL_CONTEXT = `Radl is a rowing team management SaaS (radl.app).
 Core value: Coaches plan practices with lineups; athletes know where to be.
@@ -26,11 +27,13 @@ async function callModel(prompt: string, taskType: TaskType): Promise<string> {
   const route = getRoute(taskType);
   const client = getAnthropicClient();
 
-  const response = await client.messages.create({
-    model: route.model,
-    max_tokens: route.maxTokens,
-    messages: [{ role: 'user', content: prompt }],
-  });
+  const response = await withRetry(
+    () => client.messages.create({
+      model: route.model,
+      max_tokens: route.maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  );
 
   trackUsage(
     route.model,

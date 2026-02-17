@@ -17,6 +17,7 @@ import { getRoute } from '../../models/router.js';
 import { getCostSummaryForBriefing } from '../../models/token-tracker.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
+import { withRetry } from '../../utils/retry.js';
 
 const DAILY_BRIEFING_CRITERIA = [
   'Completeness: Covers summary, metrics, priorities, blockers, wins, and API costs',
@@ -178,11 +179,13 @@ Generate 5-7 feature ideas ranked by impact. For each:
 Prioritize by impact/effort ratio. Be specific to rowing, not generic SaaS advice.`;
 
       try {
-        const response = await client.messages.create({
-          model: route.model,
-          max_tokens: route.maxTokens,
-          messages: [{ role: 'user', content: prompt }],
-        });
+        const response = await withRetry(
+          () => client.messages.create({
+            model: route.model,
+            max_tokens: route.maxTokens,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        );
 
         const text = response.content
           .filter((b): b is Anthropic.TextBlock => b.type === 'text')
