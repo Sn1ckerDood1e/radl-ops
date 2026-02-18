@@ -8,15 +8,15 @@ Claude Code IS the agent. radl-ops is a tool provider via MCP.
 
 Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups with on-demand loading.
 
-### Tool Groups (Dynamic Loading)
+### Tool Groups
 
-| Group | Default | Tools |
-|-------|---------|-------|
-| **core** | Enabled | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load |
-| **content** | Disabled | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
-| **advanced** | Disabled | eval_opt_generate, compound_extract, tool_forge, counterfactual_analyze |
+| Group | Tools |
+|-------|-------|
+| **core** | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load |
+| **content** | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
+| **advanced** | eval_opt_generate, compound_extract, tool_forge, counterfactual_analyze |
 
-To enable disabled tool groups: `mcp__radl-ops__enable_tools({ group: "content", action: "enable" })`
+All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to toggle groups if needed.
 
 ### All Tools
 

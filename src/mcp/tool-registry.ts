@@ -53,13 +53,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'daily_briefing', 'weekly_briefing', 'social_ideas', 'social_draft',
       'social_calendar', 'roadmap_ideas',
     ],
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     name: 'advanced',
     description: 'Eval-opt content generation (multi-model quality loop), compound learning extraction (Bloom pipeline)',
     toolNames: ['eval_opt_generate', 'compound_extract', 'tool_forge', 'counterfactual_analyze'],
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
 ];
 
