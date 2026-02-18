@@ -474,7 +474,12 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}` }] };
+      // Calendar sync suggestion (when Google Calendar MCP is available)
+      const calendarAction = estimate
+        ? `\nCalendar sync: Create a calendar event for this sprint:\n  Tool: google-calendar create-event or google_workspace calendar_create_event\n  Title: "${phase}: ${title}"\n  Duration: ${estimate}\n  Description: "Sprint ${phase} — ${title}\\nBranch: ${branch}\\nEstimate: ${estimate}"`
+        : '';
+
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}${calendarAction}` }] };
     })
   );
 
@@ -772,7 +777,10 @@ export function registerSprintTools(server: McpServer): void {
         reviewNote += `\nUNRESOLVED FINDINGS: ${unresolved.critical} CRITICAL, ${unresolved.high} HIGH — address before merging.`;
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}` }] };
+      // Calendar sync suggestion for sprint completion
+      const calendarComplete = `\nCalendar sync: Update the sprint calendar event with actual results:\n  Title: "${sprintPhase}: COMPLETE"\n  Duration: ${actual_time}\n  Description: "Sprint ${sprintPhase} — Complete\\nActual: ${actual_time}\\nCommit: ${commit}"`;
+
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${calendarComplete}` }] };
     })
   );
 
