@@ -26,12 +26,46 @@ import { extractCausalPairs } from './causal-graph.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
+import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
 }
 function getTeamRunsPath(): string {
   return `${getConfig().knowledgeDir}/team-runs.json`;
+}
+function getCalendarSyncPath(): string {
+  return `${getConfig().knowledgeDir}/sprint-calendar.json`;
+}
+
+interface SprintCalendarSync {
+  sprintId: string;
+  eventId: string;
+  startTime: string;
+}
+
+function saveCalendarSync(sync: SprintCalendarSync): void {
+  const tmpPath = `${getCalendarSyncPath()}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(sync, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, getCalendarSyncPath());
+}
+
+function loadCalendarSync(): SprintCalendarSync | null {
+  if (!existsSync(getCalendarSyncPath())) return null;
+  try {
+    return JSON.parse(readFileSync(getCalendarSyncPath(), 'utf-8')) as SprintCalendarSync;
+  } catch {
+    return null;
+  }
+}
+
+function parseEstimateToMs(estimate: string): number {
+  const hourMatch = estimate.match(/(\d+(?:\.\d+)?)\s*h/i);
+  const minMatch = estimate.match(/(\d+)\s*m/i);
+  let ms = 0;
+  if (hourMatch) ms += parseFloat(hourMatch[1]) * 60 * 60 * 1000;
+  if (minMatch) ms += parseInt(minMatch[1], 10) * 60 * 1000;
+  return ms || 2 * 60 * 60 * 1000; // default 2 hours
 }
 
 interface DeferredItem {
@@ -474,12 +508,30 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
-      // Calendar sync suggestion (when Google Calendar MCP is available)
-      const calendarAction = estimate
-        ? `\nCalendar sync: Create a calendar event for this sprint:\n  Tool: google-calendar create-event or google_workspace calendar_create_event\n  Title: "${phase}: ${title}"\n  Duration: ${estimate}\n  Description: "Sprint ${phase} — ${title}\\nBranch: ${branch}\\nEstimate: ${estimate}"`
-        : '';
+      // Calendar sync: create event automatically
+      let calendarNote = '';
+      if (isGoogleConfigured() && estimate) {
+        try {
+          const now = new Date();
+          const durationMs = parseEstimateToMs(estimate);
+          const endTime = new Date(now.getTime() + durationMs);
+          const { eventId, htmlLink } = await createCalendarEvent({
+            summary: `Sprint: ${phase} — ${title}`,
+            start: now,
+            end: endTime,
+            description: `Sprint ${phase} — ${title}\nBranch: ${branch}\nEstimate: ${estimate}`,
+          });
+          saveCalendarSync({ sprintId: phase, eventId, startTime: now.toISOString() });
+          calendarNote = `\nCalendar event created: ${htmlLink}`;
+          logger.info('Sprint calendar event created', { eventId, phase });
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          calendarNote = `\nCalendar sync failed (non-blocking): ${msg}`;
+          logger.warn('Sprint calendar sync failed', { error: msg });
+        }
+      }
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}${calendarAction}` }] };
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}${calendarNote}` }] };
     })
   );
 
@@ -777,10 +829,30 @@ export function registerSprintTools(server: McpServer): void {
         reviewNote += `\nUNRESOLVED FINDINGS: ${unresolved.critical} CRITICAL, ${unresolved.high} HIGH — address before merging.`;
       }
 
-      // Calendar sync suggestion for sprint completion
-      const calendarComplete = `\nCalendar sync: Update the sprint calendar event with actual results:\n  Title: "${sprintPhase}: COMPLETE"\n  Duration: ${actual_time}\n  Description: "Sprint ${sprintPhase} — Complete\\nActual: ${actual_time}\\nCommit: ${commit}"`;
+      // Calendar sync: update event with actual results
+      let calendarNote = '';
+      const calSync = loadCalendarSync();
+      if (calSync && isGoogleConfigured()) {
+        try {
+          const actualMs = parseTimeToMinutes(actual_time) * 60 * 1000;
+          const startTime = new Date(calSync.startTime);
+          const actualEnd = new Date(startTime.getTime() + actualMs);
+          await updateCalendarEvent({
+            eventId: calSync.eventId,
+            summary: `Sprint: ${sprintPhase} — COMPLETE`,
+            end: actualEnd,
+            description: `Sprint ${sprintPhase} — Complete\nActual: ${actual_time}\nCommit: ${commit}`,
+          });
+          calendarNote = `\nCalendar event updated (${calSync.eventId})`;
+          logger.info('Sprint calendar event updated', { eventId: calSync.eventId });
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          calendarNote = `\nCalendar sync failed (non-blocking): ${msg}`;
+          logger.warn('Sprint calendar sync failed on complete', { error: msg });
+        }
+      }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${calendarComplete}` }] };
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${calendarNote}` }] };
     })
   );
 
