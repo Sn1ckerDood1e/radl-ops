@@ -179,6 +179,42 @@
       "sprintPhase": "Phase 70",
       "date": "2026-02-12T22:33:59.705Z",
       "resolved": true
+    },
+    {
+      "id": 21,
+      "title": "Google Calendar MCP OAuth setup",
+      "reason": "Requires user to create OAuth credentials in Google Cloud Console — blocking dependency",
+      "effort": "small",
+      "sprintPhase": "Phase 87",
+      "date": "2026-02-18T16:48:32.432Z",
+      "resolved": false
+    },
+    {
+      "id": 22,
+      "title": "Gmail briefing delivery via Google Workspace MCP",
+      "reason": "Blocked on Google OAuth setup",
+      "effort": "medium",
+      "sprintPhase": "Phase 87",
+      "date": "2026-02-18T16:48:32.432Z",
+      "resolved": false
+    },
+    {
+      "id": 23,
+      "title": "Critical alert system via Gmail",
+      "reason": "Blocked on Google OAuth setup — needs Gmail send capability",
+      "effort": "medium",
+      "sprintPhase": "Phase 87",
+      "date": "2026-02-18T16:48:32.432Z",
+      "resolved": false
+    },
+    {
+      "id": 24,
+      "title": "Production status test coverage — behavioral tests",
+      "reason": "Code reviewer flagged smoke-only tests, need proper mocking of fetch calls",
+      "effort": "small",
+      "sprintPhase": "Phase 87",
+      "date": "2026-02-18T16:48:32.432Z",
+      "resolved": false
     }
   ]
 }

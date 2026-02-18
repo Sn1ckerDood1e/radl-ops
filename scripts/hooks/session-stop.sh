@@ -51,6 +51,7 @@ fi
 
 echo ""
 echo "END-OF-SESSION TASKS:"
+echo "  [ ] Run session_health for session diagnostic report"
 echo "  [ ] Update STATE.md with what was done"
 echo "  [ ] Commit and push feature branch"
 echo "  [ ] Run compound.sh extract (if sprint completed)"

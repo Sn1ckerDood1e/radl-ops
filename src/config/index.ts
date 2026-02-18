@@ -58,9 +58,30 @@ export const config = {
     url: optionalEnv('SUPABASE_URL'),
     anonKey: optionalEnv('SUPABASE_ANON_KEY'),
     serviceKey: optionalEnv('SUPABASE_SERVICE_KEY'),
+    projectId: optionalEnv('SUPABASE_PROJECT_ID'),
+    accessToken: optionalEnv('SUPABASE_ACCESS_TOKEN'),
   },
 
-  // Email
+  // Vercel
+  vercel: {
+    token: optionalEnv('VERCEL_TOKEN'),
+    projectId: optionalEnv('VERCEL_PROJECT_ID'),
+  },
+
+  // Sentry
+  sentry: {
+    authToken: optionalEnv('SENTRY_AUTH_TOKEN'),
+    org: optionalEnv('SENTRY_ORG'),
+    project: optionalEnv('SENTRY_PROJECT'),
+  },
+
+  // Google (uses Google Workspace MCP OAuth credentials)
+  google: {
+    credentialsPath: optionalEnv('GOOGLE_CREDENTIALS_PATH'),
+    briefingRecipient: optionalEnv('GOOGLE_BRIEFING_RECIPIENT', 'kinseymi@radl.solutions'),
+  },
+
+  // Email (legacy — use Google config for Gmail delivery)
   email: {
     resendApiKey: optionalEnv('RESEND_API_KEY'),
     briefingEmail: optionalEnv('BRIEFING_EMAIL'),
