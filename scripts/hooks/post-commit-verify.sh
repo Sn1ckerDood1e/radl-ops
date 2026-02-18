@@ -12,3 +12,4 @@ if [[ "$COMMAND" != *"git commit"* ]]; then
 fi
 
 echo "Run verify_patterns MCP tool to check for pattern drift (free, no AI cost)."
+echo "Run session_health(record_commit: true) to track commit in session metrics."
