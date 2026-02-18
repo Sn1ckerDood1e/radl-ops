@@ -149,9 +149,6 @@ async function checkSentryErrors(): Promise<ServiceStatus> {
     return { status: 'unavailable', summary: 'Sentry credentials not configured' };
   }
 
-  // Get issues from last 24 hours
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
   interface SentryIssue {
     id: string;
     title: string;
@@ -290,9 +287,11 @@ export function registerProductionStatusTools(server: McpServer): void {
       await Promise.all(checks);
 
       const statuses = Object.values(results).map(r => r.status);
-      const hasError = statuses.includes('error');
-      const hasWarning = statuses.includes('warning');
-      const overall: ProductionReport['overall'] = hasError ? 'issues_detected'
+      const configured = statuses.filter(s => s !== 'unavailable');
+      const hasError = configured.includes('error');
+      const hasWarning = configured.includes('warning');
+      const overall: ProductionReport['overall'] = configured.length === 0 ? 'degraded'
+        : hasError ? 'issues_detected'
         : hasWarning ? 'degraded'
         : 'healthy';
 

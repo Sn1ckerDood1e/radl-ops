@@ -47,6 +47,9 @@ export function recordToolCall(tool: string, success: boolean): void {
     session.toolCalls = session.toolCalls.slice(-MAX_TOOL_CALL_RECORDS);
   }
 
+  // Only update sprint state on successful tool calls
+  if (!success) return;
+
   if (tool === 'sprint_start') {
     session.sprintActive = true;
   }

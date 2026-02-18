@@ -80,19 +80,28 @@ function analyzeSession(): HealthSignal[] {
   }
 
   // Signal 4: Sprint active but no progress recorded
-  if (session.sprintActive && session.lastProgressAt) {
-    const minutesSinceProgress = (now - session.lastProgressAt) / (1000 * 60);
-    if (minutesSinceProgress > 45) {
+  if (session.sprintActive) {
+    if (session.lastProgressAt) {
+      const minutesSinceProgress = (now - session.lastProgressAt) / (1000 * 60);
+      if (minutesSinceProgress > 45) {
+        signals.push({
+          id: 'stale_progress',
+          severity: 'warning',
+          message: `Sprint active but no progress recorded in ${Math.round(minutesSinceProgress)}m. Run sprint_progress or checkpoint.`,
+          metric: `${Math.round(minutesSinceProgress)}m since last update`,
+        });
+      }
+    } else if (sessionMinutes > 45) {
       signals.push({
         id: 'stale_progress',
         severity: 'warning',
-        message: `Sprint active but no progress recorded in ${Math.round(minutesSinceProgress)}m. Run sprint_progress or checkpoint.`,
-        metric: `${Math.round(minutesSinceProgress)}m since last update`,
+        message: `Sprint active but sprint_progress never called (${Math.round(sessionMinutes)}m). Log your first milestone.`,
+        metric: `${Math.round(sessionMinutes)}m, no progress logged`,
       });
     }
   }
 
-  // Signal 5: Sprint active but no sprint started
+  // Signal 5: Commits made without sprint tracking active
   if (!session.sprintActive && session.commitCount > 0 && sessionMinutes > 10) {
     signals.push({
       id: 'no_sprint',
