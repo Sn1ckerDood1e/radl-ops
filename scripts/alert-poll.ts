@@ -12,7 +12,7 @@
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as dotenvConfig } from 'dotenv';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 // Load .env
@@ -51,7 +51,9 @@ function loadState(): AlertState {
 
 function saveState(state: AlertState): void {
   if (!existsSync(KNOWLEDGE_DIR)) mkdirSync(KNOWLEDGE_DIR, { recursive: true });
-  writeFileSync(ALERT_STATE_PATH, JSON.stringify(state, null, 2) + '\n');
+  const tmpPath = `${ALERT_STATE_PATH}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(state, null, 2) + '\n', 'utf-8');
+  renameSync(tmpPath, ALERT_STATE_PATH);
 }
 
 function isInCooldown(state: AlertState, alertId: string, cooldownMin: number): boolean {
@@ -104,7 +106,8 @@ async function checkAll(): Promise<Alert[]> {
       { Authorization: `Bearer ${vToken}` },
     );
     const latest = data?.deployments?.[0];
-    if (latest && latest.readyState !== 'READY') {
+    const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
+    if (latest && FAILED_STATES.has(latest.readyState)) {
       alerts.push({
         id: 'vercel_deploy_failed',
         name: 'Vercel Deploy Failed',
@@ -125,16 +128,16 @@ async function checkAll(): Promise<Alert[]> {
     );
     if (!project) {
       alerts.push({
-        id: 'supabase_unreachable',
-        name: 'Supabase Unreachable',
+        id: 'supabase_down',
+        name: 'Supabase Down',
         level: 'critical',
         cooldownMin: 5,
         message: 'Supabase Management API did not respond.',
       });
     } else if (project.status !== 'ACTIVE_HEALTHY') {
       alerts.push({
-        id: 'supabase_unhealthy',
-        name: 'Supabase Unhealthy',
+        id: 'supabase_down',
+        name: 'Supabase Down',
         level: 'critical',
         cooldownMin: 5,
         message: `Status: ${project.status}`,
@@ -149,7 +152,7 @@ async function checkAll(): Promise<Alert[]> {
   if (seToken && seOrg && seProject) {
     interface SIssue { level: string; title: string; count: string }
     const issues = await fetchJSON<SIssue[]>(
-      `https://sentry.io/api/0/projects/${encodeURIComponent(seOrg)}/${encodeURIComponent(seProject)}/issues/?query=is:unresolved&statsPeriod=1h&sort=freq`,
+      `https://sentry.io/api/0/projects/${encodeURIComponent(seOrg)}/${encodeURIComponent(seProject)}/issues/?query=is:unresolved&statsPeriod=24h&sort=freq`,
       { Authorization: `Bearer ${seToken}` },
     );
     if (issues) {

@@ -147,7 +147,11 @@ async function checkServices(): Promise<ServiceCheckResult[]> {
     );
     if (data) {
       const latest = data.deployments?.[0];
-      const status = !latest ? 'warning' : latest.readyState === 'READY' ? 'ok' : 'error';
+      const FAILED_STATES = new Set(['ERROR', 'CANCELED']);
+      const status = !latest ? 'warning'
+        : latest.readyState === 'READY' ? 'ok'
+        : FAILED_STATES.has(latest.readyState) ? 'error'
+        : 'warning'; // BUILDING, QUEUED, INITIALIZING — not failures
       results.push({
         service: 'vercel',
         status,

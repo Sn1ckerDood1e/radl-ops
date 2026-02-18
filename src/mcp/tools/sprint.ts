@@ -583,16 +583,16 @@ export function registerSprintTools(server: McpServer): void {
       // Clear sprint phase tag for cost tracking
       setCurrentSprintPhase(null);
 
+      // Parse sprint phase once for all downstream uses
+      const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);
+      const sprintPhase = sprintPhaseMatch ? sprintPhaseMatch[0] : 'Unknown';
+
       let deferredNote = '';
       if (deferred_items && deferred_items.length > 0) {
         const store = loadDeferred();
         const nextId = store.items.length > 0
           ? Math.max(...store.items.map(i => i.id)) + 1
           : 1;
-
-        // Get current sprint phase from the sprint output (best-effort parse)
-        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
 
         const newItems: DeferredItem[] = deferred_items.map((item, idx) => ({
           id: nextId + idx,
@@ -620,9 +620,6 @@ export function registerSprintTools(server: McpServer): void {
           ? Math.max(...store.runs.map(r => r.id)) + 1
           : 1;
 
-        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
-        const sprintPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
-
         const teamRun: TeamRun = {
           id: nextId,
           sprintPhase,
@@ -648,8 +645,6 @@ export function registerSprintTools(server: McpServer): void {
       const sprintDir = join(getConfig().radlDir, '.planning/sprints');
       const completedRaw = auto_extract !== false ? findCompletedSprintData(sprintDir) : null;
       const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
-      const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);
-      const sprintPhase = sprintPhaseMatch ? sprintPhaseMatch[0] : 'Unknown';
 
       // Auto-extract compound learnings via Bloom pipeline
       let extractNote = '';
@@ -832,7 +827,7 @@ export function registerSprintTools(server: McpServer): void {
       // Calendar sync: update event with actual results
       let calendarNote = '';
       const calSync = loadCalendarSync();
-      if (calSync && isGoogleConfigured()) {
+      if (calSync && calSync.sprintId === sprintPhase && isGoogleConfigured()) {
         try {
           const actualMs = parseTimeToMinutes(actual_time) * 60 * 1000;
           const startTime = new Date(calSync.startTime);
