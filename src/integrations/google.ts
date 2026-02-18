@@ -71,6 +71,15 @@ async function getAccessToken(): Promise<string> {
 
   logger.debug('Google OAuth token expired, refreshing...');
 
+  // C1: Validate token_uri against known Google OAuth endpoints to prevent SSRF
+  const ALLOWED_TOKEN_URIS = new Set([
+    'https://oauth2.googleapis.com/token',
+    'https://accounts.google.com/o/oauth2/token',
+  ]);
+  if (!ALLOWED_TOKEN_URIS.has(creds.token_uri)) {
+    throw new Error(`Rejected token_uri "${creds.token_uri}" — must be a known Google OAuth endpoint`);
+  }
+
   const response = await fetch(creds.token_uri, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -85,7 +94,7 @@ async function getAccessToken(): Promise<string> {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Google token refresh failed (${response.status}): ${text}`);
+    throw new Error(`Google token refresh failed (${response.status}): ${text.slice(0, 200)}`);
   }
 
   const data = (await response.json()) as TokenResponse;
@@ -164,7 +173,7 @@ export async function sendGmail(params: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Gmail send failed (${response.status}): ${text}`);
+    throw new Error(`Gmail send failed (${response.status}): ${text.slice(0, 200)}`);
   }
 
   const result = (await response.json()) as { id: string; threadId: string };
@@ -216,7 +225,7 @@ export async function createCalendarEvent(params: CalendarEventParams): Promise<
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Calendar event creation failed (${response.status}): ${text}`);
+    throw new Error(`Calendar event creation failed (${response.status}): ${text.slice(0, 200)}`);
   }
 
   const result = (await response.json()) as CalendarEvent;
@@ -256,7 +265,7 @@ export async function updateCalendarEvent(params: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Calendar event update failed (${response.status}): ${text}`);
+    throw new Error(`Calendar event update failed (${response.status}): ${text.slice(0, 200)}`);
   }
 
   logger.info('Calendar event updated', { eventId: params.eventId });
@@ -287,7 +296,7 @@ export async function getCalendarEvents(params: {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Calendar events fetch failed (${response.status}): ${text}`);
+    throw new Error(`Calendar events fetch failed (${response.status}): ${text.slice(0, 200)}`);
   }
 
   interface GCalItem { id: string; summary: string; start: { dateTime?: string; date?: string }; end: { dateTime?: string; date?: string } }

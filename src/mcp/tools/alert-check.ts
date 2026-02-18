@@ -87,7 +87,7 @@ const ALERT_RULES: AlertRule[] = [
     id: 'vercel_deploy_failed',
     name: 'Vercel Deploy Failed',
     level: 'critical',
-    cooldownMinutes: 0, // Always alert
+    cooldownMinutes: 5,
     check: (s) => s.service === 'vercel' && s.status === 'error',
     message: (s) => `Vercel deployment failure detected.\n\n${s.summary}\n\n${s.details.join('\n')}`,
   },
@@ -202,6 +202,14 @@ async function checkServices(): Promise<ServiceCheckResult[]> {
 // Alert Email
 // ---------------------------------------------------------------------------
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function buildAlertHtml(rule: AlertRule, message: string): string {
   const icon = rule.level === 'critical' ? 'CRITICAL' : 'WARNING';
   const color = rule.level === 'critical' ? '#dc2626' : '#f59e0b';
@@ -214,9 +222,9 @@ function buildAlertHtml(rule: AlertRule, message: string): string {
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#1a1a1a;">
 <div style="border-left:4px solid ${color};padding:16px;background:#fafafa;border-radius:4px;">
-<h2 style="margin:0 0 8px;color:${color};">${icon}: ${rule.name}</h2>
-<p style="color:#64748b;margin:0 0 16px;font-size:13px;">${time}</p>
-<pre style="white-space:pre-wrap;font-family:inherit;margin:0;line-height:1.6;">${message}</pre>
+<h2 style="margin:0 0 8px;color:${color};">${escapeHtml(icon)}: ${escapeHtml(rule.name)}</h2>
+<p style="color:#64748b;margin:0 0 16px;font-size:13px;">${escapeHtml(time)}</p>
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0;line-height:1.6;">${escapeHtml(message)}</pre>
 </div>
 <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 8px;">
 <p style="color:#94a3b8;font-size:12px;">Radl Ops Alert System | Cooldown: ${rule.cooldownMinutes}m</p>

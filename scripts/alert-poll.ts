@@ -93,6 +93,14 @@ interface Alert {
   message: string;
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 async function checkAll(): Promise<Alert[]> {
   const alerts: Alert[] = [];
 
@@ -112,7 +120,7 @@ async function checkAll(): Promise<Alert[]> {
         id: 'vercel_deploy_failed',
         name: 'Vercel Deploy Failed',
         level: 'critical',
-        cooldownMin: 0,
+        cooldownMin: 5,
         message: `Deploy state: ${latest.readyState}\nCommit: ${latest.meta?.githubCommitMessage?.slice(0, 80) ?? 'unknown'}`,
       });
     }
@@ -207,9 +215,9 @@ async function main(): Promise<void> {
     const htmlBody = `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <div style="border-left:4px solid ${color};padding:16px;background:#fafafa;border-radius:4px;">
-<h2 style="margin:0 0 8px;color:${color};">${alert.level.toUpperCase()}: ${alert.name}</h2>
-<p style="color:#64748b;margin:0 0 16px;font-size:13px;">${time}</p>
-<pre style="white-space:pre-wrap;font-family:inherit;margin:0;line-height:1.6;">${alert.message}</pre>
+<h2 style="margin:0 0 8px;color:${color};">${escapeHtml(alert.level.toUpperCase())}: ${escapeHtml(alert.name)}</h2>
+<p style="color:#64748b;margin:0 0 16px;font-size:13px;">${escapeHtml(time)}</p>
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0;line-height:1.6;">${escapeHtml(alert.message)}</pre>
 </div>
 <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 8px;">
 <p style="color:#94a3b8;font-size:12px;">Radl Ops Alert System</p>
