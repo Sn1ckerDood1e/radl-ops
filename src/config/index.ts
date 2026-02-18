@@ -75,7 +75,13 @@ export const config = {
     project: optionalEnv('SENTRY_PROJECT'),
   },
 
-  // Email
+  // Google (uses Google Workspace MCP OAuth credentials)
+  google: {
+    credentialsPath: optionalEnv('GOOGLE_CREDENTIALS_PATH'),
+    briefingRecipient: optionalEnv('GOOGLE_BRIEFING_RECIPIENT', 'kinseymi@radl.solutions'),
+  },
+
+  // Email (legacy — use Google config for Gmail delivery)
   email: {
     resendApiKey: optionalEnv('RESEND_API_KEY'),
     briefingEmail: optionalEnv('BRIEFING_EMAIL'),
