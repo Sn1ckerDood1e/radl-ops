@@ -6,13 +6,15 @@
 #   @reboot   - briefing on WSL start
 #   midnight  - log cleanup (90-day retention)
 #   6pm       - cost alert check
+#   every 5m  - critical alert polling (Vercel/Supabase/Sentry → Gmail)
 
 set -euo pipefail
 
 CRONTAB_ENTRIES="# Radl-Ops automated tasks
 @reboot sleep 30 && /home/hb/radl-ops/scripts/briefing-on-wake.sh >> /tmp/radl-briefing.log 2>&1
 0 0 * * * /home/hb/radl-ops/scripts/cleanup-logs.sh >> /tmp/radl-cleanup.log 2>&1
-0 18 * * * /home/hb/radl-ops/scripts/cost-alert.sh >> /tmp/radl-cost-alert.log 2>&1"
+0 18 * * * /home/hb/radl-ops/scripts/cost-alert.sh >> /tmp/radl-cost-alert.log 2>&1
+*/5 * * * * /home/hb/.nvm/versions/node/v22.22.0/bin/npx tsx /home/hb/radl-ops/scripts/alert-poll.ts >> /tmp/radl-alert-poll.log 2>&1"
 
 # Preserve existing non-radl-ops cron jobs
 EXISTING=$(crontab -l 2>/dev/null | grep -v 'radl-ops' | grep -v '^# Radl-Ops' || true)

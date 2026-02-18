@@ -1,6 +1,8 @@
 #!/bin/bash
 # Daily Briefing Script - Runs Mon-Fri at 7am
-# Generates briefing using Claude Code and emails to configured address
+# Generates briefing using Claude Code MCP tools and delivers via Gmail
+#
+# Usage: bash /home/hb/radl-ops/scripts/daily-briefing.sh
 
 set -e
 
@@ -16,61 +18,27 @@ mkdir -p "$BRIEFING_DIR"
 # Change to radl-ops directory for CLAUDE.md context
 cd /home/hb/radl-ops
 
-echo "[$DATE] Generating daily briefing..."
+echo "[$DATE] Generating daily briefing with Gmail delivery..."
 
-# Generate briefing using Claude Code
-# Using local files only (MCP tools are slow in non-interactive mode)
+# Generate and deliver briefing using Claude Code with MCP tools
+# The daily_briefing tool generates content via eval-opt loop,
+# then deliver_via_gmail sends it through the Google API client.
 /home/hb/.nvm/versions/node/v22.22.0/bin/claude -p "
-Generate a daily briefing for $DAY_NAME, $DATE.
+Generate and deliver today's daily briefing for $DAY_NAME, $DATE.
 
-Read these files:
-- /home/hb/radl/.planning/STATE.md (current position)
-- /home/hb/radl/.planning/ROADMAP.md (what's next)
+Steps:
+1. Enable content tools: mcp__radl-ops__enable_tools({ group: 'content' })
+2. Check production health: mcp__radl-ops__production_status({})
+3. Generate and send briefing: mcp__radl-ops__daily_briefing({
+     deliver_via_gmail: true,
+     monitoring_context: '<production status from step 2>'
+   })
 
-Format:
-📍 CURRENT POSITION
-- [Milestone, Phase from STATE.md]
-- [Last Sprint completed]
+If Gmail delivery fails, save the briefing markdown to $BRIEFING_FILE instead.
+" --max-turns 8 --permission-mode bypassPermissions > "$BRIEFING_FILE" 2>&1
 
-🎯 TODAY'S SPRINT
-Based on STATE.md 'Next Sprint' field or next phase task:
-- [Specific feature or task to sprint on]
-
-🔧 COMMAND
-/build \"[feature]\"
-
-📱 SOCIAL IDEA
-- One content idea (product demo or rowing humor)
-
-Keep under 150 words. Be direct.
-" --max-turns 5 --permission-mode bypassPermissions > "$BRIEFING_FILE" 2>&1
-
-# Check if briefing was generated
-if [ -s "$BRIEFING_FILE" ]; then
-    echo "[$DATE] Briefing generated: $BRIEFING_FILE"
-
-    # Send to Slack (dedicated briefings channel)
-    source /home/hb/radl-ops/.env
-    WEBHOOK="${SLACK_BRIEFING_WEBHOOK:-$SLACK_WEBHOOK_URL}"
-    if [ -n "$WEBHOOK" ]; then
-        BRIEFING_CONTENT=$(cat "$BRIEFING_FILE" | head -c 2500)
-        cat << EOF | curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d @-
-{
-  "blocks": [
-    {
-      "type": "header",
-      "text": {"type": "plain_text", "text": "📋 Daily Briefing - $DAY_NAME"}
-    },
-    {
-      "type": "section",
-      "text": {"type": "mrkdwn", "text": "$(echo "$BRIEFING_CONTENT" | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  / /g')"}
-    }
-  ]
-}
-EOF
-        echo "[$DATE] Briefing sent to Slack"
-    fi
+if [ $? -eq 0 ]; then
+    echo "[$DATE] Briefing generated and delivered via Gmail"
 else
-    echo "[$DATE] ERROR: Briefing generation failed"
-    exit 1
+    echo "[$DATE] WARNING: Briefing generation may have failed, check $BRIEFING_FILE"
 fi
