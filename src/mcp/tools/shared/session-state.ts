@@ -33,12 +33,19 @@ export const session: SessionMetrics = {
 /**
  * Record a tool call. Called from withErrorTracking wrapper.
  */
+const MAX_TOOL_CALL_RECORDS = 500;
+
 export function recordToolCall(tool: string, success: boolean): void {
   session.toolCalls.push({
     tool,
     timestamp: Date.now(),
     success,
   });
+
+  // Cap to rolling window — analysis only uses last 30min anyway
+  if (session.toolCalls.length > MAX_TOOL_CALL_RECORDS) {
+    session.toolCalls = session.toolCalls.slice(-MAX_TOOL_CALL_RECORDS);
+  }
 
   if (tool === 'sprint_start') {
     session.sprintActive = true;

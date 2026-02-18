@@ -42,8 +42,7 @@ function loadDeferredItems(): DeferredStore {
   }
 }
 
-function getDeferredSummary(): string {
-  const store = loadDeferredItems();
+function getDeferredSummaryFromStore(store: DeferredStore): string {
   const unresolved = store.items.filter(i => !i.resolved);
   if (unresolved.length === 0) return '';
 
@@ -64,11 +63,6 @@ function getDeferredSummary(): string {
   }
 
   return lines.join('\n');
-}
-
-function countDeferred(): number {
-  const store = loadDeferredItems();
-  return store.items.filter(i => !i.resolved).length;
 }
 
 const DAILY_BRIEFING_CRITERIA = [
@@ -95,7 +89,7 @@ export function registerBriefingTools(server: McpServer): void {
       github_context: z.string().max(5000).optional()
         .describe('GitHub data to include (open issues, PRs, recent commits). Gather with mcp__github__* tools and pass here.'),
       monitoring_context: z.string().max(3000).optional()
-        .describe('Production status from production_status tool output. Include deployment health, error counts, service status.'),
+        .describe('Sanitized production status summary. Use counts and status strings only — do NOT include raw error messages, stack traces, or PII from issue titles.'),
       calendar_context: z.string().max(2000).optional()
         .describe('Today\'s calendar events from Google Calendar MCP. Include meetings, blocked time, deadlines.'),
       deferred_context: z.string().max(2000).optional()
@@ -108,9 +102,13 @@ export function registerBriefingTools(server: McpServer): void {
       const costSummary = getCostSummaryForBriefing();
       const date = new Date().toISOString().split('T')[0];
 
+      // Load deferred items once for both summary and count
+      const deferredStore = loadDeferredItems();
+      const unresolvedCount = deferredStore.items.filter(i => !i.resolved).length;
+
       // Auto-populate deferred context if not provided
       const deferredSummary = deferred_context === 'none' ? ''
-        : deferred_context ?? getDeferredSummary();
+        : deferred_context ?? getDeferredSummaryFromStore(deferredStore);
 
       const prompt = `Generate a concise daily briefing for Radl (a rowing team management SaaS).
 
@@ -119,7 +117,7 @@ Date: ${date}
 ${github_context ? `GitHub Activity:\n${github_context}\n` : ''}
 ${monitoring_context ? `Production Status:\n${monitoring_context}\n` : ''}
 ${calendar_context ? `Today's Calendar:\n${calendar_context}\n` : ''}
-${deferredSummary ? `Tech Debt (${countDeferred()} items):\n${deferredSummary}\n` : ''}
+${deferredSummary ? `Tech Debt (${unresolvedCount} items):\n${deferredSummary}\n` : ''}
 API Costs: ${costSummary}
 ${custom_focus ? `\nCustom focus area: ${custom_focus}` : ''}
 
@@ -175,7 +173,9 @@ Keep it brief and actionable. Use bullet points.`;
       const start = week_start ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const end = new Date().toISOString().split('T')[0];
       const costSummary = getCostSummaryForBriefing();
-      const deferredSummary = getDeferredSummary();
+      const deferredStore = loadDeferredItems();
+      const deferredSummary = getDeferredSummaryFromStore(deferredStore);
+      const unresolvedCount = deferredStore.items.filter(i => !i.resolved).length;
 
       const prompt = `Generate a comprehensive weekly briefing for Radl (a rowing team management SaaS).
 
@@ -184,7 +184,7 @@ Week: ${start} to ${end}
 ${github_context ? `GitHub Activity:\n${github_context}\n` : ''}
 ${monitoring_context ? `Production Health This Week:\n${monitoring_context}\n` : ''}
 ${calendar_context ? `Calendar Summary:\n${calendar_context}\n` : ''}
-${deferredSummary ? `Tech Debt Backlog (${countDeferred()} items):\n${deferredSummary}\n` : ''}
+${deferredSummary ? `Tech Debt Backlog (${unresolvedCount} items):\n${deferredSummary}\n` : ''}
 API Costs: ${costSummary}
 
 Format the briefing as:

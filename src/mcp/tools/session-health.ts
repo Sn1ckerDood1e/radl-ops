@@ -180,7 +180,7 @@ export function registerSessionHealthTools(server: McpServer): void {
       if (record_tool) {
         recordToolCall(record_tool, record_success ?? true);
         return {
-          content: [{ type: 'text' as const, text: `Tool call recorded: ${record_tool}` }],
+          content: [{ type: 'text' as const, text: 'Tool call recorded.' }],
         };
       }
 

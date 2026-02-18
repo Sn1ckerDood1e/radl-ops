@@ -32,9 +32,13 @@ async function fetchJSON<T>(url: string, headers: Record<string, string>, timeou
       headers,
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      logger.debug('fetchJSON non-OK response', { status: response.status, origin: new URL(url).origin });
+      return null;
+    }
     return (await response.json()) as T;
-  } catch {
+  } catch (err) {
+    logger.debug('fetchJSON failed', { error: err instanceof Error ? err.message : 'unknown' });
     return null;
   }
 }
@@ -54,7 +58,7 @@ async function checkVercelDeployments(): Promise<ServiceStatus> {
   }
 
   const data = await fetchJSON<{ deployments: VercelDeployment[] }>(
-    `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5&target=production`,
+    `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=5&target=production`,
     { Authorization: `Bearer ${token}` },
   );
 
@@ -68,7 +72,6 @@ async function checkVercelDeployments(): Promise<ServiceStatus> {
   }
 
   const latest = deployments[0];
-  const latestTime = new Date(latest.createdAt).toISOString();
   const hoursAgo = Math.round((Date.now() - latest.createdAt) / (1000 * 60 * 60));
 
   const failedRecent = deployments.filter(d => d.readyState === 'ERROR').length;
@@ -99,15 +102,15 @@ async function checkSupabaseHealth(): Promise<ServiceStatus> {
   }
 
   // Check project health via Management API
+  // NOTE: Do NOT add database.host or connection strings — output flows to Anthropic API via briefings
   interface SupabaseProject {
     status: string;
     name: string;
     region: string;
-    database?: { host: string };
   }
 
   const project = await fetchJSON<SupabaseProject>(
-    `https://api.supabase.com/v1/projects/${projectId}`,
+    `https://api.supabase.com/v1/projects/${encodeURIComponent(projectId)}`,
     { Authorization: `Bearer ${accessToken}` },
   );
 
@@ -123,7 +126,7 @@ async function checkSupabaseHealth(): Promise<ServiceStatus> {
 
   // Also check for recent auth errors via health endpoint
   const health = await fetchJSON<{ status: string }>(
-    `https://api.supabase.com/v1/projects/${projectId}/health`,
+    `https://api.supabase.com/v1/projects/${encodeURIComponent(projectId)}/health`,
     { Authorization: `Bearer ${accessToken}` },
   );
 
@@ -159,7 +162,7 @@ async function checkSentryErrors(): Promise<ServiceStatus> {
   }
 
   const issues = await fetchJSON<SentryIssue[]>(
-    `https://sentry.io/api/0/projects/${org}/${project}/issues/?query=is:unresolved&statsPeriod=24h&sort=freq`,
+    `https://sentry.io/api/0/projects/${encodeURIComponent(org)}/${encodeURIComponent(project)}/issues/?query=is:unresolved&statsPeriod=24h&sort=freq`,
     { Authorization: `Bearer ${authToken}` },
   );
 
@@ -200,7 +203,7 @@ async function checkGitHubIssues(): Promise<ServiceStatus> {
   }
 
   const issues = await fetchJSON<GitHubIssue[]>(
-    `https://api.github.com/repos/${owner}/${repo}/issues?state=open&per_page=10&sort=created&direction=desc`,
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues?state=open&per_page=10&sort=created&direction=desc`,
     { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' },
   );
 
