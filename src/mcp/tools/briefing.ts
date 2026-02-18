@@ -18,6 +18,58 @@ import { getCostSummaryForBriefing } from '../../models/token-tracker.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { withRetry } from '../../utils/retry.js';
+import { readFileSync, existsSync } from 'fs';
+import { getConfig } from '../../config/paths.js';
+
+interface DeferredItem {
+  title: string;
+  effort: string;
+  sprintPhase: string;
+  resolved: boolean;
+}
+
+interface DeferredStore {
+  items: DeferredItem[];
+}
+
+function loadDeferredItems(): DeferredStore {
+  const path = `${getConfig().knowledgeDir}/deferred.json`;
+  if (!existsSync(path)) return { items: [] };
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as DeferredStore;
+  } catch {
+    return { items: [] };
+  }
+}
+
+function getDeferredSummary(): string {
+  const store = loadDeferredItems();
+  const unresolved = store.items.filter(i => !i.resolved);
+  if (unresolved.length === 0) return '';
+
+  const byEffort = { small: 0, medium: 0, large: 0 };
+  for (const item of unresolved) {
+    const effort = item.effort as keyof typeof byEffort;
+    if (effort in byEffort) byEffort[effort]++;
+  }
+
+  const lines = [
+    `${unresolved.length} unresolved (${byEffort.small} small, ${byEffort.medium} medium, ${byEffort.large} large)`,
+  ];
+
+  // Show oldest 3 items
+  const oldest = unresolved.slice(0, 3);
+  for (const item of oldest) {
+    lines.push(`- [${item.effort}] ${item.title} (from ${item.sprintPhase})`);
+  }
+
+  return lines.join('\n');
+}
+
+function countDeferred(): number {
+  const store = loadDeferredItems();
+  return store.items.filter(i => !i.resolved).length;
+}
 
 const DAILY_BRIEFING_CRITERIA = [
   'Completeness: Covers summary, metrics, priorities, blockers, wins, and API costs',
@@ -42,29 +94,43 @@ export function registerBriefingTools(server: McpServer): void {
     {
       github_context: z.string().max(5000).optional()
         .describe('GitHub data to include (open issues, PRs, recent commits). Gather with mcp__github__* tools and pass here.'),
+      monitoring_context: z.string().max(3000).optional()
+        .describe('Production status from production_status tool output. Include deployment health, error counts, service status.'),
+      calendar_context: z.string().max(2000).optional()
+        .describe('Today\'s calendar events from Google Calendar MCP. Include meetings, blocked time, deadlines.'),
+      deferred_context: z.string().max(2000).optional()
+        .describe('Deferred tech debt summary. Auto-populated if omitted — pass "none" to skip.'),
       custom_focus: z.string().max(500).optional()
         .describe('Custom area to focus on in the briefing'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    withErrorTracking('daily_briefing', async ({ github_context, custom_focus }) => {
+    withErrorTracking('daily_briefing', async ({ github_context, monitoring_context, calendar_context, deferred_context, custom_focus }) => {
       const costSummary = getCostSummaryForBriefing();
       const date = new Date().toISOString().split('T')[0];
+
+      // Auto-populate deferred context if not provided
+      const deferredSummary = deferred_context === 'none' ? ''
+        : deferred_context ?? getDeferredSummary();
 
       const prompt = `Generate a concise daily briefing for Radl (a rowing team management SaaS).
 
 Date: ${date}
 
 ${github_context ? `GitHub Activity:\n${github_context}\n` : ''}
+${monitoring_context ? `Production Status:\n${monitoring_context}\n` : ''}
+${calendar_context ? `Today's Calendar:\n${calendar_context}\n` : ''}
+${deferredSummary ? `Tech Debt (${countDeferred()} items):\n${deferredSummary}\n` : ''}
 API Costs: ${costSummary}
 ${custom_focus ? `\nCustom focus area: ${custom_focus}` : ''}
 
 Format the briefing as:
 1. **Summary** - 2-3 sentence overview
 2. **Key Metrics** - Important numbers at a glance
-3. **Today's Priorities** - Top 3-5 actionable items
-4. **Blockers/Risks** - Any issues that need attention
-5. **Wins** - Recent accomplishments to celebrate
-6. **API Costs** - Token usage and costs
+3. **Today's Priorities** - Top 3-5 actionable items (consider calendar and tech debt)
+4. **Production Health** - Service status and any issues (if monitoring data available)
+5. **Blockers/Risks** - Any issues that need attention
+6. **Wins** - Recent accomplishments to celebrate
+7. **API Costs** - Token usage and costs
 
 Keep it brief and actionable. Use bullet points.`;
 
@@ -97,30 +163,40 @@ Keep it brief and actionable. Use bullet points.`;
     {
       github_context: z.string().max(10000).optional()
         .describe('GitHub data for the week (commits, PRs merged, issues closed)'),
+      monitoring_context: z.string().max(3000).optional()
+        .describe('Production status summary for the week. Include uptime, incidents, deployment stats.'),
+      calendar_context: z.string().max(3000).optional()
+        .describe('Week\'s calendar summary from Google Calendar MCP. Include sprints completed, meetings held.'),
       week_start: z.string().optional()
         .describe('Start date of the week (YYYY-MM-DD, defaults to 7 days ago)'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    withErrorTracking('weekly_briefing', async ({ github_context, week_start }) => {
+    withErrorTracking('weekly_briefing', async ({ github_context, monitoring_context, calendar_context, week_start }) => {
       const start = week_start ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const end = new Date().toISOString().split('T')[0];
       const costSummary = getCostSummaryForBriefing();
+      const deferredSummary = getDeferredSummary();
 
       const prompt = `Generate a comprehensive weekly briefing for Radl (a rowing team management SaaS).
 
 Week: ${start} to ${end}
 
 ${github_context ? `GitHub Activity:\n${github_context}\n` : ''}
+${monitoring_context ? `Production Health This Week:\n${monitoring_context}\n` : ''}
+${calendar_context ? `Calendar Summary:\n${calendar_context}\n` : ''}
+${deferredSummary ? `Tech Debt Backlog (${countDeferred()} items):\n${deferredSummary}\n` : ''}
 API Costs: ${costSummary}
 
 Format the briefing as:
 1. **Week in Review** - High-level summary of the week
 2. **Development Progress** - Features shipped, bugs fixed, technical debt addressed
-3. **Metrics & Trends** - Key numbers and how they changed
-4. **Challenges Faced** - Problems encountered and how they were addressed
-5. **Next Week's Goals** - Top 3-5 priorities for the coming week
-6. **Strategic Notes** - Any longer-term considerations
-7. **API Costs** - Weekly token usage and costs
+3. **Production Health** - Deployment success rate, incidents, error trends
+4. **Metrics & Trends** - Key numbers and how they changed
+5. **Challenges Faced** - Problems encountered and how they were addressed
+6. **Tech Debt Status** - Items addressed, new items added, aging items
+7. **Next Week's Goals** - Top 3-5 priorities for the coming week
+8. **Strategic Notes** - Any longer-term considerations
+9. **API Costs** - Weekly token usage and costs
 
 Be thorough but organized. Use headers and bullet points.`;
 

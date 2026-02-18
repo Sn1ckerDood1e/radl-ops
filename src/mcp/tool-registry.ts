@@ -42,6 +42,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'trust_report', 'trust_record',
       'speculative_validate', 'cognitive_load',
       'record_review', 'resolve_review',
+      'production_status', 'session_health',
     ],
     defaultEnabled: true,
   },

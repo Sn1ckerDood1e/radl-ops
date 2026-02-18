@@ -58,6 +58,21 @@ export const config = {
     url: optionalEnv('SUPABASE_URL'),
     anonKey: optionalEnv('SUPABASE_ANON_KEY'),
     serviceKey: optionalEnv('SUPABASE_SERVICE_KEY'),
+    projectId: optionalEnv('SUPABASE_PROJECT_ID'),
+    accessToken: optionalEnv('SUPABASE_ACCESS_TOKEN'),
+  },
+
+  // Vercel
+  vercel: {
+    token: optionalEnv('VERCEL_TOKEN'),
+    projectId: optionalEnv('VERCEL_PROJECT_ID'),
+  },
+
+  // Sentry
+  sentry: {
+    authToken: optionalEnv('SENTRY_AUTH_TOKEN'),
+    org: optionalEnv('SENTRY_ORG'),
+    project: optionalEnv('SENTRY_PROJECT'),
   },
 
   // Email
