@@ -325,6 +325,63 @@ function formatCheckForDisplay(check: CrystallizedCheck): string {
 }
 
 // ============================================
+// Exportable Core Logic (for auto-invocation)
+// ============================================
+
+/**
+ * Propose crystallized checks from lessons that meet the frequency threshold.
+ * Saves proposals to crystallized.json with status 'proposed'.
+ * Returns the number of checks proposed.
+ *
+ * Used by sprint_complete every N sprints to auto-propose checks.
+ * Cost: ~$0.002 per call (Haiku).
+ */
+export async function proposeChecksFromLessons(minFrequency: number = 1): Promise<number> {
+  const lessonsFile = loadLessons();
+  const qualifyingLessons = lessonsFile.lessons.filter(
+    l => (l.frequency ?? 1) >= minFrequency,
+  );
+
+  if (qualifyingLessons.length === 0) {
+    return 0;
+  }
+
+  const { proposals } = await proposeChecks(qualifyingLessons);
+  if (proposals.length === 0) {
+    return 0;
+  }
+
+  const crystallized = loadCrystallized();
+  const nextId = crystallized.checks.reduce((max, c) => Math.max(max, c.id), 0) + 1;
+  const now = new Date().toISOString();
+
+  const newChecks: CrystallizedCheck[] = proposals.map((p, i) => ({
+    id: nextId + i,
+    lessonIds: p.lessonIds,
+    trigger: p.trigger,
+    triggerKeywords: p.triggerKeywords,
+    check: p.check,
+    checkType: p.checkType,
+    grepPattern: p.grepPattern,
+    status: 'proposed' as const,
+    proposedAt: now,
+    approvedAt: null,
+    catches: 0,
+    falsePositives: 0,
+    demotedAt: null,
+    demotionReason: null,
+  }));
+
+  const updatedCrystallized: CrystallizedFile = {
+    checks: [...crystallized.checks, ...newChecks],
+  };
+  saveCrystallized(updatedCrystallized);
+
+  logger.info('Auto-crystallization proposals saved', { count: newChecks.length });
+  return newChecks.length;
+}
+
+// ============================================
 // MCP Tool Registration
 // ============================================
 

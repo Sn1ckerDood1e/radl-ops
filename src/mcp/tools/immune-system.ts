@@ -323,6 +323,97 @@ function formatAntibodyTable(antibodies: Antibody[]): string {
 }
 
 // ============================================
+// Exportable Core Logic (for auto-invocation)
+// ============================================
+
+/**
+ * Core antibody creation logic. Calls Haiku to classify a bug description
+ * into an antibody and saves it to the store. Returns the antibody id and
+ * trigger, or null if classification failed.
+ *
+ * Used by sprint_complete for auto-creating antibodies from review findings.
+ * Cost: ~$0.001 per call (Haiku).
+ */
+export async function createAntibodyCore(
+  bugDescription: string,
+  codeContext?: string,
+  sprintPhase?: string,
+): Promise<{ id: number; trigger: string } | null> {
+  const route = getRoute('spot_check');
+  const phase = sprintPhase ?? 'unknown';
+
+  const userMessage = [
+    `Bug description: ${sanitizeForPrompt(bugDescription)}`,
+    codeContext ? `\nCode context:\n${sanitizeForPrompt(codeContext)}` : '',
+    phase !== 'unknown' ? `\nSprint phase: ${sanitizeForPrompt(phase)}` : '',
+  ].filter(Boolean).join('\n');
+
+  const response = await withRetry(
+    () => getAnthropicClient().messages.create({
+      model: route.model,
+      max_tokens: route.maxTokens,
+      system: CLASSIFY_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userMessage }],
+      tools: [CLASSIFY_TOOL],
+      tool_choice: { type: 'tool', name: 'classify_antibody' },
+    }),
+    { maxRetries: 2, baseDelayMs: 1000 },
+  );
+
+  const cost = calculateCost(
+    route.model,
+    response.usage.input_tokens,
+    response.usage.output_tokens,
+  );
+
+  trackUsage(
+    route.model,
+    response.usage.input_tokens,
+    response.usage.output_tokens,
+    'spot_check',
+    'antibody-create',
+  );
+
+  const classified = parseClassifyResponse(response);
+  if (!classified) {
+    return null;
+  }
+
+  const store = loadAntibodies();
+  const nextId = store.antibodies.reduce((max, ab) => Math.max(max, ab.id), 0) + 1;
+
+  const newAntibody: Antibody = {
+    id: nextId,
+    trigger: classified.trigger,
+    triggerKeywords: classified.triggerKeywords,
+    check: classified.check,
+    checkType: classified.checkType,
+    checkPattern: classified.checkPattern,
+    origin: { sprint: phase, bug: bugDescription.substring(0, 200) },
+    catches: 0,
+    falsePositives: 0,
+    falsePositiveRate: 0,
+    active: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  const updatedStore: AntibodyStore = {
+    antibodies: [...store.antibodies, newAntibody],
+  };
+  saveAntibodies(updatedStore);
+
+  logger.info('Antibody created', {
+    id: nextId,
+    trigger: classified.trigger,
+    checkType: classified.checkType,
+    keywordCount: classified.triggerKeywords.length,
+    cost,
+  });
+
+  return { id: nextId, trigger: classified.trigger };
+}
+
+// ============================================
 // MCP Registration
 // ============================================
 
@@ -342,49 +433,15 @@ export function registerImmuneSystemTools(server: McpServer): void {
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('antibody_create', async ({ bug_description, code_context, sprint_phase }) => {
-      const route = getRoute('spot_check');
-      const phase = sprint_phase ?? 'unknown';
-
       logger.info('Creating antibody from bug description', {
         descriptionLength: bug_description.length,
         hasCodeContext: !!code_context,
-        phase,
+        phase: sprint_phase ?? 'unknown',
       });
 
-      const userMessage = [
-        `Bug description: ${sanitizeForPrompt(bug_description)}`,
-        code_context ? `\nCode context:\n${sanitizeForPrompt(code_context)}` : '',
-        phase !== 'unknown' ? `\nSprint phase: ${sanitizeForPrompt(phase)}` : '',
-      ].filter(Boolean).join('\n');
+      const result = await createAntibodyCore(bug_description, code_context, sprint_phase);
 
-      const response = await withRetry(
-        () => getAnthropicClient().messages.create({
-          model: route.model,
-          max_tokens: route.maxTokens,
-          system: CLASSIFY_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userMessage }],
-          tools: [CLASSIFY_TOOL],
-          tool_choice: { type: 'tool', name: 'classify_antibody' },
-        }),
-        { maxRetries: 2, baseDelayMs: 1000 },
-      );
-
-      const cost = calculateCost(
-        route.model,
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-      );
-
-      trackUsage(
-        route.model,
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-        'spot_check',
-        'antibody-create',
-      );
-
-      const classified = parseClassifyResponse(response);
-      if (!classified) {
+      if (!result) {
         return {
           content: [{
             type: 'text' as const,
@@ -395,52 +452,24 @@ export function registerImmuneSystemTools(server: McpServer): void {
       }
 
       const store = loadAntibodies();
-      const nextId = store.antibodies.reduce((max, ab) => Math.max(max, ab.id), 0) + 1;
-
-      const newAntibody: Antibody = {
-        id: nextId,
-        trigger: classified.trigger,
-        triggerKeywords: classified.triggerKeywords,
-        check: classified.check,
-        checkType: classified.checkType,
-        checkPattern: classified.checkPattern,
-        origin: { sprint: phase, bug: bug_description.substring(0, 200) },
-        catches: 0,
-        falsePositives: 0,
-        falsePositiveRate: 0,
-        active: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      const updatedStore: AntibodyStore = {
-        antibodies: [...store.antibodies, newAntibody],
-      };
-      saveAntibodies(updatedStore);
-
-      logger.info('Antibody created', {
-        id: nextId,
-        trigger: classified.trigger,
-        checkType: classified.checkType,
-        keywordCount: classified.triggerKeywords.length,
-        cost,
-      });
+      const antibody = store.antibodies.find(ab => ab.id === result.id);
 
       const lines: string[] = [
-        `## Antibody #${nextId} Created`,
+        `## Antibody #${result.id} Created`,
         '',
-        `**Trigger:** ${classified.trigger}`,
-        `**Keywords:** ${classified.triggerKeywords.join(', ')}`,
-        `**Check:** ${classified.check}`,
-        `**Type:** ${classified.checkType}`,
+        `**Trigger:** ${antibody?.trigger ?? result.trigger}`,
+        `**Keywords:** ${antibody?.triggerKeywords.join(', ') ?? ''}`,
+        `**Check:** ${antibody?.check ?? ''}`,
+        `**Type:** ${antibody?.checkType ?? 'manual'}`,
       ];
 
-      if (classified.checkType === 'grep' && classified.checkPattern) {
-        lines.push(`**Pattern:** \`${classified.checkPattern}\``);
+      if (antibody?.checkType === 'grep' && antibody.checkPattern) {
+        lines.push(`**Pattern:** \`${antibody.checkPattern}\``);
       }
 
-      lines.push(`**Origin:** Sprint ${phase}`);
+      lines.push(`**Origin:** Sprint ${sprint_phase ?? 'unknown'}`);
       lines.push('');
-      lines.push(`_Cost: $${cost} (Haiku)_`);
+      lines.push(`_Cost: ~$0.001 (Haiku)_`);
 
       return {
         content: [{ type: 'text' as const, text: lines.join('\n') }],

@@ -24,6 +24,8 @@ import type { SprintData } from '../../patterns/bloom-orchestrator.js';
 import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport } from './shared/plan-store.js';
 import { extractCausalPairs } from './causal-graph.js';
 import { addDataPoint, inferTaskType, inferComplexity } from './shared/estimation.js';
+import { createAntibodyCore } from './immune-system.js';
+import { proposeChecksFromLessons } from './crystallization.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
@@ -791,6 +793,24 @@ export function registerSprintTools(server: McpServer): void {
         } catch (error) {
           logger.warn('Trust recording for bloom quality failed (non-fatal)', { error: String(error) });
         }
+
+        // A3: Auto-propose crystallized checks every 5 sprints
+        try {
+          const knowledgeDir2 = getConfig().knowledgeDir;
+          const compoundDir2 = join(knowledgeDir2, 'compounds');
+          if (existsSync(compoundDir2)) {
+            const bloomCount = readdirSync(compoundDir2)
+              .filter(f => f.startsWith('bloom-') && f.endsWith('.json')).length;
+            if (bloomCount > 0 && bloomCount % 5 === 0) {
+              const proposed = await proposeChecksFromLessons(1);
+              if (proposed > 0) {
+                logger.info('Auto-crystallization proposed checks', { count: proposed, bloomCount });
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn('Auto-crystallization failed (non-fatal)', { error: String(error) });
+        }
       }
 
       // Auto-record cognitive load calibration
@@ -850,6 +870,31 @@ export function registerSprintTools(server: McpServer): void {
         reviewNote += `\nUNRESOLVED FINDINGS: ${unresolved.critical} CRITICAL, ${unresolved.high} HIGH — address before merging.`;
       }
 
+      // A2: Auto-create antibodies from CRITICAL/HIGH review findings
+      let antibodyNote = '';
+      if (auto_extract !== false && findings.length > 0) {
+        try {
+          const criticalHighFindings = findings.filter(
+            f => f.severity === 'CRITICAL' || f.severity === 'HIGH',
+          );
+          const toProcess = criticalHighFindings.slice(0, 3); // Cap at 3 per sprint
+          let created = 0;
+          for (const finding of toProcess) {
+            const result = await createAntibodyCore(
+              finding.description,
+              undefined,
+              sprintPhase,
+            );
+            if (result) created++;
+          }
+          if (created > 0) {
+            antibodyNote = `\nAntibodies created: ${created} from ${criticalHighFindings.length} CRITICAL/HIGH findings`;
+          }
+        } catch (error) {
+          logger.warn('Auto antibody creation failed (non-fatal)', { error: String(error) });
+        }
+      }
+
       // D1-D3: Sprint quality gate warnings
       let qualityNote = '';
       {
@@ -907,7 +952,7 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${qualityNote}${calendarNote}` }] };
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${antibodyNote}${qualityNote}${calendarNote}` }] };
     })
   );
 
