@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync, readdirSync, mkdir
 import { recordTrustDecision } from './quality-ratchet.js';
 import { createAntibodyCore } from './immune-system.js';
 import { addDataPoint } from './shared/estimation.js';
+import { proposeChecksFromLessons } from './crystallization.js';
 
 // Mock child_process to avoid running actual commands
 vi.mock('child_process', () => ({
@@ -774,7 +775,35 @@ describe('Sprint Tools - Quality Gates (D1-D3)', () => {
     expect(text).toContain('QUALITY NOTE: 1 task on a');
   });
 
-  it('D2: notes when 0 blockers recorded', async () => {
+  it('D2: notes when 0 blockers recorded (with sprint data)', async () => {
+    const sprintData = {
+      phase: 'Phase 92',
+      title: 'Test Sprint',
+      status: 'completed',
+      estimate: '1 hour',
+      completedTasks: ['task 1'],
+      blockers: [],
+    };
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      if (typeof p === 'string' && p.includes('current.json')) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(sprintData));
+    vi.mocked(readdirSync).mockReturnValue([] as any);
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: false,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('QUALITY NOTE: 0 blockers recorded');
+  });
+
+  it('D2: does not fire when no sprint data exists', async () => {
     vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
     vi.mocked(existsSync).mockReturnValue(false);
 
@@ -786,7 +815,7 @@ describe('Sprint Tools - Quality Gates (D1-D3)', () => {
     });
     const text = result.content[0].text;
 
-    expect(text).toContain('QUALITY NOTE: 0 blockers recorded');
+    expect(text).not.toContain('QUALITY NOTE: 0 blockers recorded');
   });
 
   it('D3: warns when actual < 30% of estimate', async () => {
@@ -951,5 +980,45 @@ describe('Sprint Tools - Antibody Auto-Create (A2)', () => {
     });
 
     expect(createAntibodyCore).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sprint Tools - Crystallize Auto-Propose (A3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(execSync).mockReturnValue('feat/test\n');
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+  });
+
+  it('triggers proposeChecksFromLessons at every 5th bloom file', async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readdirSync).mockReturnValue(
+      Array.from({ length: 5 }, (_, i) => `bloom-2026-0${i + 1}.json`) as any,
+    );
+    vi.mocked(readFileSync).mockReturnValue('{}');
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+    });
+
+    expect(proposeChecksFromLessons).toHaveBeenCalledWith(1);
+  });
+
+  it('does not trigger proposeChecksFromLessons at non-multiple of 5', async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readdirSync).mockReturnValue(
+      Array.from({ length: 3 }, (_, i) => `bloom-2026-0${i + 1}.json`) as any,
+    );
+    vi.mocked(readFileSync).mockReturnValue('{}');
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+    });
+
+    expect(proposeChecksFromLessons).not.toHaveBeenCalled();
   });
 });

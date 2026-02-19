@@ -754,7 +754,7 @@ export function registerSprintTools(server: McpServer): void {
               addDataPoint({
                 sprintPhase,
                 taskType: inferTaskType(sprintTitle),
-                fileCount: 0,
+                fileCount: 0, // not tracked at sprint_complete level
                 estimatedMinutes: estimateMinutes,
                 actualMinutes,
                 complexity: inferComplexity(taskCount),
@@ -912,11 +912,12 @@ export function registerSprintTools(server: McpServer): void {
           qualityWarnings.push('QUALITY NOTE: 1 task on a ' + estimateStr + ' sprint — consider decomposing into smaller tasks');
         }
 
-        // D2: Blocker tracking
-        const blockers = completedRaw && Array.isArray(completedRaw.blockers)
-          ? completedRaw.blockers : [];
-        if (blockers.length === 0) {
-          qualityWarnings.push('QUALITY NOTE: 0 blockers recorded — if none occurred, great! Otherwise consider documenting them');
+        // D2: Blocker tracking (only when sprint data exists — skip if no completedRaw)
+        if (completedRaw) {
+          const blockers = Array.isArray(completedRaw.blockers) ? completedRaw.blockers : [];
+          if (blockers.length === 0) {
+            qualityWarnings.push('QUALITY NOTE: 0 blockers recorded — if none occurred, great! Otherwise consider documenting them');
+          }
         }
 
         // D3: Estimation accuracy red flag
