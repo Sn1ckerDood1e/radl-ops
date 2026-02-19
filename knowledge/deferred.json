@@ -7,7 +7,7 @@
       "effort": "small",
       "sprintPhase": "Phase 64",
       "date": "2026-02-11T23:31:06.000Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 2,
@@ -16,7 +16,7 @@
       "effort": "small",
       "sprintPhase": "Phase 64",
       "date": "2026-02-11T23:31:06.000Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 3,
@@ -25,7 +25,7 @@
       "effort": "small",
       "sprintPhase": "Phase 65",
       "date": "2026-02-12T00:10:31.052Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 4,
@@ -39,38 +39,38 @@
     {
       "id": 5,
       "title": "Multi-child parent dashboard",
-      "reason": "Dashboard only shows first linked athlete; multi-child support deferred",
+      "reason": "Dashboard only shows first linked athlete; multi-child support deferred. Superseded by #25.",
       "effort": "medium",
       "sprintPhase": "Phase 66.2",
       "date": "2026-02-12T13:52:52.810Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 6,
       "title": "Contact Coach button in parent empty state",
-      "reason": "Low priority UX enhancement for parent with no linked athlete",
+      "reason": "Low priority UX enhancement for parent with no linked athlete. Superseded by #26.",
       "effort": "small",
       "sprintPhase": "Phase 66.2",
       "date": "2026-02-12T13:52:52.811Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 7,
       "title": "Extract dashboard data fetching branches",
-      "reason": "Dashboard page.tsx approaching 400 lines; could extract coach/parent/athlete branches",
+      "reason": "Dashboard page.tsx approaching 400 lines; could extract coach/parent/athlete branches. Resolved: dashboard refactored in Phase 69+.",
       "effort": "small",
       "sprintPhase": "Phase 66.2",
       "date": "2026-02-12T13:52:52.811Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 8,
       "title": "aria-labels for icon-only buttons",
-      "reason": "~60-80 buttons need labels, estimated 3-5 hours of careful audit",
+      "reason": "~60-80 buttons need labels, estimated 3-5 hours of careful audit. Superseded by #27.",
       "effort": "large",
       "sprintPhase": "Phase 67",
       "date": "2026-02-12T15:04:00.764Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 9,
@@ -79,16 +79,16 @@
       "effort": "large",
       "sprintPhase": "Phase 67",
       "date": "2026-02-12T15:04:00.765Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 10,
       "title": "Component/E2E test coverage",
-      "reason": "Zero component tests currently, large effort needs dedicated sprint",
+      "reason": "Zero component tests currently, large effort needs dedicated sprint. Superseded by #28.",
       "effort": "large",
       "sprintPhase": "Phase 67",
       "date": "2026-02-12T15:04:00.765Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 11,
@@ -102,11 +102,11 @@
     {
       "id": 12,
       "title": "ConfirmDialog unit tests",
-      "reason": "No existing test patterns for shared UI components — better as part of a test coverage sprint",
+      "reason": "No existing test patterns for shared UI components — better as part of a test coverage sprint. Superseded by #29.",
       "effort": "small",
       "sprintPhase": "Phase 68",
       "date": "2026-02-12T15:37:45.356Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 13,
@@ -120,29 +120,29 @@
     {
       "id": 14,
       "title": "Date range validation on practice duplication",
-      "reason": "Medium priority from security review — coach could create practices with unreasonable dates",
+      "reason": "Medium priority from security review — coach could create practices with unreasonable dates. Resolved: validation added in Phase 85.",
       "effort": "small",
       "sprintPhase": "Phase 69",
       "date": "2026-02-12T21:48:32.150Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 15,
       "title": "Improve error handling in checklist dismiss",
-      "reason": "Medium priority from security review — errors silently swallowed",
+      "reason": "Medium priority from security review — errors silently swallowed. Resolved: error handling fixed in Phase 85.",
       "effort": "small",
       "sprintPhase": "Phase 69",
       "date": "2026-02-12T21:48:32.150Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 16,
       "title": "Extract parent dashboard queries to separate module",
-      "reason": "page.tsx approaching 500+ lines — code review recommended extraction",
+      "reason": "page.tsx approaching 500+ lines — code review recommended extraction. Resolved: dashboard refactored in Phase 69+.",
       "effort": "small",
       "sprintPhase": "Phase 69",
       "date": "2026-02-12T21:48:32.150Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 17,
@@ -183,37 +183,136 @@
     {
       "id": 21,
       "title": "Google Calendar MCP OAuth setup",
-      "reason": "Requires user to create OAuth credentials in Google Cloud Console — blocking dependency",
+      "reason": "Requires user to create OAuth credentials in Google Cloud Console — blocking dependency. Resolved: Phase 88 fully implemented.",
       "effort": "small",
       "sprintPhase": "Phase 87",
       "date": "2026-02-18T16:48:32.432Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 22,
       "title": "Gmail briefing delivery via Google Workspace MCP",
-      "reason": "Blocked on Google OAuth setup",
+      "reason": "Blocked on Google OAuth setup. Resolved: Phase 88 fully implemented.",
       "effort": "medium",
       "sprintPhase": "Phase 87",
       "date": "2026-02-18T16:48:32.432Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 23,
       "title": "Critical alert system via Gmail",
-      "reason": "Blocked on Google OAuth setup — needs Gmail send capability",
+      "reason": "Blocked on Google OAuth setup — needs Gmail send capability. Resolved: Phase 88 fully implemented.",
       "effort": "medium",
       "sprintPhase": "Phase 87",
       "date": "2026-02-18T16:48:32.432Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 24,
       "title": "Production status test coverage — behavioral tests",
-      "reason": "Code reviewer flagged smoke-only tests, need proper mocking of fetch calls",
+      "reason": "Code reviewer flagged smoke-only tests, need proper mocking of fetch calls. Superseded by #32.",
       "effort": "small",
       "sprintPhase": "Phase 87",
       "date": "2026-02-18T16:48:32.432Z",
+      "resolved": true
+    },
+    {
+      "id": 25,
+      "title": "Multi-child parent dashboard",
+      "reason": "Medium feature work — needs design for multi-athlete selector UX",
+      "effort": "medium",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": false
+    },
+    {
+      "id": 26,
+      "title": "Contact Coach button in parent empty state",
+      "reason": "Needs coach data fetch from API — not a simple text change",
+      "effort": "small",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": false
+    },
+    {
+      "id": 27,
+      "title": "aria-labels for icon-only buttons",
+      "reason": "Large accessibility sweep across full codebase",
+      "effort": "large",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": false
+    },
+    {
+      "id": 28,
+      "title": "Component/E2E test coverage",
+      "reason": "Infrastructure investment — needs Playwright setup and test patterns",
+      "effort": "large",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": false
+    },
+    {
+      "id": 29,
+      "title": "ConfirmDialog unit tests",
+      "reason": "No existing test patterns for shared UI components",
+      "effort": "small",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": false
+    },
+    {
+      "id": 30,
+      "title": "Gmail briefing delivery via Google Workspace MCP",
+      "reason": "Radl-ops feature — needs briefing template + Gmail API integration. Resolved: Phase 88 fully implemented.",
+      "effort": "medium",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": true
+    },
+    {
+      "id": 31,
+      "title": "Critical alert system via Gmail",
+      "reason": "Radl-ops feature — needs polling script + alert rules. Resolved: Phase 88 fully implemented.",
+      "effort": "medium",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": true
+    },
+    {
+      "id": 32,
+      "title": "Production status test coverage",
+      "reason": "Radl-ops tests — needs fetch mocking for Vercel/Sentry/Supabase APIs",
+      "effort": "small",
+      "sprintPhase": "Phase 89",
+      "date": "2026-02-18T19:46:32.991Z",
+      "resolved": false
+    },
+    {
+      "id": 33,
+      "title": "HTML entity escaping in markdownToHtml",
+      "reason": "M3 from security review: LLM output could contain raw HTML. Low risk since internal email only, but structurally should escape before regex transforms.",
+      "effort": "small",
+      "sprintPhase": "Phase 90",
+      "date": "2026-02-19T13:11:36.214Z",
+      "resolved": false
+    },
+    {
+      "id": 34,
+      "title": "Rotate Anthropic API key (in git history from Phase 57)",
+      "reason": "M1 from security review: sk-ant-api03 key found in commit 26c618070. Pre-existing, not introduced by this branch.",
+      "effort": "small",
+      "sprintPhase": "Phase 90",
+      "date": "2026-02-19T13:11:36.214Z",
+      "resolved": false
+    },
+    {
+      "id": 35,
+      "title": "Session health behavioral tests for signal detectors",
+      "reason": "MEDIUM from code review: no tests for new action_repetition detector or other signal detectors.",
+      "effort": "medium",
+      "sprintPhase": "Phase 90",
+      "date": "2026-02-19T13:11:36.214Z",
       "resolved": false
     }
   ]
