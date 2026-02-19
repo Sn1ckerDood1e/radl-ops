@@ -32,11 +32,18 @@ fi
 # Change to radl-ops directory for CLAUDE.md context
 cd /home/hb/radl-ops
 
+if [ ! -x "$CLAUDE_BIN" ]; then
+    echo "[$DATE] ERROR: Claude binary not found at $CLAUDE_BIN"
+    exit 1
+fi
+
 echo "[$DATE] Generating weekly briefing ($WEEK_START to $DATE) with Gmail delivery..."
 
 # Generate and deliver briefing using Claude Code with MCP tools
+# bypassPermissions: required for autonomous cron execution (no human in the loop)
+# max-turns 12: primary rate-limiting guard for eval-opt loops
 set +e
-$CLAUDE_BIN -p "
+"$CLAUDE_BIN" -p "
 Generate and deliver the weekly briefing for the week of $WEEK_START to $DATE.
 
 Steps:

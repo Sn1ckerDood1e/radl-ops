@@ -135,6 +135,14 @@ export async function sendGmail(params: {
 }): Promise<{ messageId: string }> {
   const token = await getAccessToken();
 
+  // Guard against email header injection (CRLF in To/Subject)
+  if (/[\r\n]/.test(params.to)) {
+    throw new Error('Invalid email address: contains line break characters');
+  }
+  if (/[\r\n]/.test(params.subject)) {
+    throw new Error('Invalid subject: contains line break characters');
+  }
+
   // Build RFC 2822 MIME message
   const boundary = `boundary_${Date.now()}`;
   const message = [
