@@ -24,6 +24,7 @@ import type { SprintData } from '../../patterns/bloom-orchestrator.js';
 import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport } from './shared/plan-store.js';
 import { extractCausalPairs } from './causal-graph.js';
 import { addDataPoint, inferTaskType, inferComplexity } from './shared/estimation.js';
+import { parseTimeToMinutes, evaluateQualityGates } from './shared/quality-gates.js';
 import { createAntibodyCore } from './immune-system.js';
 import { proposeChecksFromLessons } from './crystallization.js';
 import { recordTrustDecision } from './quality-ratchet.js';
@@ -409,14 +410,7 @@ function compareValidationWarnings(
   return lines.join('\n');
 }
 
-function parseTimeToMinutes(timeStr: string): number {
-  const hourMatch = timeStr.match(/(\d+(?:\.\d+)?)\s*h/i);
-  const minMatch = timeStr.match(/(\d+)\s*m/i);
-  let total = 0;
-  if (hourMatch) total += parseFloat(hourMatch[1]) * 60;
-  if (minMatch) total += parseInt(minMatch[1], 10);
-  return total;
-}
+// parseTimeToMinutes moved to shared/quality-gates.ts
 
 // Exported for testing
 export { compareValidationWarnings };
@@ -895,40 +889,12 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      // D1-D3: Sprint quality gate warnings
-      let qualityNote = '';
-      {
-        const qualityWarnings: string[] = [];
-        const taskCount = completedRaw && Array.isArray(completedRaw.completedTasks)
-          ? completedRaw.completedTasks.length : completedTaskCount;
-        const estimateStr = completedRaw ? String(completedRaw.estimate ?? '') : '';
-        const estimateMinutes = estimateStr ? parseTimeToMinutes(estimateStr) : 0;
-        const actualMinutes = parseTimeToMinutes(actual_time);
-
-        // D1: Task granularity
-        if (taskCount === 0) {
-          qualityWarnings.push('QUALITY: 0 tasks recorded — consider tracking tasks for future sprints');
-        } else if (taskCount === 1 && estimateMinutes >= 120) {
-          qualityWarnings.push('QUALITY NOTE: 1 task on a ' + estimateStr + ' sprint — consider decomposing into smaller tasks');
-        }
-
-        // D2: Blocker tracking (only when sprint data exists — skip if no completedRaw)
-        if (completedRaw) {
-          const blockers = Array.isArray(completedRaw.blockers) ? completedRaw.blockers : [];
-          if (blockers.length === 0) {
-            qualityWarnings.push('QUALITY NOTE: 0 blockers recorded — if none occurred, great! Otherwise consider documenting them');
-          }
-        }
-
-        // D3: Estimation accuracy red flag
-        if (estimateMinutes > 0 && actualMinutes > 0 && actualMinutes < estimateMinutes * 0.3) {
-          qualityWarnings.push(`QUALITY: Actual (${actual_time}) was <30% of estimate (${estimateStr}) — consider recalibrating estimates`);
-        }
-
-        if (qualityWarnings.length > 0) {
-          qualityNote = '\n' + qualityWarnings.join('\n');
-        }
-      }
+      // D1-D3: Sprint quality gate warnings (extracted to shared/quality-gates.ts)
+      const qualityNote = evaluateQualityGates({
+        completedRaw,
+        completedTaskCount,
+        actualTime: actual_time,
+      });
 
       // Calendar sync: update event with actual results
       let calendarNote = '';
