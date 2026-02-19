@@ -347,7 +347,7 @@ describe('Immune System — antibody_create', () => {
     expect(text).toContain('Adding a new Prisma field');
     expect(text).toContain('prisma, field, handler, route, api, schema');
     expect(text).toContain('grep');
-    expect(text).toContain('Cost: $');
+    expect(text).toContain('Cost: ~$');
 
     const store = loadAntibodies();
     expect(store.antibodies).toHaveLength(1);
@@ -523,6 +523,74 @@ describe('Immune System — antibody_list', () => {
 
     expect(text).toContain('Antibody #1');
     expect(text).not.toContain('Antibody #2');
+  });
+});
+
+describe('Immune System — createAntibodyCore', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    if (existsSync(TEST_KNOWLEDGE_DIR)) {
+      rmSync(TEST_KNOWLEDGE_DIR, { recursive: true });
+    }
+    mkdirSync(TEST_KNOWLEDGE_DIR, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(TEST_KNOWLEDGE_DIR)) {
+      rmSync(TEST_KNOWLEDGE_DIR, { recursive: true });
+    }
+  });
+
+  it('creates antibody and returns id + trigger on success', async () => {
+    const { createAntibodyCore, loadAntibodies } = await import('./immune-system.js');
+
+    mockCreate.mockResolvedValue(makeToolUseResponse({
+      trigger: 'Missing API handler field',
+      triggerKeywords: ['api', 'handler', 'field', 'route'],
+      check: 'Verify handler processes new field',
+      checkType: 'manual',
+      checkPattern: null,
+    }));
+
+    const result = await createAntibodyCore(
+      'API handler did not process the new field',
+      undefined,
+      'Phase 92',
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe(1);
+    expect(result!.trigger).toBe('Missing API handler field');
+
+    const store = loadAntibodies();
+    expect(store.antibodies).toHaveLength(1);
+    expect(store.antibodies[0].origin.sprint).toBe('Phase 92');
+  });
+
+  it('returns null when AI fails to produce structured output', async () => {
+    const { createAntibodyCore } = await import('./immune-system.js');
+
+    mockCreate.mockResolvedValue(makeTextResponse('Cannot classify this'));
+
+    const result = await createAntibodyCore('vague description');
+    expect(result).toBeNull();
+  });
+
+  it('uses unknown phase when not provided', async () => {
+    const { createAntibodyCore, loadAntibodies } = await import('./immune-system.js');
+
+    mockCreate.mockResolvedValue(makeToolUseResponse({
+      trigger: 'Test trigger',
+      triggerKeywords: ['test', 'trigger', 'check'],
+      check: 'Test check',
+      checkType: 'manual',
+      checkPattern: null,
+    }));
+
+    await createAntibodyCore('Some bug description');
+
+    const store = loadAntibodies();
+    expect(store.antibodies[0].origin.sprint).toBe('unknown');
   });
 });
 

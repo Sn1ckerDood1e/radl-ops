@@ -6,6 +6,8 @@ import {
   saveEstimationData,
   addDataPoint,
   getCalibrationFactor,
+  inferTaskType,
+  inferComplexity,
 } from './estimation.js';
 import type { EstimationDataPoint, EstimationModel } from './estimation.js';
 
@@ -194,5 +196,69 @@ describe('getCalibrationFactor', () => {
 
     const factor = getCalibrationFactor();
     expect(factor).toBeCloseTo(0.5, 1);
+  });
+});
+
+describe('inferTaskType', () => {
+  it('returns fix for bug-related keywords', () => {
+    expect(inferTaskType('Fix login bug')).toBe('fix');
+    expect(inferTaskType('Patch authentication')).toBe('fix');
+    expect(inferTaskType('Hotfix for crash')).toBe('fix');
+    expect(inferTaskType('Bug in dashboard')).toBe('fix');
+  });
+
+  it('returns refactor for cleanup keywords', () => {
+    expect(inferTaskType('Refactor auth module')).toBe('refactor');
+    expect(inferTaskType('Code cleanup sprint')).toBe('refactor');
+    expect(inferTaskType('Tech debt reduction')).toBe('refactor');
+  });
+
+  it('returns test for test keywords', () => {
+    expect(inferTaskType('Add unit tests')).toBe('test');
+    expect(inferTaskType('Improve test coverage')).toBe('test');
+    expect(inferTaskType('Write spec for API')).toBe('test');
+  });
+
+  it('returns docs for documentation keywords', () => {
+    expect(inferTaskType('Update documentation')).toBe('docs');
+    expect(inferTaskType('Write README')).toBe('docs');
+    expect(inferTaskType('Add doc comments')).toBe('docs');
+  });
+
+  it('returns migration for migration keywords', () => {
+    expect(inferTaskType('Database migration')).toBe('migration');
+    expect(inferTaskType('Schema migration for teams')).toBe('migration');
+    expect(inferTaskType('Migrate user data')).toBe('migration');
+  });
+
+  it('returns feature as default', () => {
+    expect(inferTaskType('Add user dashboard')).toBe('feature');
+    expect(inferTaskType('Implement lineup management')).toBe('feature');
+    expect(inferTaskType('Wire intelligence layer')).toBe('feature');
+  });
+
+  it('is case insensitive', () => {
+    expect(inferTaskType('FIX LOGIN BUG')).toBe('fix');
+    expect(inferTaskType('REFACTOR AUTH')).toBe('refactor');
+  });
+});
+
+describe('inferComplexity', () => {
+  it('returns low for 0-2 tasks', () => {
+    expect(inferComplexity(0)).toBe('low');
+    expect(inferComplexity(1)).toBe('low');
+    expect(inferComplexity(2)).toBe('low');
+  });
+
+  it('returns medium for 3-5 tasks', () => {
+    expect(inferComplexity(3)).toBe('medium');
+    expect(inferComplexity(4)).toBe('medium');
+    expect(inferComplexity(5)).toBe('medium');
+  });
+
+  it('returns high for 6+ tasks', () => {
+    expect(inferComplexity(6)).toBe('high');
+    expect(inferComplexity(10)).toBe('high');
+    expect(inferComplexity(100)).toBe('high');
   });
 });

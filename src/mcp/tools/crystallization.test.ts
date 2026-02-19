@@ -532,3 +532,101 @@ describe('crystallize_list', () => {
     expect(text).toContain('1 active, 1 proposed, 0 demoted');
   });
 });
+
+describe('proposeChecksFromLessons', () => {
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    mockConfig(tempDir);
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns 0 when no lessons exist', async () => {
+    const { proposeChecksFromLessons } = await import('./crystallization.js');
+    const count = await proposeChecksFromLessons(1);
+    expect(count).toBe(0);
+  });
+
+  it('returns 0 when no lessons meet frequency threshold', async () => {
+    writeFileSync(join(tempDir, 'lessons.json'), JSON.stringify({
+      lessons: [
+        { id: 1, situation: 'test', learning: 'test', date: '2026-01-01', frequency: 1 },
+      ],
+    }));
+
+    const { proposeChecksFromLessons } = await import('./crystallization.js');
+    const count = await proposeChecksFromLessons(3);
+    expect(count).toBe(0);
+  });
+
+  it('proposes checks and saves them when qualifying lessons exist', async () => {
+    writeFileSync(join(tempDir, 'lessons.json'), JSON.stringify({
+      lessons: [
+        { id: 1, situation: 'auth check', learning: 'Always verify auth', date: '2026-01-01', frequency: 5 },
+        { id: 2, situation: 'data flow', learning: 'Trace full path', date: '2026-01-02', frequency: 3 },
+      ],
+    }));
+
+    const mockCreate = vi.fn().mockResolvedValue({
+      content: [{
+        type: 'tool_use',
+        id: 'toolu_test',
+        name: 'crystallize_proposals',
+        input: {
+          proposals: [{
+            lessonIds: [1, 2],
+            trigger: 'When modifying auth or data flow',
+            triggerKeywords: ['auth', 'data', 'flow', 'check'],
+            check: 'Verify auth and data flow',
+            checkType: 'manual',
+            grepPattern: null,
+          }],
+        },
+      }],
+      usage: { input_tokens: 200, output_tokens: 100 },
+    });
+
+    vi.mocked(getAnthropicClient).mockReturnValue({
+      messages: { create: mockCreate },
+    } as unknown as ReturnType<typeof getAnthropicClient>);
+
+    const { proposeChecksFromLessons } = await import('./crystallization.js');
+    const count = await proposeChecksFromLessons(1);
+    expect(count).toBe(1);
+
+    const { loadCrystallized: load } = await import('./crystallization.js');
+    const data = load();
+    expect(data.checks).toHaveLength(1);
+    expect(data.checks[0].status).toBe('proposed');
+    expect(data.checks[0].lessonIds).toEqual([1, 2]);
+  });
+
+  it('returns 0 when AI produces no proposals', async () => {
+    writeFileSync(join(tempDir, 'lessons.json'), JSON.stringify({
+      lessons: [
+        { id: 1, situation: 'test', learning: 'test', date: '2026-01-01', frequency: 2 },
+      ],
+    }));
+
+    const mockCreate = vi.fn().mockResolvedValue({
+      content: [{
+        type: 'tool_use',
+        id: 'toolu_test',
+        name: 'crystallize_proposals',
+        input: { proposals: [] },
+      }],
+      usage: { input_tokens: 200, output_tokens: 50 },
+    });
+
+    vi.mocked(getAnthropicClient).mockReturnValue({
+      messages: { create: mockCreate },
+    } as unknown as ReturnType<typeof getAnthropicClient>);
+
+    const { proposeChecksFromLessons } = await import('./crystallization.js');
+    const count = await proposeChecksFromLessons(1);
+    expect(count).toBe(0);
+  });
+});
