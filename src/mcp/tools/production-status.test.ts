@@ -746,8 +746,18 @@ describe('production-status', () => {
       expect(result.structuredContent.services.Vercel.status).toBe('unavailable');
       expect(result.structuredContent.services.Vercel.summary).toContain('not configured');
 
-      vi.doUnmock('../../config/index.js');
-      vi.doUnmock('../../config/logger.js');
+      // Restore original config mock (vi.doUnmock removes ALL mocks including hoisted vi.mock)
+      vi.doMock('../../config/index.js', () => ({
+        config: {
+          vercel:   { token: 'test-vercel-token',   projectId: 'proj-abc123' },
+          supabase: { projectId: 'sb-proj-xyz',     accessToken: 'test-sb-token', url: '', anonKey: '', serviceKey: '' },
+          sentry:   { authToken: 'test-sentry-tok', org: 'acme-org', project: 'acme-proj' },
+          github:   { token: 'test-gh-token',       owner: 'TestOwner', repo: 'TestRepo' },
+        },
+      }));
+      vi.doMock('../../config/logger.js', () => ({
+        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+      }));
       vi.resetModules();
     });
   });
