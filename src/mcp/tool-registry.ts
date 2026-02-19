@@ -4,10 +4,10 @@
  * Wraps McpServer.tool() to capture all registered tool references,
  * then provides group-based enable/disable for on-demand tool loading.
  *
- * Groups:
- * - core: always enabled (sprint, monitoring, knowledge, iron laws)
- * - content: disabled by default (briefing, social, roadmap)
- * - advanced: disabled by default (eval-opt, compound)
+ * Groups (all enabled by default):
+ * - core: sprint, monitoring, knowledge, iron laws
+ * - content: briefing, social, roadmap
+ * - advanced: eval-opt, compound
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
