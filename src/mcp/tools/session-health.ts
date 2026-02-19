@@ -67,7 +67,28 @@ function analyzeSession(): HealthSignal[] {
     }
   }
 
-  // Signal 3: High error rate
+  // Signal 3: Consecutive identical tool calls (stuck loop)
+  if (last30min.length >= 3) {
+    let consecutiveCount = 1;
+    for (let i = last30min.length - 1; i > 0; i--) {
+      if (last30min[i].tool === last30min[i - 1].tool) {
+        consecutiveCount++;
+      } else {
+        break;
+      }
+    }
+    const lastTool = last30min[last30min.length - 1].tool;
+    if (consecutiveCount >= 3 && !['sprint_progress', 'health_check', 'session_health'].includes(lastTool)) {
+      signals.push({
+        id: 'action_repetition',
+        severity: consecutiveCount >= 5 ? 'critical' : 'warning',
+        message: `"${lastTool}" called ${consecutiveCount} times consecutively. Likely stuck — try a different approach or escalate.`,
+        metric: `${consecutiveCount}x consecutive`,
+      });
+    }
+  }
+
+  // Signal 4: High error rate
   const recentErrors = last30min.filter(c => !c.success).length;
   const recentTotal = last30min.length;
   if (recentTotal >= 5 && recentErrors / recentTotal > 0.4) {
@@ -79,7 +100,7 @@ function analyzeSession(): HealthSignal[] {
     });
   }
 
-  // Signal 4: Sprint active but no progress recorded
+  // Signal 5: Sprint active but no progress recorded
   if (session.sprintActive) {
     if (session.lastProgressAt) {
       const minutesSinceProgress = (now - session.lastProgressAt) / (1000 * 60);
@@ -101,7 +122,7 @@ function analyzeSession(): HealthSignal[] {
     }
   }
 
-  // Signal 5: Commits made without sprint tracking active
+  // Signal 6: Commits made without sprint tracking active
   if (!session.sprintActive && session.commitCount > 0 && sessionMinutes > 10) {
     signals.push({
       id: 'no_sprint',
@@ -111,7 +132,7 @@ function analyzeSession(): HealthSignal[] {
     });
   }
 
-  // Signal 6: Session duration warning
+  // Signal 7: Session duration warning
   if (sessionMinutes > 120) {
     signals.push({
       id: 'long_session',
