@@ -354,11 +354,11 @@ export async function proposeChecksFromLessons(minFrequency: number = 1): Promis
   }
 
   const crystallized = loadCrystallized();
-  const nextId = crystallized.checks.reduce((max, c) => Math.max(max, c.id), 0) + 1;
+  const baseId = Date.now();
   const now = new Date().toISOString();
 
   const newChecks: CrystallizedCheck[] = proposals.map((p, i) => ({
-    id: nextId + i,
+    id: baseId + i,
     lessonIds: p.lessonIds,
     trigger: p.trigger,
     triggerKeywords: p.triggerKeywords,
@@ -434,11 +434,11 @@ export function registerCrystallizationTools(server: McpServer): void {
 
       // Save proposals to crystallized.json
       const crystallized = loadCrystallized();
-      const nextId = crystallized.checks.reduce((max, c) => Math.max(max, c.id), 0) + 1;
+      const baseId = Date.now();
       const now = new Date().toISOString();
 
       const newChecks: CrystallizedCheck[] = proposals.map((p, i) => ({
-        id: nextId + i,
+        id: baseId + i,
         lessonIds: p.lessonIds,
         trigger: p.trigger,
         triggerKeywords: p.triggerKeywords,
