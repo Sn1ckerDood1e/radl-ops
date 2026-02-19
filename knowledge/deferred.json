@@ -219,20 +219,20 @@
     {
       "id": 25,
       "title": "Multi-child parent dashboard",
-      "reason": "Medium feature work — needs design for multi-athlete selector UX",
+      "reason": "Medium feature work — needs design for multi-athlete selector UX. Resolved: already implemented (pill selector + parallel data fetching).",
       "effort": "medium",
       "sprintPhase": "Phase 89",
       "date": "2026-02-18T19:46:32.991Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 26,
       "title": "Contact Coach button in parent empty state",
-      "reason": "Needs coach data fetch from API — not a simple text change",
+      "reason": "Needs coach data fetch from API — not a simple text change. Resolved: Phase 91 added Contact Coach mailto button.",
       "effort": "small",
       "sprintPhase": "Phase 89",
       "date": "2026-02-18T19:46:32.991Z",
-      "resolved": false
+      "resolved": true
     },
     {
       "id": 27,
