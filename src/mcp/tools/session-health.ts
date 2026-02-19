@@ -57,7 +57,7 @@ function analyzeSession(): HealthSignal[] {
     toolFreq.set(t, (toolFreq.get(t) ?? 0) + 1);
   }
   for (const [tool, count] of toolFreq) {
-    if (count >= 5 && !['sprint_progress', 'health_check', 'session_health'].includes(tool)) {
+    if (count >= 5 && !['sprint_progress', 'health_check', 'session_health', 'production_status', 'cognitive_load'].includes(tool)) {
       signals.push({
         id: 'thrashing',
         severity: 'warning',
@@ -78,7 +78,8 @@ function analyzeSession(): HealthSignal[] {
       }
     }
     const lastTool = last30min[last30min.length - 1].tool;
-    if (consecutiveCount >= 3 && !['sprint_progress', 'health_check', 'session_health'].includes(lastTool)) {
+    const BENIGN_REPEATED_TOOLS = ['sprint_progress', 'health_check', 'session_health', 'production_status', 'cognitive_load'];
+    if (consecutiveCount >= 3 && !BENIGN_REPEATED_TOOLS.includes(lastTool)) {
       signals.push({
         id: 'action_repetition',
         severity: consecutiveCount >= 5 ? 'critical' : 'warning',
