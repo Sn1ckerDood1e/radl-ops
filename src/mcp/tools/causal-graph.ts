@@ -22,6 +22,7 @@ import { getRoute, calculateCost } from '../../models/router.js';
 import { trackUsage } from '../../models/token-tracker.js';
 import { getAnthropicClient } from '../../config/anthropic.js';
 import { withRetry } from '../../utils/retry.js';
+import { sanitizeForPrompt } from './shared/decomposition.js';
 
 // ============================================
 // Types
@@ -154,24 +155,26 @@ function findSprintData(sprintPhase?: string): { data: SprintFileData; source: s
 
 function formatSprintForPrompt(data: SprintFileData): string {
   const lines: string[] = [
-    `Phase: ${data.phase ?? 'Unknown'}`,
-    `Title: ${data.title ?? 'Unknown'}`,
-    `Status: ${data.status ?? 'Unknown'}`,
-    `Estimate: ${data.estimate ?? 'Unknown'}`,
-    `Actual: ${data.actualTime ?? data.actual ?? 'Unknown'}`,
+    `Phase: ${sanitizeForPrompt(String(data.phase ?? 'Unknown'))}`,
+    `Title: ${sanitizeForPrompt(String(data.title ?? 'Unknown'))}`,
+    `Status: ${sanitizeForPrompt(String(data.status ?? 'Unknown'))}`,
+    `Estimate: ${sanitizeForPrompt(String(data.estimate ?? 'Unknown'))}`,
+    `Actual: ${sanitizeForPrompt(String(data.actualTime ?? data.actual ?? 'Unknown'))}`,
   ];
 
   if (Array.isArray(data.completedTasks) && data.completedTasks.length > 0) {
     lines.push('', 'Completed Tasks:');
     for (const task of data.completedTasks) {
-      lines.push(`- ${typeof task === 'string' ? task : JSON.stringify(task)}`);
+      const raw = typeof task === 'string' ? task : JSON.stringify(task);
+      lines.push(`- ${sanitizeForPrompt(raw)}`);
     }
   }
 
   if (Array.isArray(data.blockers) && data.blockers.length > 0) {
     lines.push('', 'Blockers:');
     for (const blocker of data.blockers) {
-      lines.push(`- ${typeof blocker === 'string' ? blocker : JSON.stringify(blocker)}`);
+      const raw = typeof blocker === 'string' ? blocker : JSON.stringify(blocker);
+      lines.push(`- ${sanitizeForPrompt(raw)}`);
     }
   }
 
@@ -395,7 +398,7 @@ export async function extractCausalPairs(sprintData: {
   // Retry if nodes were extracted but no edges — re-prompt with explicit node list
   if (extracted.nodes.length > 0 && extracted.edges.length === 0) {
     logger.info('Causal extract retry: nodes found but 0 edges, re-prompting with node list');
-    const nodeList = extracted.nodes.map(n => `- [${n.type}] ${n.label} (${n.id})`).join('\n');
+    const nodeList = extracted.nodes.map(n => `- [${n.type}] ${sanitizeForPrompt(n.label)} (${sanitizeForPrompt(n.id)})`).join('\n');
 
     const retryResponse = await withRetry(
       () => getAnthropicClient().messages.create({
@@ -435,6 +438,8 @@ export async function extractCausalPairs(sprintData: {
         nodes: extracted.nodes,
         edges: retryExtracted.edges,
       };
+    } else {
+      logger.warn('Causal extract retry: still 0 edges after retry, continuing without edges');
     }
   }
 

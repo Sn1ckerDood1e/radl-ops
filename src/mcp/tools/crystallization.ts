@@ -338,9 +338,11 @@ function formatCheckForDisplay(check: CrystallizedCheck): string {
  */
 export async function proposeChecksFromLessons(minFrequency: number = 1): Promise<number> {
   const lessonsFile = loadLessons();
-  const qualifyingLessons = lessonsFile.lessons.filter(
-    l => (l.frequency ?? 1) >= minFrequency,
-  );
+  const MAX_LESSONS_PER_AUTO_RUN = 30;
+  const qualifyingLessons = lessonsFile.lessons
+    .filter(l => (l.frequency ?? 1) >= minFrequency)
+    .sort((a, b) => (b.frequency ?? 1) - (a.frequency ?? 1))
+    .slice(0, MAX_LESSONS_PER_AUTO_RUN);
 
   if (qualifyingLessons.length === 0) {
     return 0;

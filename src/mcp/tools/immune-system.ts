@@ -24,6 +24,7 @@ import { getRoute, calculateCost } from '../../models/router.js';
 import { trackUsage } from '../../models/token-tracker.js';
 import { getAnthropicClient } from '../../config/anthropic.js';
 import { withRetry } from '../../utils/retry.js';
+import { sanitizeForPrompt } from './shared/decomposition.js';
 
 // ============================================
 // Types
@@ -260,11 +261,7 @@ function parseClassifyResponse(response: Anthropic.Message): {
   return { trigger, triggerKeywords, check, checkType, checkPattern };
 }
 
-function sanitizeForPrompt(input: string): string {
-  return input
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
+// sanitizeForPrompt imported from ./shared/decomposition.js
 
 /**
  * Format antibodies as a markdown table for display.
