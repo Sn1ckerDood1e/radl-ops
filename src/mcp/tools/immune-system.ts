@@ -335,7 +335,7 @@ export async function createAntibodyCore(
   bugDescription: string,
   codeContext?: string,
   sprintPhase?: string,
-): Promise<{ id: number; trigger: string } | null> {
+): Promise<Antibody | null> {
   const route = getRoute('spot_check');
   const phase = sprintPhase ?? 'unknown';
 
@@ -407,7 +407,7 @@ export async function createAntibodyCore(
     cost,
   });
 
-  return { id: nextId, trigger: classified.trigger };
+  return newAntibody;
 }
 
 // ============================================
@@ -448,20 +448,17 @@ export function registerImmuneSystemTools(server: McpServer): void {
         };
       }
 
-      const store = loadAntibodies();
-      const antibody = store.antibodies.find(ab => ab.id === result.id);
-
       const lines: string[] = [
         `## Antibody #${result.id} Created`,
         '',
-        `**Trigger:** ${antibody?.trigger ?? result.trigger}`,
-        `**Keywords:** ${antibody?.triggerKeywords.join(', ') ?? ''}`,
-        `**Check:** ${antibody?.check ?? ''}`,
-        `**Type:** ${antibody?.checkType ?? 'manual'}`,
+        `**Trigger:** ${result.trigger}`,
+        `**Keywords:** ${result.triggerKeywords.join(', ')}`,
+        `**Check:** ${result.check}`,
+        `**Type:** ${result.checkType}`,
       ];
 
-      if (antibody?.checkType === 'grep' && antibody.checkPattern) {
-        lines.push(`**Pattern:** \`${antibody.checkPattern}\``);
+      if (result.checkType === 'grep' && result.checkPattern) {
+        lines.push(`**Pattern:** \`${result.checkPattern}\``);
       }
 
       lines.push(`**Origin:** Sprint ${sprint_phase ?? 'unknown'}`);

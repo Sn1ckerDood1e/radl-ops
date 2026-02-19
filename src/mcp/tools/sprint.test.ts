@@ -66,7 +66,20 @@ vi.mock('./causal-graph.js', () => ({
 }));
 
 vi.mock('./immune-system.js', () => ({
-  createAntibodyCore: vi.fn().mockResolvedValue({ id: 1, trigger: 'test' }),
+  createAntibodyCore: vi.fn().mockResolvedValue({
+    id: 1,
+    trigger: 'test',
+    triggerKeywords: ['test'],
+    check: 'Verify test',
+    checkType: 'manual',
+    checkPattern: null,
+    origin: { sprint: 'Phase 93', bug: 'test bug' },
+    catches: 0,
+    falsePositives: 0,
+    falsePositiveRate: 0,
+    active: true,
+    createdAt: '2026-02-19T00:00:00.000Z',
+  }),
 }));
 
 vi.mock('./crystallization.js', () => ({
