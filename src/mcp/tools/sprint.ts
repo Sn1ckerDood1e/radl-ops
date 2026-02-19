@@ -23,6 +23,7 @@ import { runBloomPipeline } from '../../patterns/bloom-orchestrator.js';
 import type { SprintData } from '../../patterns/bloom-orchestrator.js';
 import { loadLatestPlan, matchCommitsToTasks, savePlan, formatTraceabilityReport } from './shared/plan-store.js';
 import { extractCausalPairs } from './causal-graph.js';
+import { addDataPoint, inferTaskType, inferComplexity } from './shared/estimation.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
@@ -738,6 +739,31 @@ export function registerSprintTools(server: McpServer): void {
           logger.warn('Trust recording for estimation failed (non-fatal)', { error: String(error) });
         }
 
+        // A1: Auto-record estimation data point for calibration model
+        try {
+          const estimate = completedRaw ? String(completedRaw.estimate ?? '') : '';
+          if (estimate && actual_time) {
+            const estimateMinutes = parseTimeToMinutes(estimate);
+            const actualMinutes = parseTimeToMinutes(actual_time);
+            if (estimateMinutes > 0 && actualMinutes > 0) {
+              const sprintTitle = completedSprintData?.title ?? 'Unknown';
+              const taskCount = completedRaw && Array.isArray(completedRaw.completedTasks)
+                ? completedRaw.completedTasks.length : 0;
+              addDataPoint({
+                sprintPhase,
+                taskType: inferTaskType(sprintTitle),
+                fileCount: 0,
+                estimatedMinutes: estimateMinutes,
+                actualMinutes,
+                complexity: inferComplexity(taskCount),
+                date: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (error) {
+          logger.warn('Estimation data point recording failed (non-fatal)', { error: String(error) });
+        }
+
         // 2. Bloom quality (if bloom ran)
         try {
           const knowledgeDir = getConfig().knowledgeDir;
@@ -824,6 +850,40 @@ export function registerSprintTools(server: McpServer): void {
         reviewNote += `\nUNRESOLVED FINDINGS: ${unresolved.critical} CRITICAL, ${unresolved.high} HIGH — address before merging.`;
       }
 
+      // D1-D3: Sprint quality gate warnings
+      let qualityNote = '';
+      {
+        const qualityWarnings: string[] = [];
+        const taskCount = completedRaw && Array.isArray(completedRaw.completedTasks)
+          ? completedRaw.completedTasks.length : completedTaskCount;
+        const estimateStr = completedRaw ? String(completedRaw.estimate ?? '') : '';
+        const estimateMinutes = estimateStr ? parseTimeToMinutes(estimateStr) : 0;
+        const actualMinutes = parseTimeToMinutes(actual_time);
+
+        // D1: Task granularity
+        if (taskCount === 0) {
+          qualityWarnings.push('QUALITY: 0 tasks recorded — consider tracking tasks for future sprints');
+        } else if (taskCount === 1 && estimateMinutes >= 120) {
+          qualityWarnings.push('QUALITY NOTE: 1 task on a ' + estimateStr + ' sprint — consider decomposing into smaller tasks');
+        }
+
+        // D2: Blocker tracking
+        const blockers = completedRaw && Array.isArray(completedRaw.blockers)
+          ? completedRaw.blockers : [];
+        if (blockers.length === 0) {
+          qualityWarnings.push('QUALITY NOTE: 0 blockers recorded — if none occurred, great! Otherwise consider documenting them');
+        }
+
+        // D3: Estimation accuracy red flag
+        if (estimateMinutes > 0 && actualMinutes > 0 && actualMinutes < estimateMinutes * 0.3) {
+          qualityWarnings.push(`QUALITY: Actual (${actual_time}) was <30% of estimate (${estimateStr}) — consider recalibrating estimates`);
+        }
+
+        if (qualityWarnings.length > 0) {
+          qualityNote = '\n' + qualityWarnings.join('\n');
+        }
+      }
+
       // Calendar sync: update event with actual results
       let calendarNote = '';
       const calSync = loadCalendarSync();
@@ -847,7 +907,7 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${calendarNote}` }] };
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${qualityNote}${calendarNote}` }] };
     })
   );
 

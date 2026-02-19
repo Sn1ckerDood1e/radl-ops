@@ -261,3 +261,31 @@ export function getCalibrationFactor(): number {
   logger.info('Using default calibration factor', { factor: DEFAULT_CALIBRATION });
   return DEFAULT_CALIBRATION;
 }
+
+// ============================================
+// Task Type & Complexity Inference
+// ============================================
+
+/**
+ * Infer task type from a sprint title string using keyword matching.
+ * Returns a type that maps to DEFAULT_TYPE_FACTORS keys.
+ */
+export function inferTaskType(title: string): string {
+  const lower = title.toLowerCase();
+  if (/\b(fix|bug|patch|hotfix)\b/.test(lower)) return 'fix';
+  if (/\b(refactor|cleanup|clean.?up|tech.?debt)\b/.test(lower)) return 'refactor';
+  if (/\b(test|spec|coverage)\b/.test(lower)) return 'test';
+  if (/\b(doc|docs|readme|documentation)\b/.test(lower)) return 'docs';
+  if (/\b(migrat|migration|schema)\b/.test(lower)) return 'migration';
+  return 'feature';
+}
+
+/**
+ * Infer complexity from task count.
+ * 0-2 → low, 3-5 → medium, 6+ → high
+ */
+export function inferComplexity(taskCount: number): 'low' | 'medium' | 'high' {
+  if (taskCount <= 2) return 'low';
+  if (taskCount <= 5) return 'medium';
+  return 'high';
+}
