@@ -2,28 +2,39 @@
 # Daily Briefing Script - Runs Mon-Fri at 7am
 # Generates briefing using Claude Code MCP tools and delivers via Gmail
 #
+# The daily_briefing MCP tool handles the eval-opt quality loop
+# (Haiku generates, Sonnet evaluates, threshold 7/10).
+#
 # Usage: bash /home/hb/radl-ops/scripts/daily-briefing.sh
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRIEFING_DIR="/home/hb/radl-ops/briefings"
 DATE=$(date +%Y-%m-%d)
 DAY_NAME=$(date +%A)
 BRIEFING_FILE="$BRIEFING_DIR/daily-$DATE.md"
+LOG_FILE="$BRIEFING_DIR/daily-$DATE.log"
 
 # Ensure briefing directory exists
 mkdir -p "$BRIEFING_DIR"
 
+# Resolve Claude CLI path dynamically
+if command -v claude &>/dev/null; then
+    CLAUDE_BIN="claude"
+elif [ -x "$HOME/.nvm/versions/node/$(node -v 2>/dev/null)/bin/claude" ]; then
+    CLAUDE_BIN="$HOME/.nvm/versions/node/$(node -v)/bin/claude"
+else
+    # Fallback to known path
+    CLAUDE_BIN="/home/hb/.nvm/versions/node/v22.22.0/bin/claude"
+fi
+
 # Change to radl-ops directory for CLAUDE.md context
 cd /home/hb/radl-ops
 
-echo "[$DATE] Generating daily briefing with Gmail delivery..."
+echo "[$DATE] Generating daily briefing for $DAY_NAME with Gmail delivery..."
 
 # Generate and deliver briefing using Claude Code with MCP tools
-# The daily_briefing tool generates content via eval-opt loop,
-# then deliver_via_gmail sends it through the Google API client.
-/home/hb/.nvm/versions/node/v22.22.0/bin/claude -p "
+$CLAUDE_BIN -p "
 Generate and deliver today's daily briefing for $DAY_NAME, $DATE.
 
 Steps:
@@ -34,11 +45,20 @@ Steps:
      monitoring_context: '<production status from step 2>'
    })
 
-If Gmail delivery fails, save the briefing markdown to $BRIEFING_FILE instead.
-" --max-turns 8 --permission-mode bypassPermissions > "$BRIEFING_FILE" 2>&1
+If Gmail delivery fails, output the briefing markdown so it gets saved to the log file.
+" --max-turns 12 --permission-mode bypassPermissions > "$LOG_FILE" 2>&1
 
-if [ $? -eq 0 ]; then
-    echo "[$DATE] Briefing generated and delivered via Gmail"
+EXIT_CODE=$?
+
+# Save a copy of the briefing output
+cp "$LOG_FILE" "$BRIEFING_FILE" 2>/dev/null || true
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "[$DATE] Daily briefing generated and delivered via Gmail"
 else
-    echo "[$DATE] WARNING: Briefing generation may have failed, check $BRIEFING_FILE"
+    echo "[$DATE] WARNING: Briefing generation may have failed (exit $EXIT_CODE), check $LOG_FILE"
 fi
+
+# Clean up old briefings (keep 30 days)
+find "$BRIEFING_DIR" -name "daily-*.md" -mtime +30 -delete 2>/dev/null || true
+find "$BRIEFING_DIR" -name "daily-*.log" -mtime +30 -delete 2>/dev/null || true
