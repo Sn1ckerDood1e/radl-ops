@@ -644,9 +644,9 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
-      // Shared state for auto_extract blocks (hoist to avoid repeated filesystem reads)
+      // Shared state for quality gates + auto_extract blocks (hoist to avoid repeated filesystem reads)
       const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-      const completedRaw = auto_extract !== false ? findCompletedSprintData(sprintDir) : null;
+      const completedRaw = findCompletedSprintData(sprintDir);
       const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
 
       // Auto-extract compound learnings via Bloom pipeline

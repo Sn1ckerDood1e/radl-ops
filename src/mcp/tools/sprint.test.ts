@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execSync, execFileSync } from 'child_process';
-import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import { recordTrustDecision } from './quality-ratchet.js';
+import { createAntibodyCore } from './immune-system.js';
+import { addDataPoint } from './shared/estimation.js';
 
 // Mock child_process to avoid running actual commands
 vi.mock('child_process', () => ({
@@ -15,6 +17,25 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
   renameSync: vi.fn(),
   existsSync: vi.fn(),
+  readdirSync: vi.fn().mockReturnValue([]),
+  mkdirSync: vi.fn(),
+}));
+
+vi.mock('../../config/paths.js', () => ({
+  getConfig: vi.fn(() => ({
+    radlDir: '/tmp/test-radl',
+    radlOpsDir: '/tmp/test-ops',
+    knowledgeDir: '/tmp/test-knowledge',
+    usageLogsDir: '/tmp/test-logs',
+    sprintScript: '/tmp/sprint.sh',
+    compoundScript: '/tmp/compound.sh',
+  })),
+}));
+
+vi.mock('../../integrations/google.js', () => ({
+  isGoogleConfigured: vi.fn().mockReturnValue(false),
+  createCalendarEvent: vi.fn(),
+  updateCalendarEvent: vi.fn(),
 }));
 
 // Mock the logger
@@ -41,6 +62,20 @@ vi.mock('./cognitive-load.js', () => ({
 
 vi.mock('./causal-graph.js', () => ({
   extractCausalPairs: vi.fn().mockResolvedValue({ pairs: 0 }),
+}));
+
+vi.mock('./immune-system.js', () => ({
+  createAntibodyCore: vi.fn().mockResolvedValue({ id: 1, trigger: 'test' }),
+}));
+
+vi.mock('./crystallization.js', () => ({
+  proposeChecksFromLessons: vi.fn().mockResolvedValue(0),
+}));
+
+vi.mock('./shared/estimation.js', () => ({
+  addDataPoint: vi.fn(),
+  inferTaskType: vi.fn().mockReturnValue('feature'),
+  inferComplexity: vi.fn().mockReturnValue('medium'),
 }));
 
 vi.mock('../../models/token-tracker.js', () => ({
@@ -685,5 +720,236 @@ describe('Sprint Tools - Validation Warning Comparison', () => {
       decision: '1/2 warnings addressed',
       outcome: 'partial',
     }));
+  });
+});
+
+describe('Sprint Tools - Quality Gates (D1-D3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(execSync).mockReturnValue('feat/test\n');
+  });
+
+  it('D1: warns when 0 tasks recorded', async () => {
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: false,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('QUALITY: 0 tasks recorded');
+  });
+
+  it('D1: notes single task on 2h+ sprint', async () => {
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92 — 1 task completed\n');
+    // Return sprint data with 1 task and 2h estimate
+    const sprintData = {
+      phase: 'Phase 92',
+      title: 'Test Sprint',
+      status: 'completed',
+      estimate: '2 hours',
+      completedTasks: ['task 1'],
+      blockers: [],
+    };
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      if (typeof p === 'string' && p.includes('completed-')) return false;
+      if (typeof p === 'string' && p.includes('current.json')) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(sprintData));
+    vi.mocked(readdirSync).mockReturnValue([] as any);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: false,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('QUALITY NOTE: 1 task on a');
+  });
+
+  it('D2: notes when 0 blockers recorded', async () => {
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: false,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('QUALITY NOTE: 0 blockers recorded');
+  });
+
+  it('D3: warns when actual < 30% of estimate', async () => {
+    const sprintData = {
+      phase: 'Phase 92',
+      title: 'Test Sprint',
+      status: 'completed',
+      estimate: '3 hours',
+      completedTasks: ['task 1', 'task 2'],
+      blockers: [],
+    };
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      if (typeof p === 'string' && p.includes('completed-')) return false;
+      if (typeof p === 'string' && p.includes('current.json')) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(sprintData));
+    vi.mocked(readdirSync).mockReturnValue([] as any);
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '30 minutes',
+      auto_extract: false,
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain('QUALITY: Actual');
+    expect(text).toContain('<30% of estimate');
+  });
+});
+
+describe('Sprint Tools - Estimation Auto-Record (A1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(execSync).mockReturnValue('feat/test\n');
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+  });
+
+  it('calls addDataPoint when estimate and actual_time exist', async () => {
+    const sprintData = {
+      phase: 'Phase 92',
+      title: 'Feature Sprint',
+      status: 'completed',
+      estimate: '2 hours',
+      completedTasks: ['task1', 'task2', 'task3'],
+      blockers: [],
+    };
+    vi.mocked(existsSync).mockImplementation((p: unknown) => {
+      if (typeof p === 'string' && p.includes('completed-')) return false;
+      if (typeof p === 'string' && p.includes('current.json')) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(sprintData));
+    vi.mocked(readdirSync).mockReturnValue([] as any);
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+    });
+
+    expect(addDataPoint).toHaveBeenCalledWith(expect.objectContaining({
+      sprintPhase: expect.stringContaining('Phase 92'),
+      estimatedMinutes: 120,
+      actualMinutes: 60,
+    }));
+  });
+
+  it('does not call addDataPoint when auto_extract is false', async () => {
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: false,
+    });
+
+    expect(addDataPoint).not.toHaveBeenCalled();
+  });
+});
+
+describe('Sprint Tools - Antibody Auto-Create (A2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(execSync).mockReturnValue('feat/test\n');
+    vi.mocked(execFileSync).mockReturnValue('Sprint completed: Phase 92\n');
+  });
+
+  it('calls createAntibodyCore for CRITICAL/HIGH findings', async () => {
+    // Mock review-tracker loadFindings to return findings
+    const reviewTracker = await import('./review-tracker.js');
+    vi.spyOn(reviewTracker, 'loadFindings').mockReturnValue([
+      { id: 'f1', severity: 'CRITICAL', file: 'test.ts', description: 'SQL injection vulnerability', reviewer: 'security', resolved: false, recordedAt: new Date().toISOString() },
+      { id: 'f2', severity: 'HIGH', file: 'auth.ts', description: 'Auth bypass possible', reviewer: 'security', resolved: false, recordedAt: new Date().toISOString() },
+      { id: 'f3', severity: 'MEDIUM', file: 'ui.ts', description: 'Minor style issue', reviewer: 'code', resolved: false, recordedAt: new Date().toISOString() },
+    ]);
+    vi.spyOn(reviewTracker, 'checkUnresolved').mockReturnValue({ critical: 0, high: 0, medium: 0, low: 0 });
+
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    const result = await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: true,
+    });
+    const text = result.content[0].text;
+
+    // Should be called for CRITICAL and HIGH, not MEDIUM
+    expect(createAntibodyCore).toHaveBeenCalledTimes(2);
+    expect(createAntibodyCore).toHaveBeenCalledWith(
+      'SQL injection vulnerability',
+      undefined,
+      expect.stringContaining('Phase 92'),
+    );
+    expect(createAntibodyCore).toHaveBeenCalledWith(
+      'Auth bypass possible',
+      undefined,
+      expect.stringContaining('Phase 92'),
+    );
+    expect(text).toContain('Antibodies created: 2');
+  });
+
+  it('caps at 3 antibodies per sprint', async () => {
+    const reviewTracker = await import('./review-tracker.js');
+    vi.spyOn(reviewTracker, 'loadFindings').mockReturnValue([
+      { id: 'f1', severity: 'CRITICAL', file: 'a.ts', description: 'Bug 1', reviewer: 'sec', resolved: false, recordedAt: new Date().toISOString() },
+      { id: 'f2', severity: 'CRITICAL', file: 'b.ts', description: 'Bug 2', reviewer: 'sec', resolved: false, recordedAt: new Date().toISOString() },
+      { id: 'f3', severity: 'HIGH', file: 'c.ts', description: 'Bug 3', reviewer: 'sec', resolved: false, recordedAt: new Date().toISOString() },
+      { id: 'f4', severity: 'HIGH', file: 'd.ts', description: 'Bug 4', reviewer: 'sec', resolved: false, recordedAt: new Date().toISOString() },
+    ]);
+    vi.spyOn(reviewTracker, 'checkUnresolved').mockReturnValue({ critical: 0, high: 0, medium: 0, low: 0 });
+
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: true,
+    });
+
+    // Should only be called 3 times despite 4 CRITICAL/HIGH findings
+    expect(createAntibodyCore).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not create antibodies when no findings', async () => {
+    const reviewTracker = await import('./review-tracker.js');
+    vi.spyOn(reviewTracker, 'loadFindings').mockReturnValue([]);
+    vi.spyOn(reviewTracker, 'checkUnresolved').mockReturnValue({ critical: 0, high: 0, medium: 0, low: 0 });
+
+    vi.mocked(existsSync).mockReturnValue(false);
+
+    const handlers = await getHandlers();
+    await handlers['sprint_complete']({
+      commit: 'abc1234',
+      actual_time: '1 hour',
+      auto_extract: true,
+    });
+
+    expect(createAntibodyCore).not.toHaveBeenCalled();
   });
 });

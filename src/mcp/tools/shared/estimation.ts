@@ -274,9 +274,9 @@ export function inferTaskType(title: string): string {
   const lower = title.toLowerCase();
   if (/\b(fix|bug|patch|hotfix)\b/.test(lower)) return 'fix';
   if (/\b(refactor|cleanup|clean.?up|tech.?debt)\b/.test(lower)) return 'refactor';
-  if (/\b(test|spec|coverage)\b/.test(lower)) return 'test';
-  if (/\b(doc|docs|readme|documentation)\b/.test(lower)) return 'docs';
-  if (/\b(migrat|migration|schema)\b/.test(lower)) return 'migration';
+  if (/\btests?\b|\bspec\b|\bcoverage\b/.test(lower)) return 'test';
+  if (/\bdocs?\b|\breadme\b|\bdocumentation\b/.test(lower)) return 'docs';
+  if (/\bmigrat/.test(lower)) return 'migration';
   return 'feature';
 }
 
