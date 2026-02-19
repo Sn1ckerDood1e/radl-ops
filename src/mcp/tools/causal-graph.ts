@@ -234,10 +234,17 @@ Generate node IDs using these patterns:
 
 Where <sprint> is a sanitized version of the sprint phase (lowercase, no spaces, no dots).
 
+IMPORTANT: You MUST produce at least one edge connecting nodes. A graph with nodes but no edges is useless. Every sprint has at least one decision that led to an outcome.
+
 For edges:
 - strength 1-3: Weak/possible causal link
 - strength 4-6: Moderate causal link
 - strength 7-10: Strong causal link
+
+Example edges:
+- { "from": "d-phase72-1", "to": "o-phase72-1", "strength": 8, "evidence": "Choosing parallel agents reduced wall time by 50%" }
+- { "from": "c-phase72-1", "to": "d-phase72-2", "strength": 6, "evidence": "Time pressure led to skipping incremental review" }
+- { "from": "d-phase72-2", "to": "o-phase72-2", "strength": 7, "evidence": "Skipping review allowed a field-not-persisted bug to ship" }
 
 Extract real, specific relationships — not generic observations. Each edge needs concrete evidence.
 
@@ -382,10 +389,57 @@ export async function extractCausalPairs(sprintData: {
     'causal-extract-auto',
   );
 
-  const extracted = parseExtractResponse(response);
+  let extracted = parseExtractResponse(response);
+  let totalCost = cost;
+
+  // Retry if nodes were extracted but no edges — re-prompt with explicit node list
+  if (extracted.nodes.length > 0 && extracted.edges.length === 0) {
+    logger.info('Causal extract retry: nodes found but 0 edges, re-prompting with node list');
+    const nodeList = extracted.nodes.map(n => `- [${n.type}] ${n.label} (${n.id})`).join('\n');
+
+    const retryResponse = await withRetry(
+      () => getAnthropicClient().messages.create({
+        model: route.model,
+        max_tokens: route.maxTokens,
+        system: CAUSAL_EXTRACT_SYSTEM,
+        messages: [{
+          role: 'user',
+          content: `These nodes were extracted from the sprint but no edges were produced. Add causal edges connecting them:\n\n${nodeList}\n\nOriginal sprint data:\n${sprintText}`,
+        }],
+        tools: [CAUSAL_EXTRACT_TOOL],
+        tool_choice: { type: 'tool', name: 'submit_causal_graph' },
+      }),
+      { maxRetries: 1, baseDelayMs: 1000 },
+    );
+
+    const retryCost = calculateCost(
+      route.model,
+      retryResponse.usage.input_tokens,
+      retryResponse.usage.output_tokens,
+    );
+
+    trackUsage(
+      route.model,
+      retryResponse.usage.input_tokens,
+      retryResponse.usage.output_tokens,
+      'spot_check',
+      'causal-extract-retry',
+    );
+
+    totalCost += retryCost;
+
+    const retryExtracted = parseExtractResponse(retryResponse);
+    // Merge retry edges into original nodes
+    if (retryExtracted.edges.length > 0) {
+      extracted = {
+        nodes: extracted.nodes,
+        edges: retryExtracted.edges,
+      };
+    }
+  }
 
   if (extracted.nodes.length === 0) {
-    return { nodesAdded: 0, edgesAdded: 0, cost };
+    return { nodesAdded: 0, edgesAdded: 0, cost: totalCost };
   }
 
   const { graph: updatedGraph, nodesAdded, edgesAdded } = mergeGraphData(
@@ -398,10 +452,10 @@ export async function extractCausalPairs(sprintData: {
   logger.info('Causal auto-extract complete', {
     nodesAdded,
     edgesAdded,
-    cost,
+    cost: totalCost,
   });
 
-  return { nodesAdded, edgesAdded, cost };
+  return { nodesAdded, edgesAdded, cost: totalCost };
 }
 
 // ============================================
