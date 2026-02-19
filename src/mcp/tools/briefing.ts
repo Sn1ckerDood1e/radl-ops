@@ -189,7 +189,12 @@ Format the briefing as:
 1. **Summary** - 2-3 sentence overview
 2. **Key Metrics** - Important numbers at a glance
 3. **Today's Priorities** - Top 3-5 actionable items (consider calendar and tech debt)
-4. **Production Health** - Service status and any issues (if monitoring data available)
+4. **Production Health** - Group issues by severity:
+   - **Critical** (act now): deploy failures, auth errors, DB connection issues
+   - **High** (act today): error rate spikes, security advisories, failed checks
+   - **Medium** (this week): performance warnings, deprecation notices
+   - **Low** (note): transient errors, minor advisor suggestions
+   If no issues at a severity level, omit that level. If all clear, say "All services healthy."
 5. **Blockers/Risks** - Any issues that need attention
 6. **Wins** - Recent accomplishments to celebrate
 7. **API Costs** - Token usage and costs
