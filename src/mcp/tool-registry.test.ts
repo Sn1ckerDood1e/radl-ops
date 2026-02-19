@@ -42,16 +42,16 @@ describe('ToolRegistry', () => {
       expect(core?.defaultEnabled).toBe(true);
     });
 
-    it('has content group disabled by default', () => {
+    it('has content group enabled by default', () => {
       const content = TOOL_GROUPS.find(g => g.name === 'content');
       expect(content).toBeDefined();
-      expect(content?.defaultEnabled).toBe(false);
+      expect(content?.defaultEnabled).toBe(true);
     });
 
-    it('has advanced group disabled by default', () => {
+    it('has advanced group enabled by default', () => {
       const advanced = TOOL_GROUPS.find(g => g.name === 'advanced');
       expect(advanced).toBeDefined();
-      expect(advanced?.defaultEnabled).toBe(false);
+      expect(advanced?.defaultEnabled).toBe(true);
     });
 
     it('all groups have required fields', () => {
@@ -158,7 +158,7 @@ describe('ToolRegistry', () => {
       registry.install(mockServer);
     });
 
-    it('disables content group tools by default', () => {
+    it('keeps content group tools enabled by default', () => {
       const tools = {
         daily_briefing: createMockRegisteredTool(true),
         weekly_briefing: createMockRegisteredTool(true),
@@ -173,11 +173,11 @@ describe('ToolRegistry', () => {
 
       registry.applyDefaults();
 
-      expect(tools.daily_briefing.disable).toHaveBeenCalled();
-      expect(tools.weekly_briefing.disable).toHaveBeenCalled();
+      expect(tools.daily_briefing.disable).not.toHaveBeenCalled();
+      expect(tools.weekly_briefing.disable).not.toHaveBeenCalled();
     });
 
-    it('disables advanced group tools by default', () => {
+    it('keeps advanced group tools enabled by default', () => {
       const tools = {
         eval_opt_generate: createMockRegisteredTool(true),
         compound_extract: createMockRegisteredTool(true),
@@ -192,8 +192,8 @@ describe('ToolRegistry', () => {
 
       registry.applyDefaults();
 
-      expect(tools.eval_opt_generate.disable).toHaveBeenCalled();
-      expect(tools.compound_extract.disable).toHaveBeenCalled();
+      expect(tools.eval_opt_generate.disable).not.toHaveBeenCalled();
+      expect(tools.compound_extract.disable).not.toHaveBeenCalled();
     });
 
     it('does not disable core group tools', () => {

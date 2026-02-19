@@ -4,10 +4,10 @@
  * Wraps McpServer.tool() to capture all registered tool references,
  * then provides group-based enable/disable for on-demand tool loading.
  *
- * Groups:
- * - core: always enabled (sprint, monitoring, knowledge, iron laws)
- * - content: disabled by default (briefing, social, roadmap)
- * - advanced: disabled by default (eval-opt, compound)
+ * Groups (all enabled by default):
+ * - core: sprint, monitoring, knowledge, iron laws
+ * - content: briefing, social, roadmap
+ * - advanced: eval-opt, compound
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -53,13 +53,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'daily_briefing', 'weekly_briefing', 'social_ideas', 'social_draft',
       'social_calendar', 'roadmap_ideas',
     ],
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
   {
     name: 'advanced',
     description: 'Eval-opt content generation (multi-model quality loop), compound learning extraction (Bloom pipeline)',
     toolNames: ['eval_opt_generate', 'compound_extract', 'tool_forge', 'counterfactual_analyze'],
-    defaultEnabled: false,
+    defaultEnabled: true,
   },
 ];
 
