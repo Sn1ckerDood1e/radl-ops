@@ -714,7 +714,7 @@ describe('production-status', () => {
 
   describe('service unavailable (missing config)', () => {
     it('returns unavailable for Vercel when token/projectId is empty', async () => {
-      // Re-mock config with empty Vercel credentials only for this test
+      // Re-mock config with empty Vercel credentials
       vi.doMock('../../config/index.js', () => ({
         config: {
           vercel:   { token: '', projectId: '' },
@@ -724,15 +724,31 @@ describe('production-status', () => {
         },
       }));
 
-      // Dynamic re-import to pick up new mock
-      // @ts-expect-error query string used to bust vitest module cache
-      const { registerProductionStatusTools } = await import('./production-status.js?unavailable-vercel');
-      const server = makeMockServer();
+      // Reset module registry so dynamic import picks up new mock
+      vi.resetModules();
+      // Re-mock logger after resetModules (otherwise it is also cleared)
+      vi.doMock('../../config/logger.js', () => ({
+        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+      }));
 
-      // Cast needed because the query-string import variant is used to bust module cache
-      (registerProductionStatusTools as typeof import('./production-status.js').registerProductionStatusTools)(server as never);
+      const { registerProductionStatusTools } = await import('./production-status.js');
+      const server = makeMockServer();
+      registerProductionStatusTools(server as never);
+      const handler = server.getHandler('production_status')!;
+
+      // Mock fetch for the non-Vercel services (Sentry only)
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse([])));
+
+      const result = await handler({ services: ['vercel'] }) as {
+        structuredContent: { services: Record<string, { status: string; summary: string }> }
+      };
+
+      expect(result.structuredContent.services.Vercel.status).toBe('unavailable');
+      expect(result.structuredContent.services.Vercel.summary).toContain('not configured');
 
       vi.doUnmock('../../config/index.js');
+      vi.doUnmock('../../config/logger.js');
+      vi.resetModules();
     });
   });
 
