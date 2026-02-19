@@ -314,6 +314,33 @@
       "sprintPhase": "Phase 90",
       "date": "2026-02-19T13:11:36.214Z",
       "resolved": true
+    },
+    {
+      "id": 36,
+      "title": "Extract quality gates from sprint.ts into shared/quality-gates.ts",
+      "reason": "sprint.ts at 981 lines exceeds 800-line limit",
+      "effort": "small",
+      "sprintPhase": "Phase 92",
+      "date": "2026-02-19T15:06:10.949Z",
+      "resolved": true
+    },
+    {
+      "id": 37,
+      "title": "Expand createAntibodyCore return type to include full Antibody",
+      "reason": "Eliminates redundant store re-read in MCP handler",
+      "effort": "small",
+      "sprintPhase": "Phase 92",
+      "date": "2026-02-19T15:06:10.949Z",
+      "resolved": true
+    },
+    {
+      "id": 38,
+      "title": "Crystallization ID collision under concurrent writes",
+      "reason": "Low risk in single-process MCP, but should switch to randomUUID",
+      "effort": "small",
+      "sprintPhase": "Phase 92",
+      "date": "2026-02-19T15:06:10.949Z",
+      "resolved": true
     }
   ]
 }
