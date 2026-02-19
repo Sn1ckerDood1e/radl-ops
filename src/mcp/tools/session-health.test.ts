@@ -214,7 +214,6 @@ describe('Signal 2: thrashing', () => {
       makeCall('sprint_progress', true, i + 1)
     );
 
-    expect(signals => signals.map((s: { id: string }) => s.id)).not.toContain('thrashing');
     const signals = await getSignals();
     expect(signals.map(s => s.id)).not.toContain('thrashing');
   });

@@ -725,6 +725,7 @@ describe('production-status', () => {
       }));
 
       // Dynamic re-import to pick up new mock
+      // @ts-expect-error query string used to bust vitest module cache
       const { registerProductionStatusTools } = await import('./production-status.js?unavailable-vercel');
       const server = makeMockServer();
 
