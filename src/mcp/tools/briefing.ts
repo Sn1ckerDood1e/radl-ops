@@ -71,8 +71,17 @@ function getDeferredSummaryFromStore(store: DeferredStore): string {
 // Markdown to HTML (inline-CSS for email clients)
 // ---------------------------------------------------------------------------
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function markdownToHtml(md: string, title: string): string {
-  let html = md
+  let html = escapeHtml(md)
     // Headers
     .replace(/^### (.+)$/gm, '<h3 style="color:#1e293b;margin:16px 0 8px;">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 style="color:#1e293b;margin:20px 0 10px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">$1</h2>')
@@ -116,7 +125,7 @@ function markdownToHtml(md: string, title: string): string {
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,system-ui,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1a1a1a;background:#ffffff;">
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:24px;">
-<h1 style="color:#0f172a;margin:0 0 4px;font-size:22px;">${title}</h1>
+<h1 style="color:#0f172a;margin:0 0 4px;font-size:22px;">${escapeHtml(title)}</h1>
 <p style="color:#64748b;margin:0 0 20px;font-size:14px;">${date}</p>
 ${html}
 <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 12px;">
