@@ -254,9 +254,13 @@ Keep it brief and actionable. Use bullet points.`;
         .describe('Week\'s calendar summary from Google Calendar MCP. Include sprints completed, meetings held.'),
       week_start: z.string().optional()
         .describe('Start date of the week (YYYY-MM-DD, defaults to 7 days ago)'),
+      deliver_via_gmail: z.boolean().optional()
+        .describe('Send briefing via Gmail after generation. Requires Google OAuth credentials.'),
+      recipient: z.string().email().max(100).optional()
+        .describe('Email recipient (defaults to GOOGLE_BRIEFING_RECIPIENT config)'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    withErrorTracking('weekly_briefing', async ({ github_context, monitoring_context, calendar_context, week_start }) => {
+    withErrorTracking('weekly_briefing', async ({ github_context, monitoring_context, calendar_context, week_start, deliver_via_gmail, recipient }) => {
       const start = week_start ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const end = new Date().toISOString().split('T')[0];
       const costSummary = getCostSummaryForBriefing();
@@ -305,7 +309,30 @@ Be thorough but organized. Use headers and bullet points.`;
         ? `\n\n**ERRORS:**\n${result.errors.map(e => `- ${e}`).join('\n')}`
         : '';
       const meta = `\n\n---\n_Quality: ${result.finalScore}/10 | Iterations: ${result.iterations} | Converged: ${result.converged} | Eval cost: $${result.totalCostUsd}_`;
-      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta }] };
+
+      // Gmail delivery
+      let deliveryNote = '';
+      if (deliver_via_gmail) {
+        if (!isGoogleConfigured()) {
+          deliveryNote = '\n\n**Gmail delivery skipped:** Google OAuth credentials not configured.';
+        } else {
+          try {
+            const to = recipient ?? config.google.briefingRecipient;
+            const weekLabel = `${start} to ${end}`;
+            const subject = `Weekly Briefing — ${weekLabel}`;
+            const htmlBody = markdownToHtml(result.finalOutput, 'Weekly Briefing');
+            const { messageId } = await sendGmail({ to, subject, htmlBody });
+            deliveryNote = `\n\n**Sent via Gmail** to ${to} (message: ${messageId})`;
+            logger.info('Weekly briefing sent via Gmail', { to, messageId });
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            deliveryNote = `\n\n**Gmail delivery failed:** ${msg}`;
+            logger.error('Weekly Gmail delivery failed', { error: msg });
+          }
+        }
+      }
+
+      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta + deliveryNote }] };
     })
   );
 
