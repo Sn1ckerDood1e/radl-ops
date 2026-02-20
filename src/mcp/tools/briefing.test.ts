@@ -1,13 +1,14 @@
 /**
- * Behavioral tests for MCP Briefing tools (daily_briefing, weekly_briefing, roadmap_ideas).
+ * Behavioral tests for MCP Briefing tools (daily_briefing, weekly_briefing, daily_summary, roadmap_ideas).
  *
  * Tests:
  * 1. Daily briefing — prompt construction, eval-opt invocation, Gmail delivery
  * 2. Weekly briefing — date range, prompt structure, Gmail delivery
- * 3. Roadmap ideas — Opus routing, error handling
- * 4. Deferred items — auto-population, "none" skip, store loading
- * 5. Markdown to HTML conversion
- * 6. Quality metadata in output
+ * 3. Daily summary (EOD) — sprint scanning, learnings, Gmail delivery
+ * 4. Roadmap ideas — Opus routing, error handling
+ * 5. Deferred items — auto-population, "none" skip, store loading
+ * 6. Markdown to HTML conversion
+ * 7. Quality metadata in output
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -69,14 +70,17 @@ vi.mock('../../config/index.js', () => ({
 
 const mockExistsSync = vi.fn();
 const mockReadFileSync = vi.fn();
+const mockReaddirSync = vi.fn();
 
 vi.mock('fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
   readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+  readdirSync: (...args: unknown[]) => mockReaddirSync(...args),
 }));
 
 vi.mock('../../config/paths.js', () => ({
   getConfig: vi.fn(() => ({
+    radlDir: '/tmp/test-radl',
     knowledgeDir: '/tmp/test-knowledge',
   })),
 }));
@@ -126,6 +130,7 @@ beforeEach(() => {
   mockIsGoogleConfigured.mockReturnValue(true);
   mockSendGmail.mockResolvedValue({ messageId: 'briefing-msg-1' });
   mockExistsSync.mockReturnValue(false); // No deferred.json by default
+  mockReaddirSync.mockReturnValue([]); // No sprint files by default
 });
 
 // ─── Daily Briefing ─────────────────────────────────────────────────────────
@@ -387,6 +392,200 @@ describe('weekly_briefing', () => {
     const prompt = mockRunEvalOptLoop.mock.calls[0][0];
     expect(prompt).toContain('Tech Debt Backlog');
     expect(prompt).toContain('Old debt');
+  });
+});
+
+// ─── Daily Summary (EOD) ────────────────────────────────────────────────────
+
+describe('daily_summary', () => {
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  function makeCompletedSprint(overrides: Record<string, unknown> = {}) {
+    return JSON.stringify({
+      id: '20260219-101213',
+      phase: 'Phase 93',
+      title: 'Fix Deferred Items',
+      estimate: '45 minutes',
+      actualTime: '15 minutes',
+      completedTasks: [
+        { message: 'Done: All items fixed', completedAt: `${todayStr}T10:21:19-05:00` },
+      ],
+      blockers: [],
+      commit: '3df24db',
+      endTime: `${todayStr}T10:21:31-05:00`,
+      ...overrides,
+    });
+  }
+
+  it('reports no sprints when sprint directory is empty', async () => {
+    mockReaddirSync.mockReturnValue([]);
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('End-of-Day Summary');
+    expect(text).toContain('No sprints completed today');
+  });
+
+  it('includes completed sprints from today', async () => {
+    mockReaddirSync.mockReturnValue(['completed-20260219-101213.json']);
+    mockReadFileSync.mockImplementation((path: string) => {
+      if (path.includes('completed-')) return makeCompletedSprint();
+      if (path.includes('lessons.json')) return JSON.stringify({ lessons: [] });
+      throw new Error('ENOENT');
+    });
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Phase 93');
+    expect(text).toContain('Fix Deferred Items');
+    expect(text).toContain('15 minutes');
+    expect(text).toContain('3df24db');
+    expect(text).toContain('All items fixed');
+  });
+
+  it('excludes sprints from other days', async () => {
+    mockReaddirSync.mockReturnValue(['completed-20260218-144035.json']);
+    mockReadFileSync.mockImplementation((path: string) => {
+      if (path.includes('completed-')) {
+        return makeCompletedSprint({ endTime: '2026-02-18T14:40:50-05:00' });
+      }
+      throw new Error('ENOENT');
+    });
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('No sprints completed today');
+  });
+
+  it('calculates total estimated vs actual time', async () => {
+    mockReaddirSync.mockReturnValue([
+      'completed-sprint-1.json',
+      'completed-sprint-2.json',
+    ]);
+
+    let callCount = 0;
+    mockReadFileSync.mockImplementation((path: string) => {
+      if (path.includes('completed-')) {
+        callCount++;
+        if (callCount === 1) {
+          return makeCompletedSprint({ estimate: '1 hour', actualTime: '30 minutes' });
+        }
+        return makeCompletedSprint({
+          phase: 'Phase 94',
+          title: 'Another Sprint',
+          estimate: '2 hours',
+          actualTime: '1 hour',
+        });
+      }
+      if (path.includes('lessons.json')) return JSON.stringify({ lessons: [] });
+      throw new Error('ENOENT');
+    });
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('2 sprint(s)');
+    expect(text).toContain('Est: 3h 0m');
+    expect(text).toContain('Actual: 1h 30m');
+    expect(text).toContain('**Efficiency:** 50%');
+  });
+
+  it('includes learnings extracted today', async () => {
+    mockReaddirSync.mockReturnValue([]);
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockImplementation((path: string) => {
+      if (path.includes('lessons.json')) {
+        return JSON.stringify({
+          lessons: [
+            { id: 1, situation: 'jq missing', learning: 'Use Python instead', date: `${todayStr}T12:00:00` },
+            { id: 2, situation: 'Old lesson', learning: 'Irrelevant', date: '2026-01-15T12:00:00' },
+          ],
+        });
+      }
+      throw new Error('ENOENT');
+    });
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Learnings Extracted');
+    expect(text).toContain('jq missing');
+    expect(text).toContain('Use Python instead');
+    expect(text).not.toContain('Old lesson');
+  });
+
+  it('includes API cost summary', async () => {
+    mockReaddirSync.mockReturnValue([]);
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('API Costs');
+    expect(text).toContain('$0.12 today');
+  });
+
+  it('sends via Gmail when deliver_via_gmail=true', async () => {
+    mockReaddirSync.mockReturnValue([]);
+
+    const result = await handlers['daily_summary']({ deliver_via_gmail: true });
+    const text = result.content[0].text;
+
+    expect(mockSendGmail).toHaveBeenCalledWith({
+      to: 'founder@radl.solutions',
+      subject: expect.stringContaining('End-of-Day Summary'),
+      htmlBody: expect.stringContaining('<!DOCTYPE html>'),
+    });
+    expect(text).toContain('Sent via Gmail');
+  });
+
+  it('does not send Gmail when deliver_via_gmail is not set', async () => {
+    mockReaddirSync.mockReturnValue([]);
+
+    await handlers['daily_summary']({});
+
+    expect(mockSendGmail).not.toHaveBeenCalled();
+  });
+
+  it('skips Gmail when Google not configured', async () => {
+    mockIsGoogleConfigured.mockReturnValue(false);
+    mockReaddirSync.mockReturnValue([]);
+
+    const result = await handlers['daily_summary']({ deliver_via_gmail: true });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Gmail delivery skipped');
+    expect(mockSendGmail).not.toHaveBeenCalled();
+  });
+
+  it('includes blockers from sprints', async () => {
+    mockReaddirSync.mockReturnValue(['completed-sprint-1.json']);
+    mockReadFileSync.mockImplementation((path: string) => {
+      if (path.includes('completed-')) {
+        return makeCompletedSprint({
+          blockers: [{ description: 'Supabase down for 30 min', time: `${todayStr}T14:00:00-05:00` }],
+        });
+      }
+      throw new Error('ENOENT');
+    });
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('Unresolved Blockers');
+    expect(text).toContain('Supabase down for 30 min');
+  });
+
+  it('handles missing sprint directory gracefully', async () => {
+    mockReaddirSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    const result = await handlers['daily_summary']({});
+    const text = result.content[0].text;
+
+    expect(text).toContain('End-of-Day Summary');
+    expect(text).toContain('No sprints completed today');
   });
 });
 
