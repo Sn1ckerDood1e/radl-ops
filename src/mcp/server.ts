@@ -5,14 +5,14 @@
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 48 tools across 3 groups (core, content, advanced) with annotations
+ * - Tools: 54 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
- * Tool groups (dynamic loading):
- * - core: always enabled (sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight, immune system, crystallization, causal graphs, inverse bloom, speculative validation, cognitive load, quality ratchet)
- * - content: disabled by default, enable with enable_tools (briefing, social, roadmap)
- * - advanced: disabled by default, enable with enable_tools (eval-opt, compound, tool-forge, counterfactual)
+ * Tool groups (all enabled by default, toggle with enable_tools):
+ * - core: sprint, monitoring, knowledge, iron laws, conductor, data-flow, pre-flight, immune system, crystallization, causal graphs, inverse bloom, speculative validation, cognitive load, quality ratchet, review tracker, production status, session health, alerts
+ * - content: briefing (daily/weekly/summary), social, roadmap
+ * - advanced: eval-opt, compound, tool-forge, counterfactual
  *
  * IMPORTANT: Set RADL_OPS_MODE before any imports that use logger/tracker.
  */
@@ -127,9 +127,8 @@ registerPrompts(server);
 registerResources(server, registry);
 
 // Register the enable_tools meta-tool (always enabled, manages other tool groups)
-const groupNames = TOOL_GROUPS.filter(g => !g.defaultEnabled).map(g => g.name);
+const groupNames = TOOL_GROUPS.map(g => g.name);
 const groupDescriptions = TOOL_GROUPS
-  .filter(g => !g.defaultEnabled)
   .map(g => `${g.name}: ${g.description}`)
   .join('; ');
 
@@ -171,7 +170,7 @@ server.tool(
   }
 );
 
-// Apply default enabled/disabled state (content + advanced start disabled)
+// Apply default enabled/disabled state (all groups start enabled; toggle with enable_tools)
 registry.applyDefaults();
 
 initTokenTracker();

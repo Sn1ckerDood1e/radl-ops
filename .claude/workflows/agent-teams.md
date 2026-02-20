@@ -28,8 +28,11 @@ communicate with each other, not just report back to the caller.
 ## MCP Tool: `team_recipe`
 
 Recipes are available programmatically via `mcp__radl-ops__team_recipe`. Pass a recipe type
-(`review`, `feature`, `debug`, `research`) and optional `context`, `files`, and `model` params.
+and optional `context`, `files`, and `model` params.
 Returns structured JSON with teammates, setup steps, cleanup steps, and tips.
+
+Available recipes: `review`, `feature`, `debug`, `research`, `incremental-review`,
+`migration`, `test-coverage`, `refactor`, `sprint-implementation`.
 
 ## Validated Team Recipes
 
@@ -129,6 +132,29 @@ and copied into Task 3 before review caught it. An incremental review after Task
 would have caught it before Task 3 replicated the pattern.
 
 Also available via MCP: `team_recipe(recipe: "incremental-review", context: "...", files: "...")`
+
+### 6. Sprint Implementation (Conductor-Driven Parallel)
+
+Used automatically by `/sprint-execute`. The sprint conductor generates structured
+dispatch blocks per wave with ready-to-execute `Task()` commands. The skill follows
+the dispatch plan — no manual team setup needed.
+
+**How it works:**
+1. Conductor decomposes feature into tasks with file ownership and dependency graph
+2. Tasks are grouped into waves; each wave gets a dispatch block:
+   - **PARALLEL DISPATCH** (2+ tasks, no file overlap) — agents spawned in background
+   - **SEQUENTIAL** (1 task or file conflicts) — leader executes directly
+   - **REVIEW CHECKPOINT** (after multi-task waves) — code + security reviewers
+3. Leader handles integration after each parallel wave (typecheck, commit)
+
+**Key patterns (validated Phase 69 + Phase 94):**
+- `Task(subagent_type="general-purpose", run_in_background=true, model="sonnet")`
+- Strict file ownership — each agent only modifies its assigned files
+- Leader handles shared hub files after all agents complete
+- `npm run typecheck` after each wave catches cross-cutting issues
+- Commit per-task, not per-wave
+
+Also available via MCP: `team_recipe(recipe: "sprint-implementation", context: "...", files: "...")`
 
 ## Lessons Learned (Feb 11, 2026 — updated)
 

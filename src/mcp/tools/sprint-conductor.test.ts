@@ -548,7 +548,7 @@ describe('Sprint Conductor Tool', () => {
   });
 
   describe('output formatting', () => {
-    it('includes team commands for waves with 3+ tasks', async () => {
+    it('includes dispatch blocks for waves with 3+ tasks', async () => {
       mockSuccessfulEvalOpt();
 
       mockGetAnthropicClient.mockReturnValue({
@@ -580,9 +580,83 @@ describe('Sprint Conductor Tool', () => {
       });
       const text = result.content[0].text;
 
-      expect(text).toContain('Team command:');
-      expect(text).toContain('subagent_type="coder"');
+      // New dispatch block format
+      expect(text).toContain('PARALLEL DISPATCH');
+      expect(text).toContain('subagent_type="general-purpose"');
       expect(text).toContain('run_in_background=true');
+      expect(text).toContain('Agent Spawn Commands');
+    });
+
+    it('includes team summary with agent count', async () => {
+      mockSuccessfulEvalOpt();
+
+      mockGetAnthropicClient.mockReturnValue({
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [{
+              type: 'tool_use',
+              name: 'task_decomposition',
+              input: {
+                tasks: [
+                  { id: 1, title: 'API A', description: 'Desc', activeForm: 'Building A', type: 'feature', files: ['a.ts'], dependsOn: [], estimateMinutes: 20 },
+                  { id: 2, title: 'API B', description: 'Desc', activeForm: 'Building B', type: 'feature', files: ['b.ts'], dependsOn: [], estimateMinutes: 20 },
+                  { id: 3, title: 'API C', description: 'Desc', activeForm: 'Building C', type: 'feature', files: ['c.ts'], dependsOn: [], estimateMinutes: 20 },
+                ],
+                executionStrategy: 'parallel',
+                rationale: 'All independent APIs',
+                totalEstimateMinutes: 60,
+                teamRecommendation: 'Use agent team',
+              },
+            }],
+            usage: { input_tokens: 2000, output_tokens: 1000 },
+          }),
+        },
+      });
+
+      const handlers = await getHandlers();
+      const result = await handlers['sprint_conductor']({
+        feature: 'Add three independent API endpoints',
+      });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Team Summary');
+      expect(text).toContain('3 agents total');
+    });
+
+    it('includes team_used template section for parallel waves', async () => {
+      mockSuccessfulEvalOpt();
+
+      mockGetAnthropicClient.mockReturnValue({
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [{
+              type: 'tool_use',
+              name: 'task_decomposition',
+              input: {
+                tasks: [
+                  { id: 1, title: 'API A', description: 'Desc', activeForm: 'Building A', type: 'feature', files: ['a.ts'], dependsOn: [], estimateMinutes: 20 },
+                  { id: 2, title: 'API B', description: 'Desc', activeForm: 'Building B', type: 'feature', files: ['b.ts'], dependsOn: [], estimateMinutes: 20 },
+                ],
+                executionStrategy: 'parallel',
+                rationale: 'Independent APIs',
+                totalEstimateMinutes: 40,
+                teamRecommendation: 'Use team',
+              },
+            }],
+            usage: { input_tokens: 2000, output_tokens: 1000 },
+          }),
+        },
+      });
+
+      const handlers = await getHandlers();
+      const result = await handlers['sprint_conductor']({
+        feature: 'Add two independent API endpoints',
+      });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Sprint Completion (team_used)');
+      expect(text).toContain('sprint-implementation');
+      expect(text).toContain('teammateCount: 2');
     });
 
     it('generates PR template from task titles', async () => {

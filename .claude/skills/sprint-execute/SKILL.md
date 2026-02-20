@@ -68,41 +68,44 @@ The argument is a feature description (required). Can be a short title or a deta
 
 ### Phase 3: Execution
 
-7. For each task (respecting dependency order):
+7. Execute waves from the conductor's Execution Plan (Section 3):
 
+   **For SEQUENTIAL waves (1 task or file conflicts):**
    a. Set task to `in_progress` via TaskUpdate
-
-   b. Read all files listed in the task's `files` array
-
-   c. Implement the changes:
-      - Follow ALL patterns from the conductor spec
+   b. Read all files in the task's `files` array
+   c. Implement changes following patterns from spec
       - Trace data flow in BOTH directions (READ + WRITE paths)
       - When adding a Prisma field: Schema -> Migration -> Validation -> API Handler -> Client
+   d. Typecheck: `cd /home/hb/radl && npx tsc --noEmit`
+   e. Commit: `git add <specific-files> && git commit -m "<type>(<scope>): <title>"`
+   f. `mcp__radl-ops__sprint_progress(message: "Done: <title>")`
+   g. Set task to `completed` via TaskUpdate
 
-   d. Run typecheck: `cd /home/hb/radl && npx tsc --noEmit`
+   **For PARALLEL DISPATCH waves (2+ tasks, no file conflicts):**
+   a. Create TaskCreate entries for each task in the wave
+   b. Copy-paste the agent spawn commands from the conductor's dispatch block
+      - Each Task() call uses: subagent_type="general-purpose", run_in_background=true, model="sonnet"
+      - Each agent's prompt includes: task description, file ownership list, typecheck command
+   c. While agents work: monitor via TaskOutput (non-blocking)
+   d. After ALL agents complete:
+      - Read each agent's result
+      - Run `npm run typecheck` — agents can't catch cross-cutting issues
+      - Fix type errors (leader handles integration)
+      - Commit per-task with conventional commits
+      - Call `sprint_progress` for each completed task
+      - Set tasks to `completed`
+   e. If any agent failed: handle as sequential fallback for that task
 
-   e. Commit per-task with conventional commit format:
-      ```bash
-      git add <specific-files>
-      git commit -m "<type>(<scope>): <description>"
-      ```
+   **For REVIEW CHECKPOINT waves:**
+   - Copy-paste the review agent spawn commands from the conductor's dispatch block
+   - Continue to next wave unless CRITICAL/HIGH findings
+   - Fix HIGH+ before proceeding
 
-   f. Record progress: `mcp__radl-ops__sprint_progress(message: "Done: <task title>")`
+   **For SEQUENTIAL WITH WARNING waves (file conflicts):**
+   - Execute tasks one-by-one (same as SEQUENTIAL)
+   - DO NOT parallelize — files overlap
 
-   g. If this task introduces a NEW pattern, spawn background reviewers:
-      ```
-      Task(subagent_type="code-reviewer", run_in_background=true, model="sonnet",
-           prompt="Review <changed files> for pattern correctness")
-      Task(subagent_type="security-reviewer", run_in_background=true, model="sonnet",
-           prompt="Spot-check <changed files> for auth bypass, injection")
-      ```
-
-   h. Set task to `completed` via TaskUpdate
-
-8. If 3+ tasks are independent (same wave in execution plan):
-   - Use lightweight parallel: `Task(run_in_background=true)` for each
-   - Each agent owns its files exclusively (no overlap)
-   - Leader handles shared files after all agents complete
+8. After all waves: proceed to Phase 4 (Quality Gate)
 
 ### Phase 4: Quality Gate
 
@@ -128,13 +131,22 @@ The argument is a feature description (required). Can be a short title or a deta
 
 ### Phase 5: Ship & Learn
 
-13. Complete sprint (auto-extracts compound learnings):
+13. Complete sprint with team tracking (auto-extracts compound learnings):
     ```
     mcp__radl-ops__sprint_complete(
       commit: "$(git rev-parse --short HEAD)",
-      actual_time: "<actual time>"
+      actual_time: "<actual time>",
+      team_used: {
+        recipe: "sprint-implementation",
+        teammateCount: <agents spawned across all parallel waves>,
+        model: "sonnet",
+        duration: "<total wall clock for parallel waves>",
+        tasksCompleted: <tasks completed by agents>,
+        outcome: "success" if all passed typecheck, "partial" if some needed leader fix
+      }
     )
     ```
+    Omit `team_used` if no parallel waves were executed (all sequential).
 
 14. Push and create PR:
     ```bash

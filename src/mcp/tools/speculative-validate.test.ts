@@ -19,10 +19,12 @@ vi.mock('../with-error-tracking.js', () => ({
 
 const mockLoadAntibodies = vi.fn();
 const mockMatchAntibodies = vi.fn();
+const mockMatchAntibodyChains = vi.fn();
 const mockSaveAntibodies = vi.fn();
 vi.mock('./immune-system.js', () => ({
   loadAntibodies: mockLoadAntibodies,
   matchAntibodies: mockMatchAntibodies,
+  matchAntibodyChains: mockMatchAntibodyChains,
   saveAntibodies: mockSaveAntibodies,
 }));
 
@@ -65,6 +67,7 @@ function createMockServer() {
 function setEmptyKnowledge(): void {
   mockLoadAntibodies.mockReturnValue({ antibodies: [] });
   mockMatchAntibodies.mockReturnValue([]);
+  mockMatchAntibodyChains.mockReturnValue([]);
   mockLoadCrystallized.mockReturnValue({ checks: [] });
   mockMatchCrystallizedChecks.mockReturnValue([]);
   mockLoadCausalGraph.mockReturnValue({ nodes: [], edges: [] });
@@ -261,6 +264,33 @@ describe('Speculative Validate — runSpeculativeValidation', () => {
     expect(causalIssues).toHaveLength(1);
     expect(causalIssues[0].severity).toBe('low');
     expect(causalIssues[0].suggestion).toContain('Causal chains');
+  });
+
+  it('includes antibody chain warnings as critical issues', async () => {
+    mockLoadAntibodies.mockReturnValue({ antibodies: [] });
+    mockMatchAntibodies.mockReturnValue([]);
+    mockMatchAntibodyChains.mockReturnValue([{
+      chainName: 'Schema + API handler compound',
+      antibodyIds: [1, 2],
+      triggers: ['Missing migration', 'Missing API handler update'],
+      severity: 'critical',
+      message: 'Compound pattern detected: Schema + API handler compound. Antibodies: #1, #2',
+    }]);
+
+    const { runSpeculativeValidation } = await import('./speculative-validate.js');
+
+    const report = await runSpeculativeValidation([
+      {
+        title: 'Add prisma field',
+        description: 'Add field to schema',
+      },
+    ]);
+
+    const chainIssues = report.issues.filter(i => i.check === 'antibody-chain');
+    expect(chainIssues).toHaveLength(1);
+    expect(chainIssues[0].severity).toBe('critical');
+    expect(chainIssues[0].message).toContain('Compound pattern detected');
+    expect(report.riskScore).toBeGreaterThanOrEqual(25); // critical = 25 points
   });
 
   it('calculates overall risk score from issue severities', async () => {

@@ -19,8 +19,8 @@ import type { TeamRunStore } from '../../types/index.js';
 import { getConfig } from '../../config/paths.js';
 
 const VALID_RECIPES = [
-  'review', 'feature', 'debug', 'research', 'migration',
-  'test-coverage', 'refactor', 'none',
+  'review', 'feature', 'debug', 'research', 'incremental-review',
+  'migration', 'test-coverage', 'refactor', 'sprint-implementation', 'none',
 ] as const;
 
 interface TeamAdvice {
@@ -84,14 +84,18 @@ const ADVICE_RESULT_TOOL: Anthropic.Tool = {
 const ADVISOR_SYSTEM_PROMPT = `You are a sprint planning advisor. Analyze the given tasks and decide whether an agent team would help.
 
 Decision criteria:
-- 3+ independent tasks with no shared files → RECOMMEND team
+- 2+ independent implementation tasks with no shared files → recipe: "sprint-implementation" (conductor generates dispatch blocks with ready-to-execute Task() commands)
 - Tasks are mostly review/analysis → recipe: "review" or "refactor"
 - Tasks touch different modules (frontend vs backend vs tests) → recipe: "feature"
 - Schema/database changes → recipe: "migration"
 - Test writing across different scopes → recipe: "test-coverage"
 - Bug investigation with multiple hypotheses → recipe: "debug"
 - Library evaluation or approach research → recipe: "research"
-- <3 tasks or tasks share files → recipe: "none", useTeam: false
+- Mid-sprint spot-check of new patterns → recipe: "incremental-review"
+- 1 task or tasks share files → recipe: "none", useTeam: false
+
+Prefer "sprint-implementation" for implementation sprints with 2+ independent tasks.
+It uses lightweight parallel execution (Task + run_in_background) — no full TeamCreate needed.
 
 When useTeam is false, set recipe to "none", suggestedSplit to [], estimatedTimeSaved to "0", and risks to [].
 
@@ -197,9 +201,15 @@ function formatAdviceOutput(advice: TeamAdvice): string {
   if (advice.useTeam) {
     lines.push('## Next Steps');
     lines.push('');
-    lines.push(`1. Run \`team_recipe(recipe: "${advice.recipe}")\` to get the full recipe`);
-    lines.push('2. Follow the setup steps to create the team');
-    lines.push(`3. After completion, pass \`team_used\` to \`sprint_complete\` for tracking`);
+    if (advice.recipe === 'sprint-implementation') {
+      lines.push('1. Run `/sprint-execute` — the conductor generates dispatch blocks with ready-to-execute Task() commands per wave');
+      lines.push('2. Or run `sprint_conductor` manually to get the dispatch plan, then follow it');
+      lines.push('3. After completion, pass `team_used` to `sprint_complete` for tracking');
+    } else {
+      lines.push(`1. Run \`team_recipe(recipe: "${advice.recipe}")\` to get the full recipe`);
+      lines.push('2. Follow the setup steps to create the team');
+      lines.push('3. After completion, pass `team_used` to `sprint_complete` for tracking');
+    }
     lines.push('');
   }
 

@@ -18,7 +18,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
-import { matchAntibodies, loadAntibodies, saveAntibodies } from './immune-system.js';
+import { matchAntibodies, matchAntibodyChains, loadAntibodies, saveAntibodies } from './immune-system.js';
+import type { ChainWarning } from './immune-system.js';
 import { matchCrystallizedChecks, loadCrystallized, saveCrystallized } from './crystallization.js';
 import { findRelevantCauses, loadCausalGraph } from './causal-graph.js';
 
@@ -125,29 +126,40 @@ interface AntibodyMatch {
   check: string;
 }
 
-function checkAntibodies(tasks: ValidationTask[]): AntibodyMatch[] {
+interface AntibodyCheckResult {
+  matches: AntibodyMatch[];
+  chainWarnings: ChainWarning[];
+}
+
+function checkAntibodies(tasks: ValidationTask[]): AntibodyCheckResult {
   const store = loadAntibodies();
   const activeAntibodies = store.antibodies.filter(ab => ab.active);
 
-  if (activeAntibodies.length === 0) {
-    return [];
-  }
-
   const matches: AntibodyMatch[] = [];
   const matchedIds = new Set<number>();
+  const allChainWarnings: ChainWarning[] = [];
 
   for (const task of tasks) {
     const searchText = `${task.title} ${task.description} ${(task.files ?? []).join(' ')}`;
-    const matched = matchAntibodies(searchText, activeAntibodies);
 
-    for (const ab of matched) {
-      matches.push({
-        task: task.title,
-        antibodyId: ab.id,
-        trigger: ab.trigger,
-        check: ab.check,
-      });
-      matchedIds.add(ab.id);
+    // Individual antibody matching (active only)
+    if (activeAntibodies.length > 0) {
+      const matched = matchAntibodies(searchText, activeAntibodies);
+      for (const ab of matched) {
+        matches.push({
+          task: task.title,
+          antibodyId: ab.id,
+          trigger: ab.trigger,
+          check: ab.check,
+        });
+        matchedIds.add(ab.id);
+      }
+    }
+
+    // Compound chain detection (checks all antibodies for chain-linked patterns)
+    const chains = matchAntibodyChains(searchText, store.antibodies);
+    for (const chain of chains) {
+      allChainWarnings.push(chain);
     }
   }
 
@@ -161,7 +173,7 @@ function checkAntibodies(tasks: ValidationTask[]): AntibodyMatch[] {
     saveAntibodies(updatedStore);
   }
 
-  return matches;
+  return { matches, chainWarnings: allChainWarnings };
 }
 
 // ============================================
@@ -319,6 +331,7 @@ function calculateRiskScore(issues: ValidationIssue[]): number {
 function buildIssues(
   dataFlowGaps: DataFlowGap[],
   antibodyMatches: AntibodyMatch[],
+  chainWarnings: ChainWarning[],
   crystallizedMatches: CrystallizedMatch[],
   genomeRisk: GenomeRisk | null,
   causalRisks: CausalRisk[],
@@ -341,6 +354,17 @@ function buildIssues(
           default: return l;
         }
       }).join(', ')}`,
+    });
+  }
+
+  // Antibody chain warnings are critical — compound risk patterns
+  for (const chain of chainWarnings) {
+    issues.push({
+      check: 'antibody-chain',
+      severity: 'critical',
+      task: '(cross-task)',
+      message: chain.message,
+      suggestion: `Review all antibodies in chain: ${chain.antibodyIds.map(id => `#${id}`).join(', ')}`,
     });
   }
 
@@ -467,8 +491,8 @@ export async function runSpeculativeValidation(
   const dataFlowGaps = checkDataFlowCoverage(tasks);
   checksRun.push('data-flow-coverage');
 
-  // 2. Antibody matching
-  const antibodyMatches = checkAntibodies(tasks);
+  // 2. Antibody matching (includes chain detection)
+  const { matches: antibodyMatches, chainWarnings } = checkAntibodies(tasks);
   checksRun.push('antibody-match');
 
   // 3. Crystallized check matching
@@ -487,6 +511,7 @@ export async function runSpeculativeValidation(
   const issues = buildIssues(
     dataFlowGaps,
     antibodyMatches,
+    chainWarnings,
     crystallizedMatches,
     genomeRisk,
     causalRisks,
