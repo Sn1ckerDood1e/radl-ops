@@ -923,11 +923,9 @@ export {
   getEstimationCalibrationFactor,
 };
 
-// Re-export from shared module for backward compatibility
+// Re-export from shared modules (used by tests)
 export { sanitizeForPrompt, parseDecomposition } from './shared/decomposition.js';
-export type { DecomposedTask, Decomposition } from './shared/decomposition.js';
 
-export type { ParallelWave } from './shared/agent-validation.js';
 export type {
   ExecutionPlan,
   KnowledgeContext,

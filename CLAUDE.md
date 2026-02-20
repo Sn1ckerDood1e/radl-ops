@@ -37,7 +37,7 @@ All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to tog
 | `cost_report` | core | API costs from radl-ops internal Claude calls |
 | `knowledge_query` | core | Query compound learnings (patterns, lessons, decisions) |
 | `iron_laws` | core | List all iron laws and current branch status |
-| `team_recipe` | core | Get structured agent team recipe (review, feature, debug, research, migration, test-coverage, refactor) |
+| `team_recipe` | core | Get structured agent team recipe (review, feature, debug, research, incremental-review, migration, test-coverage, refactor, sprint-implementation) |
 | `audit_triage` | core | Classify audit findings into DO_NOW/DO_SOON/DEFER via Haiku |
 | `sprint_advisor` | core | AI-powered analysis of sprint tasks to recommend team usage |
 | `review_pipeline` | core | Complete review workflow: recipe + triage template + orchestration checklist |
@@ -128,7 +128,7 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
                                     ├── social tools (Sonnet + Radl brand context + withRetry)
                                     ├── monitoring tools (HTTP health checks)
-                                    ├── team recipes (8 recipes)
+                                    ├── team recipes (9 recipes)
                                     ├── sprint advisor + decompose (AI task planning)
                                     ├── review pipeline (chained review → triage → tracking)
                                     ├── eval-opt (generate→evaluate→refine with memory + caching)
