@@ -18,7 +18,7 @@ CRONTAB_ENTRIES="# Radl-Ops automated tasks
 0 7 * * 6 /home/hb/radl-ops/scripts/weekly-briefing.sh >> /tmp/radl-weekly-briefing.log 2>&1
 0 0 * * * /home/hb/radl-ops/scripts/cleanup-logs.sh >> /tmp/radl-cleanup.log 2>&1
 0 18 * * * /home/hb/radl-ops/scripts/cost-alert.sh >> /tmp/radl-cost-alert.log 2>&1
-*/5 * * * * /home/hb/.nvm/versions/node/v22.22.0/bin/npx tsx /home/hb/radl-ops/scripts/alert-poll.ts >> /tmp/radl-alert-poll.log 2>&1"
+*/5 * * * * /home/hb/radl-ops/node_modules/.bin/tsx /home/hb/radl-ops/scripts/alert-poll.ts >> /tmp/radl-alert-poll.log 2>&1"
 
 # Preserve existing non-radl-ops cron jobs
 EXISTING=$(crontab -l 2>/dev/null | grep -v 'radl-ops' | grep -v '^# Radl-Ops' || true)

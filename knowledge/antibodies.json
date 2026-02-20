@@ -1,1 +1,74 @@
-{ "antibodies": [] }
+{
+  "antibodies": [
+    {
+      "id": 1,
+      "trigger": "Adding a new Prisma field without updating the API route handler to destructure and process it",
+      "triggerKeywords": ["prisma", "field", "handler", "route", "api", "schema", "updatedata"],
+      "check": "Verify the API route handler destructures the new field from the request body AND includes it in the updateData object. Check that any condition guard (e.g., if fieldA !== undefined || fieldB !== undefined) also includes the new field.",
+      "checkType": "manual",
+      "checkPattern": null,
+      "origin": { "sprint": "Phase 69", "bug": "API handler silently drops new field - data flow incomplete" },
+      "catches": 0,
+      "falsePositives": 0,
+      "falsePositiveRate": 0,
+      "active": true,
+      "createdAt": "2026-02-19T12:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "trigger": "Using listUsers() or fetching all users to look up a single email address instead of an indexed database query",
+      "triggerKeywords": ["listusers", "email", "lookup", "users", "query", "auth", "find"],
+      "check": "Never use listUsers() or equivalent admin API for single-user lookups. Use an indexed database query instead: prisma.$queryRaw on auth.users with WHERE email = $1.",
+      "checkType": "grep",
+      "checkPattern": "listUsers|getUsers\\(\\)|admin\\.listUsers",
+      "origin": { "sprint": "Phase 69", "bug": "listUsers() for single email lookup instead of indexed query" },
+      "catches": 0,
+      "falsePositives": 0,
+      "falsePositiveRate": 0,
+      "active": true,
+      "createdAt": "2026-02-19T12:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "trigger": "Client-side fetch mutation missing CSRF header (x-csrf-token or similar)",
+      "triggerKeywords": ["fetch", "post", "patch", "delete", "csrf", "headers", "mutation"],
+      "check": "All client-side fetch calls that perform mutations (POST, PATCH, DELETE, PUT) must include the CSRF header. Check for 'x-csrf-token' in the headers object.",
+      "checkType": "grep",
+      "checkPattern": "method:\\s*['\"](?:POST|PATCH|DELETE|PUT)['\"](?:(?!csrf).)*$",
+      "origin": { "sprint": "Phase 54", "bug": "CSRF header missing in client fetch mutation" },
+      "catches": 0,
+      "falsePositives": 0,
+      "falsePositiveRate": 0,
+      "active": true,
+      "createdAt": "2026-02-19T12:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "trigger": "Using new PostgreSQL enum values in the same migration transaction that creates them",
+      "triggerKeywords": ["enum", "migration", "prisma", "postgresql", "transaction", "alter", "type"],
+      "check": "PostgreSQL cannot use new enum values in the same transaction that adds them. ALWAYS split into 2 separate migrations: first migration adds the enum values, second migration uses them in column defaults or constraints.",
+      "checkType": "manual",
+      "checkPattern": null,
+      "origin": { "sprint": "Phase 69", "bug": "New Prisma enum values used in same transaction as creation" },
+      "catches": 0,
+      "falsePositives": 0,
+      "falsePositiveRate": 0,
+      "active": true,
+      "createdAt": "2026-02-19T12:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "trigger": "Prisma query missing team-scoped where clause allowing cross-tenant data access",
+      "triggerKeywords": ["prisma", "where", "team", "teamid", "findmany", "query", "tenant"],
+      "check": "Every Prisma query that reads or writes user-facing data MUST include a teamId filter in the where clause. Check that findMany, findFirst, update, delete all scope to the authenticated user's team.",
+      "checkType": "grep",
+      "checkPattern": "prisma\\.\\w+\\.(?:findMany|findFirst|update|delete)\\(",
+      "origin": { "sprint": "Phase 54", "bug": "Missing team-scoped where clause in Prisma query" },
+      "catches": 0,
+      "falsePositives": 0,
+      "falsePositiveRate": 0,
+      "active": true,
+      "createdAt": "2026-02-19T12:00:00.000Z"
+    }
+  ]
+}

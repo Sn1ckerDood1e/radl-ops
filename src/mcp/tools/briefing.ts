@@ -18,7 +18,8 @@ import { getCostSummaryForBriefing } from '../../models/token-tracker.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { withRetry } from '../../utils/retry.js';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 import { getConfig } from '../../config/paths.js';
 import { sendGmail, isGoogleConfigured } from '../../integrations/google.js';
 import { config } from '../../config/index.js';
@@ -347,6 +348,170 @@ Be thorough but organized. Use headers and bullet points.`;
       }
 
       return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta + deliveryNote }] };
+    })
+  );
+
+  server.tool(
+    'daily_summary',
+    'Generate an end-of-day summary email. Scans completed sprints from today, commit messages, learnings, and unresolved blockers. Sends via Gmail.',
+    {
+      deliver_via_gmail: z.boolean().optional()
+        .describe('Send summary via Gmail after generation. Requires Google OAuth credentials.'),
+      recipient: z.string().email().max(100).optional()
+        .describe('Email recipient (defaults to GOOGLE_BRIEFING_RECIPIENT config)'),
+    },
+    { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    withErrorTracking('daily_summary', async ({ deliver_via_gmail, recipient }) => {
+      const { radlDir, knowledgeDir } = getConfig();
+      const sprintDir = join(radlDir, '.planning', 'sprints');
+      const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+      // 1. Scan completed sprints from today
+      interface CompletedSprint {
+        id: string;
+        phase: string;
+        title: string;
+        estimate: string;
+        actualTime: string;
+        completedTasks: Array<{ message: string; completedAt: string }>;
+        blockers: Array<{ description: string; time: string }>;
+        commit: string;
+      }
+
+      const todaySprints: CompletedSprint[] = [];
+      try {
+        const files = readdirSync(sprintDir).filter(f => f.startsWith('completed-'));
+        for (const file of files) {
+          try {
+            const data = JSON.parse(readFileSync(join(sprintDir, file), 'utf-8')) as CompletedSprint & { endTime?: string };
+            const endDate = (data.endTime ?? '').split('T')[0];
+            if (endDate === todayStr) {
+              todaySprints.push(data);
+            }
+          } catch {
+            // Skip malformed files
+          }
+        }
+      } catch {
+        // Sprint directory missing — no sprints
+      }
+
+      // 2. Load today's learnings
+      interface LessonsStore {
+        lessons: Array<{ id: number; situation: string; learning: string; date: string }>;
+      }
+      const lessonsPath = join(knowledgeDir, 'lessons.json');
+      let todayLessons: LessonsStore['lessons'] = [];
+      try {
+        if (existsSync(lessonsPath)) {
+          const store = JSON.parse(readFileSync(lessonsPath, 'utf-8')) as LessonsStore;
+          todayLessons = store.lessons.filter(l => l.date.startsWith(todayStr));
+        }
+      } catch {
+        // Skip if parse fails
+      }
+
+      // 3. Build summary sections
+      const sections: string[] = [];
+
+      // Header
+      const dayName = new Date().toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+      });
+      sections.push(`# End-of-Day Summary\n\n**${dayName}**`);
+
+      // Sprints completed
+      if (todaySprints.length > 0) {
+        sections.push('## Sprints Completed');
+        let totalEstMin = 0;
+        let totalActMin = 0;
+
+        for (const sprint of todaySprints) {
+          const taskCount = sprint.completedTasks?.length ?? 0;
+          sections.push(`### ${sprint.phase}: ${sprint.title}`);
+          sections.push(`- **Estimated:** ${sprint.estimate} | **Actual:** ${sprint.actualTime} | **Tasks:** ${taskCount} | **Commit:** \`${sprint.commit}\``);
+
+          if (sprint.completedTasks?.length > 0) {
+            for (const task of sprint.completedTasks) {
+              sections.push(`  - ${task.message}`);
+            }
+          }
+
+          // Parse times for totals
+          const estMatch = sprint.estimate?.match(/(\d+(?:\.\d+)?)\s*h/i);
+          const actMatch = sprint.actualTime?.match(/(\d+(?:\.\d+)?)\s*h/i);
+          const estMinMatch = sprint.estimate?.match(/(\d+)\s*m/i);
+          const actMinMatch = sprint.actualTime?.match(/(\d+)\s*m/i);
+
+          if (estMatch) totalEstMin += parseFloat(estMatch[1]) * 60;
+          if (estMinMatch) totalEstMin += parseInt(estMinMatch[1], 10);
+          if (actMatch) totalActMin += parseFloat(actMatch[1]) * 60;
+          if (actMinMatch) totalActMin += parseInt(actMinMatch[1], 10);
+        }
+
+        const fmtTime = (mins: number) => {
+          const h = Math.floor(mins / 60);
+          const m = Math.round(mins % 60);
+          return h > 0 ? `${h}h ${m}m` : `${m}m`;
+        };
+
+        sections.push(`\n**Totals:** ${todaySprints.length} sprint(s) | Est: ${fmtTime(totalEstMin)} | Actual: ${fmtTime(totalActMin)}`);
+        if (totalEstMin > 0 && totalActMin > 0) {
+          const ratio = Math.round((totalActMin / totalEstMin) * 100);
+          sections.push(`**Efficiency:** ${ratio}% of estimated time`);
+        }
+      } else {
+        sections.push('## Sprints Completed\n\nNo sprints completed today.');
+      }
+
+      // Blockers
+      const allBlockers = todaySprints.flatMap(s => (s.blockers ?? []).map(b => ({
+        sprint: s.phase,
+        ...b,
+      })));
+      if (allBlockers.length > 0) {
+        sections.push('## Unresolved Blockers');
+        for (const blocker of allBlockers) {
+          sections.push(`- **${blocker.sprint}:** ${blocker.description}`);
+        }
+      }
+
+      // Learnings
+      if (todayLessons.length > 0) {
+        sections.push('## Learnings Extracted');
+        for (const lesson of todayLessons) {
+          sections.push(`- **${lesson.situation}** — ${lesson.learning}`);
+        }
+      }
+
+      // API costs
+      const costSummary = getCostSummaryForBriefing();
+      sections.push(`## API Costs\n\n${costSummary}`);
+
+      const summaryMarkdown = sections.join('\n\n');
+
+      // Gmail delivery
+      let deliveryNote = '';
+      if (deliver_via_gmail) {
+        if (!isGoogleConfigured()) {
+          deliveryNote = '\n\n**Gmail delivery skipped:** Google OAuth credentials not configured.';
+        } else {
+          try {
+            const to = recipient ?? config.google.briefingRecipient;
+            const subject = `End-of-Day Summary — ${dayName}`;
+            const htmlBody = markdownToHtml(summaryMarkdown, 'End-of-Day Summary');
+            const { messageId } = await sendGmail({ to, subject, htmlBody });
+            deliveryNote = `\n\n**Sent via Gmail** to ${to} (message: ${messageId})`;
+            logger.info('EOD summary sent via Gmail', { to, messageId });
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown error';
+            deliveryNote = `\n\n**Gmail delivery failed:** ${msg}`;
+            logger.error('EOD Gmail delivery failed', { error: msg });
+          }
+        }
+      }
+
+      return { content: [{ type: 'text' as const, text: summaryMarkdown + deliveryNote }] };
     })
   );
 

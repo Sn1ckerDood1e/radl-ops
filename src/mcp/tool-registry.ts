@@ -50,7 +50,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     name: 'content',
     description: 'Briefings (daily/weekly), social media (ideas, drafts, calendar), roadmap brainstorming',
     toolNames: [
-      'daily_briefing', 'weekly_briefing', 'social_ideas', 'social_draft',
+      'daily_briefing', 'weekly_briefing', 'daily_summary', 'social_ideas', 'social_draft',
       'social_calendar', 'roadmap_ideas',
     ],
     defaultEnabled: true,

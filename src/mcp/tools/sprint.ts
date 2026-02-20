@@ -545,7 +545,28 @@ export function registerSprintTools(server: McpServer): void {
       if (notify) args.push('--notify');
       const output = runSprint(args);
       notifySprintChanged();
-      return { content: [{ type: 'text' as const, text: output }] };
+
+      // Calendar sync: append progress note to event description
+      let calendarNote = '';
+      const calSync = loadCalendarSync();
+      if (calSync && isGoogleConfigured()) {
+        try {
+          const timestamp = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          const currentDescription = `Progress update (${timestamp}): ${message}`;
+          await updateCalendarEvent({
+            eventId: calSync.eventId,
+            description: currentDescription,
+          });
+          calendarNote = `\nCalendar event updated with progress note.`;
+          logger.info('Sprint progress synced to calendar', { eventId: calSync.eventId });
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          calendarNote = `\nCalendar sync failed (non-blocking): ${msg}`;
+          logger.warn('Sprint progress calendar sync failed', { error: msg });
+        }
+      }
+
+      return { content: [{ type: 'text' as const, text: `${output}${calendarNote}` }] };
     })
   );
 
