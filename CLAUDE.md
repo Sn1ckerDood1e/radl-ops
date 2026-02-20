@@ -12,8 +12,8 @@ Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups 
 
 | Group | Tools |
 |-------|-------|
-| **core** | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load |
-| **content** | daily_briefing, weekly_briefing, social_*, roadmap_ideas |
+| **core** | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load, record_review, resolve_review, production_status, session_health, alert_check |
+| **content** | daily_briefing, weekly_briefing, daily_summary, social_*, roadmap_ideas |
 | **advanced** | eval_opt_generate, compound_extract, tool_forge, counterfactual_analyze |
 
 All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to toggle groups if needed.
@@ -65,6 +65,13 @@ All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to tog
 | `trust_record` | core | Record decision outcome for quality ratchet |
 | `speculative_validate` | core | Zero-cost pre-validation against knowledge base (5 checks) |
 | `cognitive_load` | core | Zero-cost context window overflow prediction |
+| `record_review` | core | Record review findings for tracking across sprints |
+| `resolve_review` | core | Mark review findings as resolved |
+| `production_status` | core | Aggregated production health (Vercel + Supabase + Sentry) |
+| `session_health` | core | Session progress tracking and rabbit hole detection |
+| `alert_check` | core | Check for critical production alerts |
+| `verify` | core | Verify task completion against acceptance criteria |
+| `daily_summary` | content | End-of-day summary via eval-opt quality loop |
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
 | `compound_extract` | advanced | AI-powered compound learning extraction via Bloom pipeline |
 | `tool_forge` | advanced | Generate MCP tool code from crystallized checks or antibodies (Sonnet) |
@@ -98,7 +105,7 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 
 ```
 Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
-                                    ├── tools (48 tools, 3 groups + 1 meta, with annotations)
+                                    ├── tools (54 tools, 3 groups + 1 meta, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
                                     ├── sprint conductor:
@@ -142,7 +149,7 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
 
 ## Hooks (Automatic Enforcement)
 
-10 hooks across 7 Claude Code lifecycle events. All quality gates fire automatically.
+13 hooks across 7 Claude Code lifecycle events. All quality gates fire automatically.
 
 | Hook | Type | Event | Purpose |
 |------|------|-------|---------|
@@ -153,8 +160,11 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
 | Push Pre-Flight | command | PreToolUse (Bash) | Runs pre_flight_check before git push |
 | Branch Guard | command | PreToolUse (Bash) | Blocks pushes to main/master |
 | Typecheck After Edit | command | PostToolUse (Edit/Write) | Runs tsc after editing .ts/.tsx files |
+| Commit Spot-Check | command | PostToolUse (Bash) | AI spot-check of committed diffs |
+| Post-Commit Verify | command | PostToolUse (Bash) | Verifies commit quality post-commit |
 | Task Review Detector | agent | TaskCompleted | Inspects git diff for new patterns, recommends review |
 | Session Verify | agent | Stop | Verifies STATE.md updated, sprint tracked, no uncommitted changes |
+| Session Stop | command | Stop | Final session cleanup |
 | Build Self-Healer | agent | PostToolUseFailure | Auto-diagnoses build/typecheck failures |
 
 Hook scripts live in `scripts/hooks/`. Agent hooks are configured in `~/.claude/settings.json`.
