@@ -12,7 +12,7 @@ import type { TeamRecipe } from '../../types/index.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 
-export type RecipeType = 'review' | 'feature' | 'debug' | 'research' | 'incremental-review' | 'migration' | 'test-coverage' | 'refactor';
+export type RecipeType = 'review' | 'feature' | 'debug' | 'research' | 'incremental-review' | 'migration' | 'test-coverage' | 'refactor' | 'sprint-implementation';
 export type ModelTier = 'haiku' | 'sonnet' | 'opus';
 
 interface RecipeParams {
@@ -391,6 +391,65 @@ function buildRefactorRecipe(context: string, files: string, model: ModelTier): 
   };
 }
 
+export function buildSprintImplementationRecipe(context: string, files: string, model: ModelTier): TeamRecipe {
+  const fileList = files ? files.split(',').map(f => f.trim()) : [];
+  const taskCount = fileList.length > 0 ? Math.ceil(fileList.length / 3) : 3;
+
+  const teammates: TeamRecipe['teammates'] = [];
+  if (fileList.length > 0) {
+    const chunkSize = Math.ceil(fileList.length / Math.min(taskCount, 4));
+    for (let i = 0; i < fileList.length; i += chunkSize) {
+      const chunk = fileList.slice(i, i + chunkSize);
+      const idx = Math.floor(i / chunkSize) + 1;
+      teammates.push({
+        name: `implementer-${idx}`,
+        subagentType: 'general-purpose',
+        model,
+        taskDescription: `Implement sprint tasks for files: ${chunk.join(', ')}. ${context}`,
+        fileOwnership: chunk,
+      });
+    }
+  } else {
+    teammates.push({
+      name: 'implementer-1',
+      subagentType: 'general-purpose',
+      model,
+      taskDescription: `Implement sprint tasks as described. ${context}`,
+    });
+  }
+
+  return {
+    teamName: 'sprint-implementation',
+    teammates,
+    setupSteps: [
+      'Use the conductor\'s dispatch plan — it has ready-to-execute Task() commands per wave',
+      'For PARALLEL waves: copy-paste agent spawn commands from the dispatch block',
+      'Each agent uses: subagent_type="general-purpose", run_in_background=true, model="sonnet"',
+      'Each agent\'s prompt includes: task description, file ownership list, typecheck command',
+      'For SEQUENTIAL waves: execute directly without agent dispatch',
+      'For REVIEW CHECKPOINT waves: spawn code-reviewer + security-reviewer in background',
+      'After each parallel wave: run `npm run typecheck` to catch cross-cutting issues',
+      'Commit per-task with conventional commit format',
+      'Call sprint_progress after each completed task',
+    ],
+    cleanupSteps: [
+      'No agent team cleanup needed — uses lightweight parallel (Task + run_in_background)',
+      'Background agents terminate automatically when their task completes',
+      'Run final typecheck: `cd /home/hb/radl && npx tsc --noEmit`',
+    ],
+    tips: [
+      'Lightweight parallel (Task + run_in_background) is preferred over full TeamCreate for implementation',
+      'Strict file ownership prevents merge conflicts — each agent owns different files',
+      'Leader handles shared/hub files (e.g., page.tsx) AFTER all agents complete',
+      'Agents can\'t catch cross-cutting bugs (field in A, handler in B) — typecheck + security review are the safety net',
+      'Plans must list ALL files in every data flow — missing route.ts = silent data loss',
+      'Sonnet is sufficient for implementation agents — same quality at lower cost',
+      'If an agent fails: fall back to sequential execution for that task',
+      'When calling sprint_complete, include team_used parameter with agent count and outcome',
+    ],
+  };
+}
+
 const RECIPE_BUILDERS: Record<RecipeType, (context: string, files: string, model: ModelTier) => TeamRecipe> = {
   review: buildReviewRecipe,
   feature: buildFeatureRecipe,
@@ -400,6 +459,7 @@ const RECIPE_BUILDERS: Record<RecipeType, (context: string, files: string, model
   migration: buildMigrationRecipe,
   'test-coverage': buildTestCoverageRecipe,
   refactor: buildRefactorRecipe,
+  'sprint-implementation': buildSprintImplementationRecipe,
 };
 
 export function formatRecipeOutput(recipe: TeamRecipe, recipeType: string): string {
@@ -456,9 +516,9 @@ export function formatRecipeOutput(recipe: TeamRecipe, recipeType: string): stri
 export function registerTeamTools(server: McpServer): void {
   server.tool(
     'team_recipe',
-    'Get a structured agent team recipe for Claude Code to execute. Returns teammate configuration, setup steps, and cleanup instructions. Recipes: review (3 parallel reviewers), feature (backend + frontend + tester), debug (3 hypothesis investigators), research (library + architecture + risk), incremental-review (2 background sub-agents), migration (DB engineer + tester + docs), test-coverage (unit + integration + e2e), refactor (dead code + patterns + types). Example: { "recipe": "review", "context": "auth module security audit", "files": "src/lib/auth,src/app/api/auth", "model": "sonnet" }',
+    'Get a structured agent team recipe for Claude Code to execute. Returns teammate configuration, setup steps, and cleanup instructions. Recipes: review (3 parallel reviewers), feature (backend + frontend + tester), debug (3 hypothesis investigators), research (library + architecture + risk), incremental-review (2 background sub-agents), migration (DB engineer + tester + docs), test-coverage (unit + integration + e2e), refactor (dead code + patterns + types), sprint-implementation (conductor-driven parallel execution). Example: { "recipe": "review", "context": "auth module security audit", "files": "src/lib/auth,src/app/api/auth", "model": "sonnet" }',
     {
-      recipe: z.enum(['review', 'feature', 'debug', 'research', 'incremental-review', 'migration', 'test-coverage', 'refactor'])
+      recipe: z.enum(['review', 'feature', 'debug', 'research', 'incremental-review', 'migration', 'test-coverage', 'refactor', 'sprint-implementation'])
         .describe('Type of team recipe to generate'),
       context: z.string().max(2000).optional()
         .describe('What the team will work on (e.g., "review the auth module", "implement dark mode")'),

@@ -33,7 +33,12 @@ import type {
   DecomposedTask,
   Decomposition,
 } from './shared/decomposition.js';
-import { formatAgentDispatchSection } from './shared/agent-validation.js';
+import {
+  formatAgentDispatchSection,
+  formatWaveDispatchBlock,
+  formatDispatchSummary,
+} from './shared/agent-validation.js';
+import type { ParallelWave } from './shared/agent-validation.js';
 import { withRetry } from '../../utils/retry.js';
 import { createPlanFromDecomposition, savePlan } from './shared/plan-store.js';
 import { getCalibrationFactor } from './shared/estimation.js';
@@ -48,14 +53,6 @@ import { formatVerificationSection } from './shared/task-verifier.js';
 // ============================================
 // Types
 // ============================================
-
-interface ParallelWave {
-  waveNumber: number;
-  tasks: DecomposedTask[];
-  fileConflicts: string[];
-  hasConflicts: boolean;
-  isReviewCheckpoint?: boolean;
-}
 
 interface ExecutionPlan {
   waves: ParallelWave[];
@@ -515,7 +512,7 @@ function formatConductorOutput(result: ConductorResult): string {
     lines.push('');
   }
 
-  // Section 3: Execution Plan
+  // Section 3: Execution Plan with Dispatch Blocks
   lines.push('## 3. Execution Plan');
   lines.push('');
   lines.push(`**Strategy:** ${result.executionPlan.strategy}`);
@@ -526,36 +523,18 @@ function formatConductorOutput(result: ConductorResult): string {
   }
   lines.push('');
 
-  for (const wave of result.executionPlan.waves) {
-    if (wave.isReviewCheckpoint) {
-      lines.push(`### Wave ${wave.waveNumber} — REVIEW CHECKPOINT`);
-      lines.push('Run incremental code-reviewer + security-reviewer on committed changes before proceeding.');
-      lines.push('```');
-      lines.push('Task(subagent_type="code-reviewer", run_in_background=true, model="sonnet", prompt="Review committed changes")');
-      lines.push('Task(subagent_type="security-reviewer", run_in_background=true, model="sonnet", prompt="Security review committed changes")');
-      lines.push('```');
-      lines.push('');
-      continue;
-    }
+  // Team summary
+  lines.push(formatDispatchSummary(result.executionPlan.waves));
 
-    const taskList = wave.tasks.map(t => `#${t.id} ${t.title}`).join(', ');
-    lines.push(`### Wave ${wave.waveNumber} (${wave.tasks.length} task${wave.tasks.length > 1 ? 's' : ''})`);
-    lines.push(`Tasks: ${taskList}`);
-    if (wave.hasConflicts) {
-      lines.push(`**FILE CONFLICTS:** ${wave.fileConflicts.join('; ')} — run these sequentially`);
-    }
-    if (wave.tasks.length >= 3) {
-      lines.push('**Team command:**');
-      lines.push('```');
-      for (const t of wave.tasks) {
-        lines.push(`Task(subagent_type="coder", run_in_background=true, prompt="Implement: ${t.title}. Files: ${t.files.join(', ')}")`);
-      }
-      lines.push('```');
-    }
-    lines.push('');
+  // Wave dispatch blocks
+  const featureTitle = result.decomposition.tasks.length > 0
+    ? result.decomposition.tasks[0].title
+    : 'feature implementation';
+  for (const wave of result.executionPlan.waves) {
+    lines.push(formatWaveDispatchBlock(wave, featureTitle));
   }
 
-  // Agent dispatch recommendations
+  // Agent dispatch recommendations (per-task sizing)
   lines.push(formatAgentDispatchSection(result.decomposition.tasks));
   lines.push('');
 
@@ -597,9 +576,36 @@ function formatConductorOutput(result: ConductorResult): string {
   lines.push(formatVerificationSection());
   lines.push('');
 
-  // Section 6: Validation Warnings (from speculative validation)
+  // Section 6: Sprint Completion Template
+  const parallelWaves = result.executionPlan.waves.filter(
+    w => !w.isReviewCheckpoint && !w.hasConflicts && w.tasks.length >= 2,
+  );
+  if (parallelWaves.length > 0) {
+    const totalAgents = parallelWaves.reduce((sum, w) => sum + w.tasks.length, 0);
+    lines.push('## 6. Sprint Completion (team_used)');
+    lines.push('');
+    lines.push('When calling sprint_complete, include:');
+    lines.push('```');
+    lines.push('sprint_complete({');
+    lines.push('  commit: "...",');
+    lines.push('  actual_time: "...",');
+    lines.push('  team_used: {');
+    lines.push('    recipe: "sprint-implementation",');
+    lines.push(`    teammateCount: ${totalAgents},`);
+    lines.push('    model: "sonnet",');
+    lines.push('    duration: "<wall clock for parallel waves>",');
+    lines.push(`    tasksCompleted: ${totalAgents},`);
+    lines.push('    outcome: "success|partial|failed"');
+    lines.push('  }');
+    lines.push('})');
+    lines.push('```');
+    lines.push('');
+  }
+
+  // Section 7: Validation Warnings (from speculative validation)
   if (result.validationWarnings && result.validationWarnings.length > 0) {
-    lines.push('## 6. Validation Warnings');
+    const warningSection = parallelWaves.length > 0 ? '7' : '6';
+    lines.push(`## ${warningSection}. Validation Warnings`);
     lines.push('');
     lines.push('Pre-execution validation detected potential issues:');
     lines.push('');
@@ -921,8 +927,8 @@ export {
 export { sanitizeForPrompt, parseDecomposition } from './shared/decomposition.js';
 export type { DecomposedTask, Decomposition } from './shared/decomposition.js';
 
+export type { ParallelWave } from './shared/agent-validation.js';
 export type {
-  ParallelWave,
   ExecutionPlan,
   KnowledgeContext,
   ConductorResult,
