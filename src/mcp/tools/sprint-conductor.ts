@@ -299,9 +299,9 @@ function buildExecutionPlan(decomposition: Decomposition): ExecutionPlan {
   const rawEstimate = decomposition.tasks.reduce((sum, t) => sum + t.estimateMinutes, 0);
   const calibratedEstimate = Math.round(rawEstimate * getEstimationCalibrationFactor());
 
-  // Recommend team if any wave has 3+ tasks
+  // Recommend team if any wave has 2+ tasks (matches dispatch block threshold)
   const maxWaveSize = Math.max(...implementationWaves.map(w => w.tasks.length), 0);
-  const recommendTeam = maxWaveSize >= 3;
+  const recommendTeam = maxWaveSize >= 2;
 
   const strategy: 'sequential' | 'parallel' | 'mixed' =
     implementationWaves.length === 1 && implementationWaves[0].tasks.length === decomposition.tasks.length
