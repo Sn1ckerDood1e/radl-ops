@@ -2,10 +2,13 @@
  * Configuration management for Radl Ops
  */
 
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config as dotenvConfig } from 'dotenv';
 
-// Load .env file
-dotenvConfig();
+// Load .env file with explicit path — CWD may differ in MCP subprocess context
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenvConfig({ path: resolve(__dirname, '../../.env') });
 
 function requireEnv(key: string): string {
   const value = process.env[key];
