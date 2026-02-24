@@ -648,17 +648,18 @@ async function runConductorPipeline(
   let knowledge: KnowledgeContext;
   const cachedKnowledge = getCachedContext(feature);
   if (cachedKnowledge) {
-    // Cache hit — reconstruct KnowledgeContext from cached string
-    knowledge = { patterns: cachedKnowledge, lessons: '', deferred: '', estimations: '' };
-    logger.info('Sprint conductor: knowledge loaded from ReasoningBank cache');
+    // Cache hit — restore full KnowledgeContext from cached JSON
+    try {
+      knowledge = JSON.parse(cachedKnowledge) as KnowledgeContext;
+      logger.info('Sprint conductor: knowledge loaded from ReasoningBank cache');
+    } catch {
+      // Corrupt cache entry — fall through to fresh load
+      knowledge = loadKnowledgeContext();
+    }
   } else {
     knowledge = loadKnowledgeContext();
-    // Cache the assembled context for future similar features
-    const assembledContext = [knowledge.patterns, knowledge.lessons, knowledge.deferred, knowledge.estimations]
-      .filter(Boolean).join('\n\n');
-    if (assembledContext) {
-      cacheContext(feature, assembledContext);
-    }
+    // Cache the full KnowledgeContext as JSON for future similar features
+    cacheContext(feature, JSON.stringify(knowledge));
   }
 
   // EFFORT: instant — return knowledge context only (no AI calls)

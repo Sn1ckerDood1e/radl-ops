@@ -531,8 +531,10 @@ export function registerSprintTools(server: McpServer): void {
       let knowledgeHints = '';
       try {
         knowledgeHints = getProactiveKnowledge(title);
-      } catch {
-        // Non-critical: don't block sprint start
+      } catch (error) {
+        logger.warn('Proactive knowledge retrieval failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
 
       const taskAdvisory = (!task_count || task_count === 0)

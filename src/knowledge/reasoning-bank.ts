@@ -42,6 +42,11 @@ interface ReasoningBankStore {
 const BANK_FILENAME = 'reasoning-bank.json';
 const MAX_ENTRIES = 50;
 const KNOWLEDGE_FILES = ['patterns.json', 'lessons.json', 'decisions.json', 'deferred.json'];
+const STOPWORDS = new Set([
+  'the', 'a', 'an', 'is', 'in', 'to', 'of', 'and', 'for', 'with',
+  'on', 'at', 'by', 'it', 'or', 'be', 'as', 'do', 'add', 'implement',
+  'create', 'build', 'make', 'update', 'fix', 'new',
+]);
 
 // ============================================
 // File I/O
@@ -77,16 +82,10 @@ function saveBank(bank: ReasoningBankStore): void {
  * Lowercases, removes stopwords, sorts remaining tokens.
  */
 function normalizeFeature(feature: string): string {
-  const stopwords = new Set([
-    'the', 'a', 'an', 'is', 'in', 'to', 'of', 'and', 'for', 'with',
-    'on', 'at', 'by', 'it', 'or', 'be', 'as', 'do', 'add', 'implement',
-    'create', 'build', 'make', 'update', 'fix', 'new',
-  ]);
-
   const tokens = feature
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter(t => t.length > 1 && !stopwords.has(t))
+    .filter(t => t.length > 1 && !STOPWORDS.has(t))
     .sort();
 
   return tokens.join(' ');

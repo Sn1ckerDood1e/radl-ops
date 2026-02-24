@@ -327,7 +327,9 @@ export function getGraphStats(): { nodes: number; edges: number; nodeTypes: Reco
  */
 export function clearGraph(): void {
   const db = getDb();
-  db.exec('DELETE FROM knowledge_edges');
-  db.exec('DELETE FROM knowledge_nodes');
+  db.transaction(() => {
+    db.exec('DELETE FROM knowledge_edges');
+    db.exec('DELETE FROM knowledge_nodes');
+  })();
   logger.info('Knowledge graph cleared');
 }

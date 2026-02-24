@@ -13,7 +13,7 @@ import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
 import { recordRetrievals, getPromotionCandidates, getStaleEntries } from '../../knowledge/fts-index.js';
-import { findNodesByKeywords, getNeighbors, getGraphStats, type GraphNode } from '../../knowledge/graph.js';
+import { findNodesByKeywords, getNeighbors, type GraphNode } from '../../knowledge/graph.js';
 
 interface Pattern {
   id: number;
@@ -440,10 +440,7 @@ function fusionRetrieveFromGraph(
   existingResults: ScoredEntry[],
 ): ScoredEntry[] {
   try {
-    const stats = getGraphStats();
-    if (stats.nodes === 0) return [];
-
-    // Find graph nodes matching keywords
+    // Find graph nodes matching keywords (returns [] if graph is empty)
     const matchedNodes = findNodesByKeywords(keywords, 5);
     if (matchedNodes.length === 0) return [];
 

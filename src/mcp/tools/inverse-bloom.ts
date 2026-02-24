@@ -17,7 +17,7 @@ import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../config/logger.js';
 import { getConfig } from '../../config/paths.js';
-import { findNodesByKeywords, getNeighbors, getGraphStats } from '../../knowledge/graph.js';
+import { findNodesByKeywords, getNeighbors } from '../../knowledge/graph.js';
 
 // ============================================
 // Types
@@ -309,9 +309,6 @@ function scoreCausalNodes(taskTokens: Set<string>): ScoredItem[] {
 
 function scoreGraphNeighbors(taskTokens: Set<string>): ScoredItem[] {
   try {
-    const stats = getGraphStats();
-    if (stats.nodes === 0) return [];
-
     const keywords = [...taskTokens].slice(0, 10); // Limit keywords for perf
     const matchedNodes = findNodesByKeywords(keywords, 5);
     if (matchedNodes.length === 0) return [];
