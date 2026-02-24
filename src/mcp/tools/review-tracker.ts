@@ -106,7 +106,7 @@ export function registerReviewTrackerTools(server: McpServer): void {
         reviewer: z.string().min(1).max(50).describe('Reviewer name (e.g., "security-reviewer", "code-reviewer")'),
       })).min(1).describe('Array of review findings to record'),
       intent: z.string().min(1).max(100).optional()
-        .describe('Short intent description for causal tracking (e.g., "post-task security review")'),
+        .describe('Short intent description for structured logging (e.g., "post-task security review")'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     withErrorTracking('record_review', async ({ findings, intent }) => {

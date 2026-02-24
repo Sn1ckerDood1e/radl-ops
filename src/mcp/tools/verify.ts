@@ -49,7 +49,7 @@ export function registerVerifyTools(server: McpServer): void {
       checks: z.array(z.enum(['typecheck', 'build', 'test'])).optional()
         .describe('Which checks to run (defaults to typecheck + build)'),
       intent: z.string().min(1).max(100).optional()
-        .describe('Short intent description for causal tracking (e.g., "pre-PR check")'),
+        .describe('Short intent description for structured logging (e.g., "pre-PR check")'),
     },
     { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     withErrorTracking('verify', async ({ checks, intent }) => {

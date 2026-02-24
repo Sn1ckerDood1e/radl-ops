@@ -349,11 +349,12 @@ describe('Knowledge Query Tool', () => {
       expect(recordRetrievals).not.toHaveBeenCalled();
     });
 
-    it('shows promotion hint when candidates exist', async () => {
+    it('shows promotion hint when candidates overlap with results', async () => {
       mockFiles();
+      // pattern-1 matches CSRF query and is a promotion candidate
       vi.mocked(getPromotionCandidates).mockReturnValue([
         { entryId: 'pattern-1', count: 5, lastRetrieved: '2026-02-20' },
-        { entryId: 'lesson-2', count: 3, lastRetrieved: '2026-02-19' },
+        { entryId: 'lesson-99', count: 3, lastRetrieved: '2026-02-19' },
       ]);
 
       const handler = await getHandler();
@@ -361,7 +362,22 @@ describe('Knowledge Query Tool', () => {
       const text = result.content[0].text;
 
       expect(text).toContain('Promotion hint');
-      expect(text).toContain('2 entries retrieved 3+ times');
+      // Only pattern-1 overlaps with CSRF results, lesson-99 doesn't
+      expect(text).toContain('1 returned entries retrieved 3+ times');
+    });
+
+    it('does not show promotion hint when candidates do not overlap with results', async () => {
+      mockFiles();
+      // Candidates exist but none match the CSRF query results
+      vi.mocked(getPromotionCandidates).mockReturnValue([
+        { entryId: 'lesson-99', count: 5, lastRetrieved: '2026-02-20' },
+      ]);
+
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'CSRF' });
+      const text = result.content[0].text;
+
+      expect(text).not.toContain('Promotion hint');
     });
 
     it('does not show promotion hint when no candidates', async () => {
@@ -382,6 +398,7 @@ describe('Knowledge Query Tool', () => {
 
       const structured = result.structuredContent;
       expect(structured.results[0]).toHaveProperty('type');
+      expect(structured.results[0]).toHaveProperty('entryId');
       expect(structured.results[0]).toHaveProperty('score');
     });
   });

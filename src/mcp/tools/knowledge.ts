@@ -242,12 +242,16 @@ export function registerKnowledgeTools(server: McpServer): void {
         // Non-critical: don't fail the query if tracking fails
       }
 
-      // Check for promotion candidates and append hint
+      // Check for promotion candidates that overlap with current results
       try {
         const candidates = getPromotionCandidates();
         if (candidates.length > 0) {
-          lines.push('');
-          lines.push(`_Promotion hint: ${candidates.length} entries retrieved 3+ times — consider crystallize_propose._`);
+          const candidateIds = new Set(candidates.map(c => c.entryId));
+          const returningCandidates = top.filter(e => candidateIds.has(e.entryId));
+          if (returningCandidates.length > 0) {
+            lines.push('');
+            lines.push(`_Promotion hint: ${returningCandidates.length} returned entries retrieved 3+ times — consider crystallize_propose._`);
+          }
         }
       } catch {
         // Non-critical
@@ -262,6 +266,7 @@ export function registerKnowledgeTools(server: McpServer): void {
           totalMatches: scored.length,
           results: top.map(entry => ({
             type: entry.type,
+            entryId: entry.entryId,
             score: entry.score,
             text: entry.text,
           })),

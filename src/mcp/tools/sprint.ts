@@ -539,7 +539,7 @@ export function registerSprintTools(server: McpServer): void {
       message: z.string().min(1).max(500).describe('Description of completed task'),
       notify: z.boolean().optional().default(false).describe('Send Slack notification'),
       intent: z.string().min(1).max(100).optional()
-        .describe('Short intent description for causal tracking (e.g., "complete auth refactor")'),
+        .describe('Short intent description for structured logging (e.g., "complete auth refactor")'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     withErrorTracking('sprint_progress', async ({ message, notify, intent }) => {
@@ -549,7 +549,7 @@ export function registerSprintTools(server: McpServer): void {
       notifySprintChanged();
 
       if (intent) {
-        logger.info('Sprint progress intent', { intent, message });
+        logger.info('Sprint progress intent', { intent: intent.substring(0, 80), messageLength: message.length });
       }
 
       // Calendar sync: append progress note to event description
@@ -600,14 +600,14 @@ export function registerSprintTools(server: McpServer): void {
       auto_extract: z.boolean().optional().default(true)
         .describe('Auto-run compound learning extraction via Bloom pipeline (default: true)'),
       intent: z.string().min(1).max(100).optional()
-        .describe('Short intent description for causal tracking (e.g., "ship auth feature")'),
+        .describe('Short intent description for structured logging (e.g., "ship auth feature")'),
     },
     { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used, auto_extract, intent }) => {
       const output = runSprint(['complete', commit, actual_time]);
 
       if (intent) {
-        logger.info('Sprint complete intent', { intent, commit, actual_time });
+        logger.info('Sprint complete intent', { intent: intent.substring(0, 80), commit });
       }
 
       // Clear sprint phase tag for cost tracking

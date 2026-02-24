@@ -472,7 +472,7 @@ export function getStaleEntries(): PromotionCandidate[] {
   const db = getDb();
   const cutoff = new Date(Date.now() - STALE_DAYS * 86_400_000).toISOString();
 
-  // Entries in FTS5 with no retrieval record OR last retrieved before cutoff
+  // Entries in FTS5 with no retrieval record OR retrieved infrequently and not recently
   const rows = db.prepare(`
     SELECT f.id as entry_id,
            COALESCE(r.count, 0) as count,
@@ -480,11 +480,10 @@ export function getStaleEntries(): PromotionCandidate[] {
     FROM knowledge_fts f
     LEFT JOIN retrieval_counts r ON r.entry_id = f.id
     WHERE r.entry_id IS NULL
-       OR (r.count = 0 AND r.last_retrieved_at < ?)
        OR (r.last_retrieved_at < ? AND r.count < 2)
     ORDER BY last_retrieved_at ASC
     LIMIT 20
-  `).all(cutoff, cutoff) as Array<{
+  `).all(cutoff) as Array<{
     entry_id: string;
     count: number;
     last_retrieved_at: string;

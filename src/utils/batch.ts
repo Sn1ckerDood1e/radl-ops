@@ -32,7 +32,7 @@ export interface BatchResult {
 export interface BatchOptions {
   /** Polling interval in ms (default 10000) */
   pollIntervalMs?: number;
-  /** Max time to wait for batch completion in ms (default 300000 = 5 min) */
+  /** Max time to wait for batch completion in ms (default 3600000 = 1 hour) */
   timeoutMs?: number;
   /** Injectable sleep function for testing */
   _sleep?: (ms: number) => Promise<void>;
@@ -40,7 +40,7 @@ export interface BatchOptions {
 
 const DEFAULT_OPTIONS: Required<BatchOptions> = {
   pollIntervalMs: 10_000,
-  timeoutMs: 300_000,
+  timeoutMs: 3_600_000,
   _sleep: (ms: number) => new Promise(resolve => setTimeout(resolve, ms)),
 };
 
