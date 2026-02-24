@@ -246,10 +246,65 @@ function parseProposalResponse(response: Anthropic.Message): ProposedCheck[] {
   }));
 }
 
+/**
+ * Quality gate: filter out lessons that don't warrant crystallization.
+ * Rejects documentation-only, single-use workarounds, and untested fixes.
+ */
+function filterLessonQuality(lessons: LessonEntry[]): LessonEntry[] {
+  const DOC_ONLY_PATTERNS = [
+    /\bdocument(ation)?\b/i,
+    /\bupdate\s+(readme|docs?|changelog)\b/i,
+    /\badd\s+comment/i,
+  ];
+
+  const WORKAROUND_PATTERNS = [
+    /\bworkaround\b/i,
+    /\bhack\b/i,
+    /\btemporary fix\b/i,
+    /\bquick fix\b/i,
+  ];
+
+  return lessons.filter(lesson => {
+    const text = `${lesson.situation} ${lesson.learning}`;
+
+    // Reject documentation-only lessons
+    const isDocOnly = DOC_ONLY_PATTERNS.some(p => p.test(text)) &&
+      !text.toLowerCase().includes('code') &&
+      !text.toLowerCase().includes('implementation');
+    if (isDocOnly) {
+      logger.debug('Crystallization quality gate: rejected doc-only lesson', { id: lesson.id });
+      return false;
+    }
+
+    // Reject single-use workarounds (unless high frequency proves recurrence)
+    const isWorkaround = WORKAROUND_PATTERNS.some(p => p.test(text));
+    if (isWorkaround && (lesson.frequency ?? 1) < 3) {
+      logger.debug('Crystallization quality gate: rejected low-freq workaround', { id: lesson.id });
+      return false;
+    }
+
+    // Reject very short lessons (likely incomplete)
+    if (lesson.learning.length < 20) {
+      logger.debug('Crystallization quality gate: rejected short lesson', { id: lesson.id });
+      return false;
+    }
+
+    return true;
+  });
+}
+
 async function proposeChecks(
   qualifyingLessons: LessonEntry[],
-): Promise<{ proposals: ProposedCheck[]; costUsd: number }> {
-  const lessonsText = qualifyingLessons.map(l =>
+): Promise<{ proposals: ProposedCheck[]; costUsd: number; filtered: number }> {
+  // Apply quality gate before sending to AI
+  const filteredLessons = filterLessonQuality(qualifyingLessons);
+  const filteredCount = qualifyingLessons.length - filteredLessons.length;
+
+  if (filteredLessons.length === 0) {
+    return { proposals: [], costUsd: 0, filtered: filteredCount };
+  }
+
+  const lessonsText = filteredLessons.map(l =>
     `- [ID ${l.id}] (freq: ${l.frequency ?? 1}) ${l.situation}: ${l.learning}`
   ).join('\n');
 
@@ -289,6 +344,7 @@ async function proposeChecks(
   return {
     proposals,
     costUsd: Math.round(cost * 1_000_000) / 1_000_000,
+    filtered: filteredCount,
   };
 }
 
@@ -348,8 +404,11 @@ export async function proposeChecksFromLessons(minFrequency: number = 1): Promis
     return 0;
   }
 
-  const { proposals } = await proposeChecks(qualifyingLessons);
+  const { proposals, filtered } = await proposeChecks(qualifyingLessons);
   if (proposals.length === 0) {
+    if (filtered > 0) {
+      logger.info('Auto-crystallization: all lessons filtered by quality gate', { filtered });
+    }
     return 0;
   }
 
@@ -421,13 +480,14 @@ export function registerCrystallizationTools(server: McpServer): void {
         totalLessons: lessonsFile.lessons.length,
       });
 
-      const { proposals, costUsd } = await proposeChecks(qualifyingLessons);
+      const { proposals, costUsd, filtered } = await proposeChecks(qualifyingLessons);
 
       if (proposals.length === 0) {
+        const filterMsg = filtered > 0 ? ` (${filtered} filtered by quality gate)` : '';
         return {
           content: [{
             type: 'text' as const,
-            text: `Haiku analyzed ${qualifyingLessons.length} lessons but found no recurring patterns worth crystallizing. Cost: $${costUsd}`,
+            text: `Haiku analyzed ${qualifyingLessons.length - filtered} lessons${filterMsg} but found no recurring patterns worth crystallizing. Cost: $${costUsd}`,
           }],
         };
       }
@@ -463,7 +523,7 @@ export function registerCrystallizationTools(server: McpServer): void {
       const lines: string[] = [
         `## Crystallization Proposals`,
         '',
-        `**Lessons analyzed:** ${qualifyingLessons.length} (frequency >= ${min_frequency})`,
+        `**Lessons analyzed:** ${qualifyingLessons.length - filtered} (frequency >= ${min_frequency})${filtered > 0 ? ` (${filtered} filtered by quality gate)` : ''}`,
         `**Checks proposed:** ${newChecks.length}`,
         `**Cost:** $${costUsd}`,
         '',
