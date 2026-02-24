@@ -133,14 +133,26 @@ export function registerKnowledgeTools(server: McpServer): void {
         .describe('Type of knowledge to query (defaults to all)'),
       query: z.string().max(200).optional()
         .describe('Search keyword to filter results (searches names, descriptions, learnings, rationale)'),
+      depth: z.enum(['brief', 'standard', 'full']).optional()
+        .describe('Detail level: brief (counts only), standard (default), full (all entries with examples)'),
     },
     { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    withErrorTracking('knowledge_query', async ({ type, query }) => {
+    withErrorTracking('knowledge_query', async ({ type, query, depth }) => {
       const queryType = type ?? 'all';
+      const detailLevel = depth ?? 'standard';
+
+      // Brief mode: counts only, no content
+      if (detailLevel === 'brief' && !query) {
+        const counts = getKnowledgeCounts(queryType);
+        return {
+          content: [{ type: 'text' as const, text: counts.text }],
+          structuredContent: counts.structured,
+        };
+      }
 
       // If no query, return all entries (existing behavior)
       if (!query) {
-        const { text, structured } = formatAll(queryType);
+        const { text, structured } = formatAll(queryType, detailLevel);
         return {
           content: [{ type: 'text' as const, text }],
           structuredContent: structured,
@@ -252,9 +264,44 @@ export function registerKnowledgeTools(server: McpServer): void {
 }
 
 /**
+ * Brief mode: return counts only
+ */
+function getKnowledgeCounts(queryType: string): { text: string; structured: Record<string, unknown> } {
+  const counts: Record<string, number> = {};
+
+  if (queryType === 'all' || queryType === 'patterns') {
+    const data = loadJson<{ patterns: Pattern[] }>('patterns.json');
+    counts.patterns = data?.patterns?.length ?? 0;
+  }
+  if (queryType === 'all' || queryType === 'lessons') {
+    const data = loadJson<{ lessons: Lesson[] }>('lessons.json');
+    counts.lessons = data?.lessons?.length ?? 0;
+  }
+  if (queryType === 'all' || queryType === 'decisions') {
+    const data = loadJson<{ decisions: Decision[] }>('decisions.json');
+    counts.decisions = data?.decisions?.length ?? 0;
+  }
+  if (queryType === 'all') {
+    const data = loadJson<{ items: DeferredItem[] }>('deferred.json');
+    const open = (data?.items ?? []).filter(d => !d.resolved).length;
+    counts.deferredOpen = open;
+  }
+  if (queryType === 'all' || queryType === 'team-runs') {
+    const data = loadJson<{ runs: TeamRun[] }>('team-runs.json');
+    counts.teamRuns = data?.runs?.length ?? 0;
+  }
+
+  const lines = Object.entries(counts).map(([k, v]) => `${k}: ${v}`);
+  const text = `Knowledge counts: ${lines.join(', ')}`;
+
+  logger.info('Knowledge queried (brief)', { type: queryType, counts });
+  return { text, structured: { type: queryType, depth: 'brief', counts } };
+}
+
+/**
  * Format all entries without search filtering (original behavior)
  */
-function formatAll(queryType: string): { text: string; structured: Record<string, unknown> } {
+function formatAll(queryType: string, depth: string = 'standard'): { text: string; structured: Record<string, unknown> } {
   const lines: string[] = [];
   const structured: Record<string, unknown> = { type: queryType };
 
@@ -295,7 +342,8 @@ function formatAll(queryType: string): { text: string; structured: Record<string
     if (decisions.length === 0) {
       lines.push('No decisions recorded yet.', '');
     } else {
-      for (const d of decisions.slice(-10)) {
+      const displayDecisions = depth === 'full' ? decisions : decisions.slice(-10);
+      for (const d of displayDecisions) {
         lines.push(formatDecision(d));
       }
       lines.push('');
@@ -322,9 +370,9 @@ function formatAll(queryType: string): { text: string; structured: Record<string
     const data = loadJson<{ runs: TeamRun[] }>('team-runs.json');
     const runs = data?.runs ?? [];
     if (runs.length > 0) {
-      const recent = runs.slice(-5);
-      lines.push(`## Team Runs (${runs.length} total, showing last ${recent.length})`, '');
-      for (const r of recent) {
+      const displayRuns = depth === 'full' ? runs : runs.slice(-5);
+      lines.push(`## Team Runs (${runs.length} total, showing ${depth === 'full' ? 'all' : `last ${displayRuns.length}`})`, '');
+      for (const r of displayRuns) {
         lines.push(formatTeamRun(r));
       }
       lines.push('');

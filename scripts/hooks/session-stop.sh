@@ -49,6 +49,44 @@ with open('$SPRINT_DIR/current.json') as f:
   fi
 fi
 
+# Session metrics summary
+echo ""
+echo "SESSION METRICS:"
+
+# Tool call count (from context-awareness counter)
+TOOL_COUNT_FILE="/tmp/claude-tool-call-count"
+if [ -f "$TOOL_COUNT_FILE" ]; then
+  TOOL_COUNT=$(cat "$TOOL_COUNT_FILE" 2>/dev/null || echo "0")
+  echo "  Tool calls: $TOOL_COUNT"
+fi
+
+# Bash call count (from attention-inject counter)
+BASH_COUNT_FILE="/tmp/claude-bash-call-count"
+if [ -f "$BASH_COUNT_FILE" ]; then
+  BASH_COUNT=$(cat "$BASH_COUNT_FILE" 2>/dev/null || echo "0")
+  echo "  Bash calls: $BASH_COUNT"
+fi
+
+# Session duration estimate (from counter file timestamps)
+if [ -f "$TOOL_COUNT_FILE" ]; then
+  CREATED=$(stat -c '%Y' "$TOOL_COUNT_FILE" 2>/dev/null || echo "0")
+  NOW=$(date +%s)
+  if [ "$CREATED" -gt 0 ]; then
+    DURATION=$(( (NOW - CREATED) / 60 ))
+    echo "  Session duration: ~${DURATION}min"
+  fi
+fi
+
+# Commit count in this session (commits since branch diverged from main)
+BRANCH=$(git -C /home/hb/radl rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ]; then
+  COMMIT_COUNT=$(git -C /home/hb/radl rev-list --count main.."$BRANCH" 2>/dev/null || echo "0")
+  echo "  Commits on branch: $COMMIT_COUNT"
+fi
+
+# Clean up counter files
+rm -f "$TOOL_COUNT_FILE" "$BASH_COUNT_FILE" 2>/dev/null
+
 echo ""
 echo "END-OF-SESSION TASKS:"
 echo "  [ ] Run session_health for session diagnostic report"

@@ -248,6 +248,11 @@ echo "  8. sprint_complete MCP tool -> compound_extract"
 echo "  9. Update STATE.md at session end"
 echo ""
 
+# ─── Self-correction protocol ────────────────────────────────────────────────
+
+echo "SELF-CORRECTION: After every commit, verify with 'npm run typecheck' before proceeding to next task. Never stack commits without typechecking."
+echo ""
+
 # ─── Iron laws reinforcement (bottom placement for recency effect) ────────────
 
 echo "IRON LAWS: No push to main | No delete prod data | No commit secrets | 3-strike stop | No modify CI/CD | No force push"

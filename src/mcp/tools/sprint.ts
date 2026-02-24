@@ -31,6 +31,7 @@ import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
+import { session } from './shared/session-state.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -419,21 +420,39 @@ export function registerSprintTools(server: McpServer): void {
   server.tool(
     'sprint_status',
     'Get current sprint status including phase, tasks completed, blockers, and git branch',
-    {},
+    {
+      depth: z.enum(['brief', 'standard', 'full']).optional()
+        .describe('Detail level: brief (phase+status only), standard (default), full (all fields + raw output)'),
+    },
     { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    withErrorTracking('sprint_status', async () => {
+    withErrorTracking('sprint_status', async ({ depth }) => {
+      const detailLevel = depth ?? 'standard';
       const branch = getCurrentBranch();
       const branchWarning = (branch === 'main' || branch === 'master')
         ? `\nWARNING: On '${branch}' branch! Create a feature branch before making changes.\n`
         : '';
 
       const output = runSprint(['status']);
-      const statusText = `Branch: ${branch}${branchWarning}\n${output}`;
 
       // Parse sprint output for structured content (best-effort)
       const phaseMatch = output.match(/Phase:\s*(.+)/i);
       const titleMatch = output.match(/Title:\s*(.+)/i);
       const statusMatch = output.match(/Status:\s*(.+)/i);
+
+      if (detailLevel === 'brief') {
+        const briefText = `${branch} | ${phaseMatch?.[1]?.trim() ?? 'No sprint'} | ${statusMatch?.[1]?.trim() ?? 'unknown'}`;
+        return {
+          content: [{ type: 'text' as const, text: briefText }],
+          structuredContent: {
+            branch,
+            phase: phaseMatch?.[1]?.trim(),
+            status: statusMatch?.[1]?.trim(),
+            depth: 'brief',
+          },
+        };
+      }
+
+      const statusText = `Branch: ${branch}${branchWarning}\n${output}`;
 
       return {
         content: [{ type: 'text' as const, text: statusText }],
@@ -443,7 +462,7 @@ export function registerSprintTools(server: McpServer): void {
           phase: phaseMatch?.[1]?.trim(),
           title: titleMatch?.[1]?.trim(),
           status: statusMatch?.[1]?.trim(),
-          rawOutput: output,
+          rawOutput: detailLevel === 'full' ? output : undefined,
         },
       };
     })
@@ -910,6 +929,16 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
+      // Pre-flight verification gate advisory
+      let preFlightNote = '';
+      const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+      if (!session.preFlightPassed) {
+        preFlightNote = '\nPRE-FLIGHT WARNING: No pre_flight_check was run this session. Run it before pushing to verify branch safety, clean tree, and typecheck.';
+      } else if (session.preFlightAt && (Date.now() - session.preFlightAt) > STALE_THRESHOLD_MS) {
+        const minutesAgo = Math.round((Date.now() - session.preFlightAt) / 60_000);
+        preFlightNote = `\nPRE-FLIGHT WARNING: Last pre_flight_check was ${minutesAgo} minutes ago (stale). Consider re-running before push.`;
+      }
+
       // D1-D3: Sprint quality gate warnings (extracted to shared/quality-gates.ts)
       const qualityNote = evaluateQualityGates({
         completedRaw,
@@ -940,7 +969,7 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${antibodyNote}${qualityNote}${calendarNote}` }] };
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${antibodyNote}${qualityNote}${preFlightNote}${calendarNote}` }] };
     })
   );
 
