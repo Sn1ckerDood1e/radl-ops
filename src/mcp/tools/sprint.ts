@@ -420,21 +420,39 @@ export function registerSprintTools(server: McpServer): void {
   server.tool(
     'sprint_status',
     'Get current sprint status including phase, tasks completed, blockers, and git branch',
-    {},
+    {
+      depth: z.enum(['brief', 'standard', 'full']).optional()
+        .describe('Detail level: brief (phase+status only), standard (default), full (all fields + raw output)'),
+    },
     { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    withErrorTracking('sprint_status', async () => {
+    withErrorTracking('sprint_status', async ({ depth }) => {
+      const detailLevel = depth ?? 'standard';
       const branch = getCurrentBranch();
       const branchWarning = (branch === 'main' || branch === 'master')
         ? `\nWARNING: On '${branch}' branch! Create a feature branch before making changes.\n`
         : '';
 
       const output = runSprint(['status']);
-      const statusText = `Branch: ${branch}${branchWarning}\n${output}`;
 
       // Parse sprint output for structured content (best-effort)
       const phaseMatch = output.match(/Phase:\s*(.+)/i);
       const titleMatch = output.match(/Title:\s*(.+)/i);
       const statusMatch = output.match(/Status:\s*(.+)/i);
+
+      if (detailLevel === 'brief') {
+        const briefText = `${branch} | ${phaseMatch?.[1]?.trim() ?? 'No sprint'} | ${statusMatch?.[1]?.trim() ?? 'unknown'}`;
+        return {
+          content: [{ type: 'text' as const, text: briefText }],
+          structuredContent: {
+            branch,
+            phase: phaseMatch?.[1]?.trim(),
+            status: statusMatch?.[1]?.trim(),
+            depth: 'brief',
+          },
+        };
+      }
+
+      const statusText = `Branch: ${branch}${branchWarning}\n${output}`;
 
       return {
         content: [{ type: 'text' as const, text: statusText }],
@@ -444,7 +462,7 @@ export function registerSprintTools(server: McpServer): void {
           phase: phaseMatch?.[1]?.trim(),
           title: titleMatch?.[1]?.trim(),
           status: statusMatch?.[1]?.trim(),
-          rawOutput: output,
+          rawOutput: detailLevel === 'full' ? output : undefined,
         },
       };
     })

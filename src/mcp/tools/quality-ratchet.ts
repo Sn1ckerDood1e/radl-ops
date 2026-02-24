@@ -407,14 +407,18 @@ export function registerQualityRatchetTools(server: McpServer): void {
     {
       domain: z.string().max(100).optional()
         .describe('Filter to a specific domain (e.g., "code-review", "security-review", "estimation"). Omit to show all domains.'),
+      depth: z.enum(['brief', 'standard', 'full']).optional()
+        .describe('Detail level: brief (summary line), standard (default table + details), full (all + false positives)'),
     },
     { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    async ({ domain }) => {
+    async ({ domain, depth }) => {
+      const detailLevel = depth ?? 'standard';
       const ledger = loadTrustLedger();
 
       logger.info('Generating trust report', {
         totalDecisions: ledger.decisions.length,
         filterDomain: domain ?? 'all',
+        depth: detailLevel,
       });
 
       // Determine which domains to report on
@@ -423,6 +427,16 @@ export function registerQualityRatchetTools(server: McpServer): void {
         : getAllDomains(ledger.decisions);
 
       const stats = domains.map(d => calculateDomainStats(ledger.decisions, d));
+
+      // Brief mode: one-liner summary
+      if (detailLevel === 'brief') {
+        const totalDecisions = stats.reduce((sum, s) => sum + s.total, 0);
+        const avgSuccess = stats.length > 0
+          ? stats.reduce((sum, s) => sum + s.successRate, 0) / stats.length
+          : 0;
+        const briefText = `Trust: ${totalDecisions} decisions across ${stats.length} domains, avg success ${formatPercent(avgSuccess)}`;
+        return { content: [{ type: 'text' as const, text: briefText }] };
+      }
 
       // Load antibodies and crystallized checks for false positive analysis
       const antibodies = loadAntibodiesFile();
