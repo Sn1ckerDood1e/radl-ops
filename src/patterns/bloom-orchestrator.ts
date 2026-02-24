@@ -17,6 +17,7 @@ import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
 import { withRetry } from '../utils/retry.js';
+import { addNodes, addEdges, type GraphNode, type GraphEdge } from '../knowledge/graph.js';
 
 /**
  * Tool definitions for structured output stages.
@@ -426,6 +427,15 @@ export async function runBloomPipeline(
     }
   }
 
+  // Extract entities and relationships into the knowledge graph (zero-cost)
+  try {
+    extractAndStoreEntities(lessons, sprintData.phase);
+  } catch (error) {
+    logger.warn('Entity extraction failed (non-blocking)', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   logger.info('Bloom pipeline complete', {
     lessonsExtracted: lessons.length,
     qualityScore,
@@ -445,4 +455,155 @@ export async function runBloomPipeline(
     sprintPhase: sprintData.phase,
     sprintTitle: sprintData.title,
   };
+}
+
+// ============================================
+// Entity Extraction (Zero-Cost)
+// ============================================
+
+const ENTITY_STOPWORDS = new Set([
+  'the', 'a', 'an', 'is', 'in', 'to', 'of', 'and', 'for', 'with',
+  'on', 'at', 'by', 'it', 'or', 'be', 'as', 'do', 'if', 'no',
+  'not', 'but', 'from', 'that', 'this', 'was', 'are', 'has', 'had',
+  'have', 'will', 'can', 'all', 'its', 'than', 'so', 'up', 'use',
+  'when', 'always', 'never', 'should', 'must', 'before', 'after',
+]);
+
+/**
+ * Extract entities (concepts) from lessons and store as graph nodes.
+ * Creates co-occurrence edges between entities that appear in the same lesson.
+ * Zero-cost: pure string analysis, no AI calls.
+ */
+export function extractAndStoreEntities(
+  lessons: CategorizedLesson[],
+  sprintPhase: string,
+): { nodesAdded: number; edgesAdded: number } {
+  if (lessons.length === 0) return { nodesAdded: 0, edgesAdded: 0 };
+
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const seenNodeIds = new Set<string>();
+
+  // Create a sprint node as anchor
+  const sprintNodeId = `sprint-${sprintPhase.toLowerCase().replace(/\s+/g, '-')}`;
+  nodes.push({
+    id: sprintNodeId,
+    type: 'sprint',
+    label: sprintPhase,
+    properties: { lessonCount: lessons.length },
+  });
+  seenNodeIds.add(sprintNodeId);
+
+  for (const lesson of lessons) {
+    // Create a lesson node
+    const lessonNodeId = `lesson-${sprintPhase.toLowerCase().replace(/\s+/g, '-')}-${lesson.category}-${hashString(lesson.content).substring(0, 8)}`;
+    nodes.push({
+      id: lessonNodeId,
+      type: lesson.category,
+      label: lesson.content.substring(0, 120),
+      properties: { confidence: lesson.confidence, fullContent: lesson.content },
+    });
+    seenNodeIds.add(lessonNodeId);
+
+    // Link lesson to sprint
+    edges.push({
+      source: sprintNodeId,
+      target: lessonNodeId,
+      relationship: 'produced',
+      weight: lesson.confidence / 10,
+    });
+
+    // Extract concept tokens from the lesson content
+    const concepts = extractConcepts(lesson.content);
+
+    for (const concept of concepts) {
+      const conceptNodeId = `concept-${concept}`;
+      if (!seenNodeIds.has(conceptNodeId)) {
+        nodes.push({
+          id: conceptNodeId,
+          type: 'concept',
+          label: concept,
+          properties: {},
+        });
+        seenNodeIds.add(conceptNodeId);
+      }
+
+      // Link lesson to concept
+      edges.push({
+        source: lessonNodeId,
+        target: conceptNodeId,
+        relationship: 'mentions',
+        weight: 0.5,
+      });
+    }
+
+    // Create co-occurrence edges between concepts in the same lesson
+    for (let i = 0; i < concepts.length; i++) {
+      for (let j = i + 1; j < concepts.length; j++) {
+        edges.push({
+          source: `concept-${concepts[i]}`,
+          target: `concept-${concepts[j]}`,
+          relationship: 'co_occurs',
+          weight: 0.3,
+        });
+      }
+    }
+  }
+
+  addNodes(nodes);
+  addEdges(edges);
+
+  logger.info('Entity extraction complete', {
+    sprintPhase,
+    nodesAdded: nodes.length,
+    edgesAdded: edges.length,
+  });
+
+  return { nodesAdded: nodes.length, edgesAdded: edges.length };
+}
+
+/**
+ * Extract meaningful concept tokens from text.
+ * Identifies multi-word patterns (PascalCase, kebab-case) and single keywords.
+ */
+function extractConcepts(text: string): string[] {
+  const concepts = new Set<string>();
+
+  // Extract PascalCase/camelCase identifiers (e.g., "getUser", "SprintConductor")
+  const camelMatches = text.match(/[A-Z][a-z]+(?:[A-Z][a-z]+)+/g) ?? [];
+  for (const m of camelMatches) {
+    concepts.add(m.toLowerCase());
+  }
+
+  // Extract kebab-case terms (e.g., "sprint-conductor", "tool-choice")
+  const kebabMatches = text.match(/[a-z]+-[a-z]+(?:-[a-z]+)*/g) ?? [];
+  for (const m of kebabMatches) {
+    if (!ENTITY_STOPWORDS.has(m)) {
+      concepts.add(m);
+    }
+  }
+
+  // Extract meaningful single words (4+ chars, not stopwords)
+  const words = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  for (const word of words) {
+    if (word.length >= 4 && !ENTITY_STOPWORDS.has(word)) {
+      concepts.add(word);
+    }
+  }
+
+  // Limit to top 8 concepts per lesson to avoid over-connecting the graph
+  return [...concepts].slice(0, 8);
+}
+
+/**
+ * Simple string hash for creating deterministic IDs.
+ */
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
 }
