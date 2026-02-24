@@ -182,6 +182,54 @@ export function detectTaskType(message: string): TaskType {
 }
 
 /**
+ * Model fallback chains for rate-limit resilience.
+ * Each model maps to its next-best alternative.
+ */
+const FALLBACK_CHAINS: Record<ModelId, ModelId[]> = {
+  'claude-opus-4-6': ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'],
+  'claude-sonnet-4-5-20250929': ['claude-haiku-4-5-20251001'],
+  'claude-haiku-4-5-20251001': [], // No fallback for cheapest model
+};
+
+/**
+ * Get a route with fallback model if the primary is rate-limited.
+ * Returns the route for the next available model in the chain.
+ */
+export function getRouteWithFallback(
+  taskType: TaskType,
+  unavailableModels: ModelId[] = [],
+): ModelRoute {
+  const base = getRoute(taskType);
+
+  if (!unavailableModels.includes(base.model)) {
+    return base;
+  }
+
+  // Try fallback chain
+  const fallbacks = FALLBACK_CHAINS[base.model];
+  for (const fallbackModel of fallbacks) {
+    if (!unavailableModels.includes(fallbackModel)) {
+      const pricing = MODEL_PRICING[fallbackModel];
+      logger.info('Model fallback activated', {
+        taskType,
+        original: base.model,
+        fallback: fallbackModel,
+      });
+      return {
+        ...base,
+        model: fallbackModel,
+        inputCostPer1M: pricing.input,
+        outputCostPer1M: pricing.output,
+      };
+    }
+  }
+
+  // All models unavailable — return base (will fail at API call)
+  logger.warn('All models in fallback chain unavailable', { taskType, base: base.model });
+  return base;
+}
+
+/**
  * Get all routes for display/debugging
  */
 export function getAllRoutes(): Record<TaskType, ModelRoute> {
