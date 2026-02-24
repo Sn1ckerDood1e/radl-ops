@@ -51,7 +51,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['typecheck'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('ALL CHECKS PASSED');
+      expect(text).toContain('VERIFICATION PASSED');
       expect(text).toContain('[PASS] TypeScript');
       expect(vi.mocked(execSync)).toHaveBeenCalledWith(
         'npx tsc --noEmit',
@@ -73,7 +73,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['typecheck'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('CHECKS FAILED');
+      expect(text).toContain('VERIFICATION FAILED');
       expect(text).toContain('[FAIL] TypeScript');
       expect(text).toContain('Cannot find name "foo"');
     });
@@ -97,7 +97,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['build'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('ALL CHECKS PASSED');
+      expect(text).toContain('VERIFICATION PASSED');
       expect(text).toContain('[PASS] Build');
       expect(vi.mocked(execSync)).toHaveBeenCalledWith(
         'npm run build',
@@ -118,7 +118,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['build'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('CHECKS FAILED');
+      expect(text).toContain('VERIFICATION FAILED');
       expect(text).toContain('[FAIL] Build');
       expect(text).toContain('Module not found');
     });
@@ -132,7 +132,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['test'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('ALL CHECKS PASSED');
+      expect(text).toContain('VERIFICATION PASSED');
       expect(text).toContain('[PASS] Tests');
       expect(vi.mocked(execSync)).toHaveBeenCalledWith(
         'npm test',
@@ -153,7 +153,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['test'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('CHECKS FAILED');
+      expect(text).toContain('VERIFICATION FAILED');
       expect(text).toContain('[FAIL] Tests');
       expect(text).toContain('Expected: 5');
     });
@@ -188,7 +188,7 @@ describe('Verify Tool', () => {
       const result = await handler({ checks: ['typecheck', 'build'] });
       const text = result.content[0].text;
 
-      expect(text).toContain('CHECKS FAILED');
+      expect(text).toContain('VERIFICATION FAILED');
       expect(text).toContain('[PASS] TypeScript');
       expect(text).toContain('[FAIL] Build');
     });
@@ -347,11 +347,11 @@ describe('Verify Tool', () => {
       expect(logger.info).toHaveBeenCalledWith(
         'Verification complete',
         expect.objectContaining({
-          checks: ['typecheck', 'build'],
+          level: 'default',
           allPassed: true,
           results: expect.arrayContaining([
-            expect.objectContaining({ name: 'TypeScript', passed: true }),
-            expect.objectContaining({ name: 'Build', passed: true }),
+            expect.objectContaining({ name: 'TypeScript', passed: true, durationMs: expect.any(Number) }),
+            expect.objectContaining({ name: 'Build', passed: true, durationMs: expect.any(Number) }),
           ]),
         })
       );

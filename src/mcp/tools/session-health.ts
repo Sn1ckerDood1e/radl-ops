@@ -148,9 +148,11 @@ function analyzeSession(): HealthSignal[] {
 
   // Signal 8: Looping — rapid consecutive calls (< 30s apart each)
   if (last30min.length >= 5) {
+    // Sort chronologically (oldest first) to ensure gap calculation is correct
+    const sorted = [...last30min].sort((a, b) => a.timestamp - b.timestamp);
     let rapidCount = 0;
-    for (let i = last30min.length - 1; i > 0; i--) {
-      const gap = last30min[i].timestamp - last30min[i - 1].timestamp;
+    for (let i = sorted.length - 1; i > 0; i--) {
+      const gap = sorted[i].timestamp - sorted[i - 1].timestamp;
       if (gap < 30_000) {
         rapidCount++;
       } else {
