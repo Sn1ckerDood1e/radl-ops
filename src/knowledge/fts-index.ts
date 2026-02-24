@@ -102,8 +102,44 @@ function getDb(): Database.Database {
     );
   `);
 
+  // Knowledge graph tables for entity relationships
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS knowledge_nodes (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      label TEXT NOT NULL,
+      properties TEXT DEFAULT '{}'
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS knowledge_edges (
+      source TEXT NOT NULL REFERENCES knowledge_nodes(id),
+      target TEXT NOT NULL REFERENCES knowledge_nodes(id),
+      relationship TEXT NOT NULL,
+      weight REAL DEFAULT 1.0,
+      PRIMARY KEY (source, target, relationship)
+    );
+  `);
+
+  // Index for efficient neighbor lookups
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_edges_source ON knowledge_edges(source);
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_edges_target ON knowledge_edges(target);
+  `);
+
   dbInstance = db;
   return db;
+}
+
+/**
+ * Expose the DB getter for the graph module.
+ * Avoids circular import: graph.ts imports this, not vice versa.
+ */
+export function getDbForGraph(): Database.Database {
+  return getDb();
 }
 
 /**
