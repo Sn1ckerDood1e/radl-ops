@@ -308,3 +308,8 @@ When context is compacted, ALWAYS preserve:
 - Current task ID and next steps from the task list
 - Iron laws (never violate, even after compaction)
 - STATE.md update status (was it updated this session?)
+
+<!-- AUTO-MANAGED: Recent Changes -->
+<!-- This section is automatically updated by the auto-memory plugin -->
+<!-- DO NOT edit between these markers manually -->
+<!-- /AUTO-MANAGED -->
