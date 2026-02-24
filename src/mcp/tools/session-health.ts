@@ -133,7 +133,41 @@ function analyzeSession(): HealthSignal[] {
     });
   }
 
-  // Signal 7: Session duration warning
+  // Signal 7: Stuck — many tool calls since last commit
+  if (session.lastCommitAt) {
+    const callsSinceCommit = session.toolCalls.filter(c => c.timestamp > session.lastCommitAt!).length;
+    if (callsSinceCommit >= 20) {
+      signals.push({
+        id: 'stuck',
+        severity: callsSinceCommit >= 30 ? 'critical' : 'warning',
+        message: `${callsSinceCommit} tool calls since last commit. Possibly stuck — consider a different approach or break the problem down.`,
+        metric: `${callsSinceCommit} calls since commit`,
+      });
+    }
+  }
+
+  // Signal 8: Looping — rapid consecutive calls (< 30s apart each)
+  if (last30min.length >= 5) {
+    let rapidCount = 0;
+    for (let i = last30min.length - 1; i > 0; i--) {
+      const gap = last30min[i].timestamp - last30min[i - 1].timestamp;
+      if (gap < 30_000) {
+        rapidCount++;
+      } else {
+        break;
+      }
+    }
+    if (rapidCount >= 5) {
+      signals.push({
+        id: 'looping',
+        severity: rapidCount >= 10 ? 'critical' : 'warning',
+        message: `${rapidCount + 1} rapid-fire tool calls (< 30s apart). Possible retry loop — stop and reassess.`,
+        metric: `${rapidCount + 1} calls in rapid succession`,
+      });
+    }
+  }
+
+  // Signal 9: Session duration warning
   if (sessionMinutes > 120) {
     signals.push({
       id: 'long_session',
