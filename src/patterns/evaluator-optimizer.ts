@@ -86,6 +86,10 @@ export interface EvalOptConfig {
   maxIterations?: number;
   /** Evaluation criteria the evaluator should check */
   evaluationCriteria: string[];
+  /** Enable extended thinking for evaluator (deeper quality assessment, Sonnet/Opus only) */
+  enableThinking?: boolean;
+  /** Thinking budget in tokens (default 2048) */
+  thinkingBudget?: number;
 }
 
 /**
@@ -121,6 +125,8 @@ export async function runEvalOptLoop(
     qualityThreshold = 7,
     maxIterations = 3,
     evaluationCriteria,
+    enableThinking = false,
+    thinkingBudget = 2048,
   } = evalConfig;
 
   const generatorRoute = getRoute(generatorTaskType);
@@ -185,15 +191,21 @@ export async function runEvalOptLoop(
 
     let evalResponse: Anthropic.Message;
     try {
+      // Build eval params, optionally including extended thinking for deeper assessment
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const evalCreateParams: any = {
+        model: evaluatorRoute.model,
+        max_tokens: enableThinking ? Math.max(evaluatorRoute.maxTokens, thinkingBudget + 1024) : evaluatorRoute.maxTokens,
+        system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: evalUserMessage }],
+        tools: [EVAL_RESULT_TOOL],
+        tool_choice: { type: 'tool', name: 'evaluation_result' },
+      };
+      if (enableThinking) {
+        evalCreateParams.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+      }
       evalResponse = await withRetry(
-        () => getAnthropicClient().messages.create({
-          model: evaluatorRoute.model,
-          max_tokens: evaluatorRoute.maxTokens,
-          system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: evalUserMessage }],
-          tools: [EVAL_RESULT_TOOL],
-          tool_choice: { type: 'tool', name: 'evaluation_result' },
-        }),
+        () => getAnthropicClient().messages.create(evalCreateParams),
         { maxRetries: 3, baseDelayMs: 1000 },
       );
     } catch (error) {
