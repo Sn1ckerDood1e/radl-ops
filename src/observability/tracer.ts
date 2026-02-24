@@ -149,6 +149,11 @@ export function getSessionSpans(): readonly Span[] {
  * Get spans from a specific date (from disk).
  */
 export function getSpansForDate(date: string): Span[] {
+  // Defense in depth: validate date format to prevent path traversal
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    logger.warn('getSpansForDate: invalid date format rejected', { date: date.substring(0, 20) });
+    return [];
+  }
   const file = join(getTracesDir(), `trace-${date}.jsonl`);
   if (!existsSync(file)) return [];
 

@@ -27,9 +27,10 @@ export const githubFetcher: DataFetcher<GitHubQuery, GitHubData> = {
   name: 'github',
 
   transformQuery({ token, owner, repo, perPage = 10 }) {
-    if (!token) return null;
+    if (!token || !owner || !repo) return null;
+    const safePage = Math.min(Math.max(1, Math.floor(perPage)), 30);
     return {
-      url: `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues?state=open&per_page=${perPage}&sort=created&direction=desc`,
+      url: `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues?state=open&per_page=${safePage}&sort=created&direction=desc`,
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' },
     };
   },

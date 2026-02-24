@@ -29,8 +29,9 @@ export const vercelFetcher: DataFetcher<VercelQuery, VercelData> = {
 
   transformQuery({ token, projectId, limit = 5 }) {
     if (!token || !projectId) return null;
+    const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 20);
     return {
-      url: `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=${limit}&target=production`,
+      url: `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=${safeLimit}&target=production`,
       headers: { Authorization: `Bearer ${token}` },
     };
   },

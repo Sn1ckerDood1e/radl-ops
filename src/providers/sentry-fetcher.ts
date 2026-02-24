@@ -30,7 +30,7 @@ export const sentryFetcher: DataFetcher<SentryQuery, SentryData> = {
   transformQuery({ authToken, org, project, statsPeriod = '24h' }) {
     if (!authToken || !org || !project) return null;
     return {
-      url: `https://sentry.io/api/0/projects/${encodeURIComponent(org)}/${encodeURIComponent(project)}/issues/?query=is:unresolved&statsPeriod=${statsPeriod}&sort=freq`,
+      url: `https://sentry.io/api/0/projects/${encodeURIComponent(org)}/${encodeURIComponent(project)}/issues/?query=is:unresolved&statsPeriod=${encodeURIComponent(statsPeriod)}&sort=freq`,
       headers: { Authorization: `Bearer ${authToken}` },
     };
   },
