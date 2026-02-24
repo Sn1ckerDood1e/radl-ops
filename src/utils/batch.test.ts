@@ -94,6 +94,31 @@ describe('Batch API Utility', () => {
       const callArgs = mockBatchesCreate.mock.calls[0][0];
       expect(callArgs.requests[0].params.system).toBeUndefined();
     });
+
+    it('rejects disallowed models', async () => {
+      await expect(submitBatch([{
+        custom_id: 'req-opus',
+        model: 'claude-opus-4-6',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: 'Hi' }],
+      }])).rejects.toThrow('not permitted for batch API');
+      expect(mockBatchesCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects excessive max_tokens', async () => {
+      await expect(submitBatch([{
+        custom_id: 'req-big',
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 32000,
+        messages: [{ role: 'user', content: 'Hi' }],
+      }])).rejects.toThrow('exceeds batch limit');
+      expect(mockBatchesCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects batch exceeding max request count', async () => {
+      await expect(submitBatch(makeBatchRequests(101))).rejects.toThrow('exceeds maximum of 100');
+      expect(mockBatchesCreate).not.toHaveBeenCalled();
+    });
   });
 
   describe('awaitBatch', () => {

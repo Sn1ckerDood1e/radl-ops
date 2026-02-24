@@ -191,19 +191,28 @@ export async function runEvalOptLoop(
 
     let evalResponse: Anthropic.Message;
     try {
-      // Build eval params, optionally including extended thinking for deeper assessment
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const evalCreateParams: any = {
-        model: evaluatorRoute.model,
-        max_tokens: enableThinking ? Math.max(evaluatorRoute.maxTokens, thinkingBudget + 1024) : evaluatorRoute.maxTokens,
-        system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: evalUserMessage }],
-        tools: [EVAL_RESULT_TOOL],
-        tool_choice: { type: 'tool', name: 'evaluation_result' },
-      };
-      if (enableThinking) {
-        evalCreateParams.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
-      }
+      // Cap thinking budget to prevent cost injection
+      const MAX_THINKING_BUDGET = 8192;
+      const safeBudget = Math.min(thinkingBudget, MAX_THINKING_BUDGET);
+
+      // Build eval params — thinking and tool_choice are incompatible in Anthropic API,
+      // so when thinking is enabled we omit tools/tool_choice and fall back to text parsing
+      const evalCreateParams: Anthropic.MessageCreateParamsNonStreaming = enableThinking
+        ? {
+            model: evaluatorRoute.model,
+            max_tokens: Math.max(evaluatorRoute.maxTokens, safeBudget + 1024),
+            system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
+            messages: [{ role: 'user', content: evalUserMessage }],
+            thinking: { type: 'enabled', budget_tokens: safeBudget },
+          }
+        : {
+            model: evaluatorRoute.model,
+            max_tokens: evaluatorRoute.maxTokens,
+            system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
+            messages: [{ role: 'user', content: evalUserMessage }],
+            tools: [EVAL_RESULT_TOOL],
+            tool_choice: { type: 'tool', name: 'evaluation_result' },
+          };
       evalResponse = await withRetry(
         () => getAnthropicClient().messages.create(evalCreateParams),
         { maxRetries: 3, baseDelayMs: 1000 },

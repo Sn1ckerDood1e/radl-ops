@@ -287,6 +287,19 @@ export function initFtsIndex(): void {
 // ============================================
 
 /**
+ * Sanitize a user-supplied query string for FTS5 MATCH.
+ * Strips FTS5 metacharacters that could cause parse errors or wildcard DoS.
+ * Joins remaining tokens with OR for multi-word queries.
+ */
+function sanitizeFtsQuery(raw: string): string {
+  // Strip FTS5 special characters: quotes, wildcards, negation, grouping, column prefix
+  const stripped = raw.replace(/["*\-^():]/g, ' ').trim();
+  if (!stripped) return '';
+  // Join tokens with OR for broad matching
+  return stripped.split(/\s+/).filter(Boolean).join(' OR ');
+}
+
+/**
  * Search the FTS5 index using BM25 ranking with optional time decay.
  *
  * Returns results sorted by combined score (FTS5 BM25 * time decay).
@@ -303,23 +316,15 @@ export function searchFts(options: SearchOptions): SearchResult[] {
 
   if (!query.trim()) return [];
 
+  // Sanitize query for FTS5 — strip metacharacters that could cause parse errors or DoS
+  const safeQuery = sanitizeFtsQuery(query);
+  if (!safeQuery) return [];
+
   const db = getDb();
 
   // FTS5 match query with BM25 ranking
   // bm25() returns negative values (lower = better match), so we negate it
-  const rows = db.prepare(`
-    SELECT
-      text,
-      id,
-      source,
-      source_id,
-      date,
-      -bm25(knowledge_fts) as fts_score
-    FROM knowledge_fts
-    WHERE knowledge_fts MATCH ?
-    ORDER BY fts_score DESC
-    LIMIT ?
-  `).all(query, maxResults * 3) as Array<{
+  let rows: Array<{
     text: string;
     id: string;
     source: string;
@@ -327,6 +332,29 @@ export function searchFts(options: SearchOptions): SearchResult[] {
     date: string;
     fts_score: number;
   }>;
+  try {
+    rows = db.prepare(`
+      SELECT
+        text,
+        id,
+        source,
+        source_id,
+        date,
+        -bm25(knowledge_fts) as fts_score
+      FROM knowledge_fts
+      WHERE knowledge_fts MATCH ?
+      ORDER BY fts_score DESC
+      LIMIT ?
+    `).all(safeQuery, maxResults * 3) as typeof rows;
+  } catch (error) {
+    // FTS5 query syntax can still fail on edge cases — return empty instead of crashing
+    logger.warn('FTS5 query failed, returning empty results', {
+      query,
+      safeQuery,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 
   // Apply time decay and compute combined scores
   const results: SearchResult[] = rows.map(row => {

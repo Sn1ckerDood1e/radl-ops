@@ -44,6 +44,19 @@ const DEFAULT_OPTIONS: Required<BatchOptions> = {
   _sleep: (ms: number) => new Promise(resolve => setTimeout(resolve, ms)),
 };
 
+/** Models permitted for batch operations (cost-governed) */
+const BATCH_ALLOWED_MODELS = new Set([
+  'claude-haiku-4-5-20251001',
+  'claude-sonnet-4-5-20251001',
+  'claude-sonnet-4-6-20250514',
+]);
+
+/** Max tokens per batch request (prevents cost blowout) */
+const BATCH_MAX_TOKENS = 4096;
+
+/** Max requests per batch (prevents accidental mass submissions) */
+const BATCH_MAX_REQUESTS = 100;
+
 /**
  * Submit a batch of message requests to the Anthropic Batch API.
  *
@@ -53,6 +66,18 @@ const DEFAULT_OPTIONS: Required<BatchOptions> = {
 export async function submitBatch(requests: BatchRequest[]): Promise<string> {
   if (requests.length === 0) {
     throw new Error('Cannot submit empty batch');
+  }
+  if (requests.length > BATCH_MAX_REQUESTS) {
+    throw new Error(`Batch exceeds maximum of ${BATCH_MAX_REQUESTS} requests`);
+  }
+
+  for (const req of requests) {
+    if (!BATCH_ALLOWED_MODELS.has(req.model)) {
+      throw new Error(`Model ${req.model} not permitted for batch API. Allowed: ${[...BATCH_ALLOWED_MODELS].join(', ')}`);
+    }
+    if (req.max_tokens > BATCH_MAX_TOKENS) {
+      throw new Error(`max_tokens ${req.max_tokens} exceeds batch limit of ${BATCH_MAX_TOKENS}`);
+    }
   }
 
   const client = getAnthropicClient();

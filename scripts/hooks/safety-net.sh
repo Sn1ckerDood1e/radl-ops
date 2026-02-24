@@ -3,10 +3,14 @@
 #
 # Catches evasion vectors that simple pattern matching misses:
 # - Shell wrappers: bash -c "git push -f", sh -c "rm -rf /"
+# - Heredoc execution: bash << 'EOF' ... EOF
 # - Interpreter one-liners: python -c "import os; os.system('rm -rf /')"
 # - Flag reordering: git push --force origin main
-# - Variable substitution: $CMD where CMD=rm
+# - Modern git commands: git restore ., git stash drop
 # - Pipe chains: echo "yes" | git push -f
+#
+# Known limitation: Variable substitution ($CMD where CMD=rm) is NOT detected
+# at this layer. Branch-guard and iron laws serve as the authoritative defense.
 #
 # Complements existing iron law hooks (branch-guard, risk-classifier).
 # Exit codes: 0 = allow, 2 = block
@@ -96,7 +100,27 @@ for CHECK_CMD in "$NORM" "$INNER"; do
     BLOCKED="Force delete of main/master branch"
     break
   fi
+
+  # git restore . (modern equivalent of checkout .)
+  if echo "$CHECK_CMD" | grep -qE 'git\s+restore\s+.*\.\s*$'; then
+    BLOCKED="git restore . discards all uncommitted working tree changes"
+    break
+  fi
+
+  # git stash drop/clear (permanently removes stashed work)
+  if echo "$CHECK_CMD" | grep -qE 'git\s+stash\s+(drop|clear)'; then
+    BLOCKED="git stash drop/clear permanently removes stashed work"
+    break
+  fi
 done
+
+# 2b. Heredoc shell execution detection
+# Cannot safely inspect inner commands of heredocs, so block for review
+if [ -z "$BLOCKED" ]; then
+  if echo "$NORM" | grep -qE '(bash|sh|zsh)\s+<<'; then
+    BLOCKED="Heredoc shell execution detected — cannot safely inspect inner commands"
+  fi
+fi
 
 # 2. Interpreter one-liner detection
 # python -c, node -e, ruby -e, perl -e containing destructive ops
