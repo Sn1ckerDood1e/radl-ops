@@ -217,10 +217,14 @@ async function callStage(
 ): Promise<{ text: string; cost: number; toolInput?: unknown }> {
   const client = getAnthropicClient();
 
+  // System message with cache_control for prompt reuse across Bloom stages
+  const systemMessage = 'You are a compound learning extraction system analyzing sprint data for a Next.js rowing team management app. Extract specific, actionable insights.';
+
   // Build request params, adding tools if the stage uses structured output
   const requestParams: Anthropic.MessageCreateParams = {
     model: stage.model,
     max_tokens: stage.maxTokens,
+    system: [{ type: 'text', text: systemMessage, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: prompt }],
   };
 
@@ -240,6 +244,11 @@ async function callStage(
     response.usage.output_tokens
   );
 
+  // Extract cache metrics from response
+  const usage = response.usage as unknown as Record<string, number>;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+
   // Use spot_check for Haiku stages, review for Sonnet stages
   const taskType = stage.model.includes('haiku') ? 'spot_check' as const : 'review' as const;
 
@@ -248,7 +257,9 @@ async function callStage(
     response.usage.input_tokens,
     response.usage.output_tokens,
     taskType,
-    `bloom-${stage.name}`
+    `bloom-${stage.name}`,
+    cacheRead,
+    cacheWrite
   );
 
   // Extract tool_use input if present, otherwise extract text

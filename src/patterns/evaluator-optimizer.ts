@@ -138,16 +138,20 @@ export async function runEvalOptLoop(
   // Build evaluation system message with cache_control for reuse across iterations
   const evalSystemMessage = buildEvalSystemMessage(evaluationCriteria);
 
+  // Build generator system message with cache_control for reuse across iterations
+  const genSystemMessage = 'You are an expert implementation planner for a Next.js + Prisma + Supabase rowing team management app called Radl. Generate detailed, actionable specs that follow established patterns.';
+
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     logger.info('Eval-opt iteration', { iteration, maxIterations });
 
-    // Step 1: Generate
+    // Step 1: Generate (with cached system message for prompt reuse across iterations)
     let genResponse: Anthropic.Message;
     try {
       genResponse = await withRetry(
         () => getAnthropicClient().messages.create({
           model: generatorRoute.model,
           max_tokens: generatorRoute.maxTokens,
+          system: [{ type: 'text', text: genSystemMessage, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: currentPrompt }],
         }),
         { maxRetries: 3, baseDelayMs: 1000 },
@@ -167,12 +171,25 @@ export async function runEvalOptLoop(
     );
     totalCost += genCost;
 
+    // Extract cache metrics from generator response
+    const genUsage = genResponse.usage as unknown as Record<string, number>;
+    const genCacheRead = genUsage.cache_read_input_tokens ?? 0;
+    const genCacheWrite = genUsage.cache_creation_input_tokens ?? 0;
+
+    if (genCacheRead > 0) {
+      const normalCost = (genCacheRead / 1_000_000) * generatorRoute.inputCostPer1M;
+      const cachedCost = (genCacheRead / 1_000_000) * generatorRoute.inputCostPer1M * 0.1;
+      totalCacheSavings += normalCost - cachedCost;
+    }
+
     trackUsage(
       generatorRoute.model,
       genResponse.usage.input_tokens,
       genResponse.usage.output_tokens,
       generatorTaskType,
-      'eval-opt-generator'
+      'eval-opt-generator',
+      genCacheRead,
+      genCacheWrite
     );
 
     currentOutput = genResponse.content
