@@ -50,6 +50,7 @@ import {
   clearCheckpoint,
 } from './shared/conductor-checkpoint.js';
 import { formatVerificationSection } from './shared/task-verifier.js';
+import { getCachedContext, cacheContext } from '../../knowledge/reasoning-bank.js';
 
 // ============================================
 // Types
@@ -642,9 +643,24 @@ async function runConductorPipeline(
   const featureHash = computeFeatureHash(feature, context);
   const checkpoint = loadCheckpoint(featureHash);
 
-  // Step 1: Load knowledge context
+  // Step 1: Load knowledge context (with ReasoningBank cache)
   logger.info('Sprint conductor: loading knowledge context', { effort });
-  const knowledge = loadKnowledgeContext();
+  let knowledge: KnowledgeContext;
+  const cachedKnowledge = getCachedContext(feature);
+  if (cachedKnowledge) {
+    // Cache hit — restore full KnowledgeContext from cached JSON
+    try {
+      knowledge = JSON.parse(cachedKnowledge) as KnowledgeContext;
+      logger.info('Sprint conductor: knowledge loaded from ReasoningBank cache');
+    } catch {
+      // Corrupt cache entry — fall through to fresh load
+      knowledge = loadKnowledgeContext();
+    }
+  } else {
+    knowledge = loadKnowledgeContext();
+    // Cache the full KnowledgeContext as JSON for future similar features
+    cacheContext(feature, JSON.stringify(knowledge));
+  }
 
   // EFFORT: instant — return knowledge context only (no AI calls)
   if (effort === 'instant') {
