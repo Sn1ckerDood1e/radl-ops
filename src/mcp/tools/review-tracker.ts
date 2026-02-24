@@ -105,9 +105,11 @@ export function registerReviewTrackerTools(server: McpServer): void {
         description: z.string().min(1).max(500).describe('Description of the finding'),
         reviewer: z.string().min(1).max(50).describe('Reviewer name (e.g., "security-reviewer", "code-reviewer")'),
       })).min(1).describe('Array of review findings to record'),
+      intent: z.string().min(1).max(100).optional()
+        .describe('Short intent description for causal tracking (e.g., "post-task security review")'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    withErrorTracking('record_review', async ({ findings }) => {
+    withErrorTracking('record_review', async ({ findings, intent }) => {
       const now = new Date().toISOString();
       const newFindings: ReviewFinding[] = findings.map(f => ({
         id: randomUUID().substring(0, 8),
@@ -120,6 +122,10 @@ export function registerReviewTrackerTools(server: McpServer): void {
       }));
 
       recordFindings(newFindings);
+
+      if (intent) {
+        logger.info('Review recording intent', { intent, findingCount: newFindings.length });
+      }
 
       const summary = {
         critical: newFindings.filter(f => f.severity === 'CRITICAL').length,
