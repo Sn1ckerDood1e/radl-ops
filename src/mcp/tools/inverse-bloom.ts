@@ -17,6 +17,7 @@ import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../config/logger.js';
 import { getConfig } from '../../config/paths.js';
+import { findNodesByKeywords, getNeighbors, getGraphStats } from '../../knowledge/graph.js';
 
 // ============================================
 // Types
@@ -306,6 +307,53 @@ function scoreCausalNodes(taskTokens: Set<string>): ScoredItem[] {
   return items;
 }
 
+function scoreGraphNeighbors(taskTokens: Set<string>): ScoredItem[] {
+  try {
+    const stats = getGraphStats();
+    if (stats.nodes === 0) return [];
+
+    const keywords = [...taskTokens].slice(0, 10); // Limit keywords for perf
+    const matchedNodes = findNodesByKeywords(keywords, 5);
+    if (matchedNodes.length === 0) return [];
+
+    const items: ScoredItem[] = [];
+    const seenLabels = new Set<string>();
+
+    for (const node of matchedNodes) {
+      const neighbors = getNeighbors(node.id);
+      for (const neighbor of neighbors) {
+        const label = neighbor.node.label;
+        if (seenLabels.has(label)) continue;
+        seenLabels.add(label);
+
+        // Score: keyword match quality * edge weight
+        const keywordHits = keywords.filter(k =>
+          node.label.toLowerCase().includes(k)
+        ).length;
+        const score = keywordHits * neighbor.edge.weight * 0.4; // Discount vs direct matches
+
+        if (score > 0) {
+          const props = neighbor.node.properties as Record<string, unknown>;
+          const displayLabel = props.fullContent
+            ? String(props.fullContent).substring(0, 150)
+            : label;
+
+          items.push({
+            source: 'Graph',
+            item: label,
+            score,
+            displayText: `**[Graph: ${neighbor.node.type}]** ${displayLabel} _(via ${neighbor.edge.relationship})_`,
+          });
+        }
+      }
+    }
+    return items;
+  } catch {
+    // Graph may not exist yet — silently return empty
+    return [];
+  }
+}
+
 // ============================================
 // Core Logic
 // ============================================
@@ -342,6 +390,7 @@ export function runInverseBloom(
       ...scoreAntibodies(taskTokens),
       ...scoreCrystallized(taskTokens),
       ...scoreCausalNodes(taskTokens),
+      ...scoreGraphNeighbors(taskTokens),
     ];
 
     // Sort by score descending, take top 5
