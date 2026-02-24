@@ -41,6 +41,7 @@ interface ReasoningBankStore {
 
 const BANK_FILENAME = 'reasoning-bank.json';
 const MAX_ENTRIES = 50;
+const MAX_CONTEXT_CHARS = 50_000; // ~50KB per entry to prevent disk exhaustion
 const KNOWLEDGE_FILES = ['patterns.json', 'lessons.json', 'decisions.json', 'deferred.json'];
 const STOPWORDS = new Set([
   'the', 'a', 'an', 'is', 'in', 'to', 'of', 'and', 'for', 'with',
@@ -176,10 +177,14 @@ export function cacheContext(feature: string, context: string): void {
   // Remove existing entry with same key (upsert)
   const filtered = bank.entries.filter(e => e.key !== key);
 
+  const truncatedContext = context.length > MAX_CONTEXT_CHARS
+    ? context.substring(0, MAX_CONTEXT_CHARS)
+    : context;
+
   const newEntry: CachedReasoning = {
     key,
     featureNormalized: normalized,
-    context,
+    context: truncatedContext,
     sourceHashes: currentHashes,
     cachedAt: new Date().toISOString(),
     hits: 0,

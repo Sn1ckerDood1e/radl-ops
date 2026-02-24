@@ -440,8 +440,9 @@ function fusionRetrieveFromGraph(
   existingResults: ScoredEntry[],
 ): ScoredEntry[] {
   try {
-    // Find graph nodes matching keywords (returns [] if graph is empty)
-    const matchedNodes = findNodesByKeywords(keywords, 5);
+    // Cap keywords to prevent unbounded LIKE query amplification
+    const cappedKeywords = keywords.slice(0, 10);
+    const matchedNodes = findNodesByKeywords(cappedKeywords, 5);
     if (matchedNodes.length === 0) return [];
 
     const existingIds = new Set(existingResults.map(e => e.entryId));

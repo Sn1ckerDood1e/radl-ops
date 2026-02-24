@@ -18,6 +18,16 @@ function getDb(): Database.Database {
   return getDbForGraph();
 }
 
+/** Safely parse JSON properties column, returning {} on failure. */
+function parseProperties(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 // ============================================
 // Types
 // ============================================
@@ -96,7 +106,7 @@ export function getNode(id: string): GraphNode | null {
     id: row.id,
     type: row.type,
     label: row.label,
-    properties: JSON.parse(row.properties),
+    properties: parseProperties(row.properties),
   };
 }
 
@@ -112,7 +122,7 @@ export function getNodesByType(type: string): GraphNode[] {
     id: row.id,
     type: row.type,
     label: row.label,
-    properties: JSON.parse(row.properties),
+    properties: parseProperties(row.properties),
   }));
 }
 
@@ -198,7 +208,7 @@ export function getNeighbors(nodeId: string): Neighbor[] {
 
   for (const row of outgoing) {
     neighbors.push({
-      node: { id: row.id, type: row.type, label: row.label, properties: JSON.parse(row.properties) },
+      node: { id: row.id, type: row.type, label: row.label, properties: parseProperties(row.properties) },
       edge: { source: row.source, target: row.target, relationship: row.relationship, weight: row.weight },
       direction: 'outgoing',
     });
@@ -218,7 +228,7 @@ export function getNeighbors(nodeId: string): Neighbor[] {
 
   for (const row of incoming) {
     neighbors.push({
-      node: { id: row.id, type: row.type, label: row.label, properties: JSON.parse(row.properties) },
+      node: { id: row.id, type: row.type, label: row.label, properties: parseProperties(row.properties) },
       edge: { source: row.source, target: row.target, relationship: row.relationship, weight: row.weight },
       direction: 'incoming',
     });
@@ -298,7 +308,7 @@ export function findNodesByKeywords(keywords: string[], maxResults: number = 10)
     id: row.id,
     type: row.type,
     label: row.label,
-    properties: JSON.parse(row.properties),
+    properties: parseProperties(row.properties),
   }));
 }
 

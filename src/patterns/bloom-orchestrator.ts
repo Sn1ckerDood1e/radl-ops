@@ -10,6 +10,7 @@
  * Each stage sees output of all prior stages for accumulated context.
  */
 
+import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ModelId } from '../types/index.js';
 import { getRoute, calculateCost } from '../models/router.js';
@@ -599,11 +600,5 @@ function extractConcepts(text: string): string[] {
  * Simple string hash for creating deterministic IDs.
  */
 function hashString(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const chr = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + chr;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
+  return createHash('sha256').update(str).digest('hex').substring(0, 12);
 }
