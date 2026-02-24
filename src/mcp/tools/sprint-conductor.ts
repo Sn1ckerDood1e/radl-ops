@@ -42,6 +42,7 @@ import {
 import type { ParallelWave } from './shared/agent-validation.js';
 import { withRetry } from '../../utils/retry.js';
 import { startSpan, endSpan } from '../../observability/tracer.js';
+import { searchFts } from '../../knowledge/fts-index.js';
 import { createPlanFromDecomposition, savePlan } from './shared/plan-store.js';
 import { getCalibrationFactor } from './shared/estimation.js';
 import {
@@ -70,6 +71,7 @@ interface KnowledgeContext {
   lessons: string;
   deferred: string;
   estimations: string;
+  historicalContext: string;
 }
 
 interface ConductorResult {
@@ -95,6 +97,25 @@ function getEstimationCalibrationFactor(): number {
 // Helpers
 // ============================================
 
+/**
+ * Search FTS knowledge base for entries relevant to the feature description.
+ * Returns formatted context string with top matches (zero-cost, local BM25 search).
+ */
+function searchHistoricalContext(feature: string, maxResults = 3): string {
+  try {
+    const results = searchFts({ query: feature, maxResults });
+    if (results.length === 0) return '';
+
+    const lines = results.map(r =>
+      `- [${r.source}] ${r.text.slice(0, 200)}`
+    );
+    return `Historical knowledge (similar past work):\n${lines.join('\n')}`;
+  } catch {
+    // FTS not initialized or query failed — non-critical
+    return '';
+  }
+}
+
 function loadKnowledgeContext(): KnowledgeContext {
   const config = getConfig();
   const result: KnowledgeContext = {
@@ -102,6 +123,7 @@ function loadKnowledgeContext(): KnowledgeContext {
     lessons: '',
     deferred: '',
     estimations: '',
+    historicalContext: '',
   };
 
   const patternsPath = `${config.knowledgeDir}/patterns.json`;
@@ -171,6 +193,7 @@ function buildSpecPrompt(feature: string, context: string | undefined, knowledge
     knowledge.patterns,
     knowledge.lessons,
     knowledge.deferred,
+    knowledge.historicalContext,
   ].filter(Boolean).join('\n\n');
 
   const contextSection = context
@@ -663,10 +686,18 @@ async function runConductorPipeline(
     cacheContext(feature, JSON.stringify(knowledge));
   }
 
+  // Enrich with historical context from FTS knowledge base (zero-cost BM25 search)
+  if (!knowledge.historicalContext) {
+    knowledge = { ...knowledge, historicalContext: searchHistoricalContext(feature) };
+    if (knowledge.historicalContext) {
+      logger.info('Sprint conductor: injected historical context from FTS');
+    }
+  }
+
   // EFFORT: instant — return knowledge context only (no AI calls)
   if (effort === 'instant') {
     logger.info('Sprint conductor: instant effort — returning knowledge context only');
-    const knowledgeSummary = [knowledge.patterns, knowledge.lessons, knowledge.deferred, knowledge.estimations]
+    const knowledgeSummary = [knowledge.patterns, knowledge.lessons, knowledge.deferred, knowledge.estimations, knowledge.historicalContext]
       .filter(Boolean).join('\n\n');
     return {
       spec: knowledgeSummary || 'No knowledge context available.',
