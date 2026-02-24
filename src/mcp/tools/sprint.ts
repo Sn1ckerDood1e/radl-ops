@@ -31,6 +31,7 @@ import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
+import { session } from './shared/session-state.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -910,6 +911,16 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
+      // Pre-flight verification gate advisory
+      let preFlightNote = '';
+      const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+      if (!session.preFlightPassed) {
+        preFlightNote = '\nPRE-FLIGHT WARNING: No pre_flight_check was run this session. Run it before pushing to verify branch safety, clean tree, and typecheck.';
+      } else if (session.preFlightAt && (Date.now() - session.preFlightAt) > STALE_THRESHOLD_MS) {
+        const minutesAgo = Math.round((Date.now() - session.preFlightAt) / 60_000);
+        preFlightNote = `\nPRE-FLIGHT WARNING: Last pre_flight_check was ${minutesAgo} minutes ago (stale). Consider re-running before push.`;
+      }
+
       // D1-D3: Sprint quality gate warnings (extracted to shared/quality-gates.ts)
       const qualityNote = evaluateQualityGates({
         completedRaw,
@@ -940,7 +951,7 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${antibodyNote}${qualityNote}${calendarNote}` }] };
+      return { content: [{ type: 'text' as const, text: `${output}${deferredNote}${teamNote}${extractNote}${traceabilityNote}${validationNote}${reviewNote}${antibodyNote}${qualityNote}${preFlightNote}${calendarNote}` }] };
     })
   );
 

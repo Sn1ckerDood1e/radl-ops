@@ -18,6 +18,8 @@ export interface SessionMetrics {
   lastCommitAt: number | null;
   lastProgressAt: number | null;
   sprintActive: boolean;
+  preFlightPassed: boolean;
+  preFlightAt: number | null;
 }
 
 // In-memory session state (reset on server restart = new session)
@@ -28,6 +30,8 @@ export const session: SessionMetrics = {
   lastCommitAt: null,
   lastProgressAt: null,
   sprintActive: false,
+  preFlightPassed: false,
+  preFlightAt: null,
 };
 
 /**

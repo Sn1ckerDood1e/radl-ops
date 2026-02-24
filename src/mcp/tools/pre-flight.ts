@@ -13,6 +13,7 @@ import { execSync } from 'child_process';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
+import { session } from './shared/session-state.js';
 
 interface CheckResult {
   name: string;
@@ -265,6 +266,12 @@ export function registerPreFlightTools(server: McpServer): void {
       ];
 
       const allPassed = results.every(r => r.passed);
+
+      // Record pre-flight result in session state for sprint_complete gate
+      if (allPassed) {
+        session.preFlightPassed = true;
+        session.preFlightAt = Date.now();
+      }
 
       logger.info('Pre-flight check complete', {
         allPassed,
