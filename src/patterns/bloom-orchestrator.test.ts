@@ -27,7 +27,13 @@ vi.mock('../utils/retry.js', () => ({
   withRetry: vi.fn((fn: () => Promise<unknown>) => fn()),
 }));
 
-import { runBloomPipeline } from './bloom-orchestrator.js';
+vi.mock('../knowledge/graph.js', () => ({
+  addNodes: vi.fn(),
+  addEdges: vi.fn(),
+}));
+
+import { runBloomPipeline, extractAndStoreEntities } from './bloom-orchestrator.js';
+import { addNodes, addEdges } from '../knowledge/graph.js';
 import type { SprintData } from './bloom-orchestrator.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { getRoute, calculateCost } from '../models/router.js';
@@ -391,5 +397,91 @@ describe('Bloom Pipeline', () => {
 
     expect(result.qualityScore).toBe(5);
     expect(result.lessons).toHaveLength(1);
+  });
+
+  it('calls entity extraction after successful pipeline', async () => {
+    mockCreate.mockResolvedValueOnce(makeTextMessage('Understanding'));
+    mockCreate.mockResolvedValueOnce(makeTextMessage('Ideation'));
+    mockCreate.mockResolvedValueOnce(makeToolMessage('submit_lessons', {
+      lessons: [
+        { category: 'pattern', content: 'Use CSRF headers always', confidence: 8 },
+        { category: 'lesson', content: 'Never use listUsers for single lookup', confidence: 9 },
+      ],
+    }));
+    mockCreate.mockResolvedValueOnce(makeToolMessage('submit_judgment', {
+      score: 8,
+      feedback: 'Good insights',
+    }));
+
+    await runBloomPipeline(mockSprintData);
+
+    // Entity extraction should have been called
+    expect(addNodes).toHaveBeenCalled();
+    expect(addEdges).toHaveBeenCalled();
+  });
+});
+
+describe('Entity Extraction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('creates sprint + lesson + concept nodes', () => {
+    const result = extractAndStoreEntities(
+      [{ category: 'pattern', content: 'Always use CSRF protection headers', confidence: 8 }],
+      'Phase 110',
+    );
+
+    expect(result.nodesAdded).toBeGreaterThan(0);
+    expect(result.edgesAdded).toBeGreaterThan(0);
+    expect(addNodes).toHaveBeenCalled();
+    expect(addEdges).toHaveBeenCalled();
+  });
+
+  it('returns zeros for empty lessons', () => {
+    const result = extractAndStoreEntities([], 'Phase 110');
+    expect(result.nodesAdded).toBe(0);
+    expect(result.edgesAdded).toBe(0);
+  });
+
+  it('creates co-occurrence edges between concepts', () => {
+    extractAndStoreEntities(
+      [{ category: 'lesson', content: 'Authentication and CSRF protection are related security concerns', confidence: 7 }],
+      'Phase 110',
+    );
+
+    const edgeCalls = vi.mocked(addEdges).mock.calls;
+    expect(edgeCalls.length).toBeGreaterThan(0);
+
+    // Should have co_occurs edges between concepts
+    const allEdges = edgeCalls.flatMap(call => call[0]);
+    const coOccurs = allEdges.filter(e => e.relationship === 'co_occurs');
+    expect(coOccurs.length).toBeGreaterThan(0);
+  });
+
+  it('extracts PascalCase identifiers as concepts', () => {
+    extractAndStoreEntities(
+      [{ category: 'pattern', content: 'Use SprintConductor for orchestration', confidence: 8 }],
+      'Phase 110',
+    );
+
+    const nodeCalls = vi.mocked(addNodes).mock.calls;
+    const allNodes = nodeCalls.flatMap(call => call[0]);
+    const conceptNodes = allNodes.filter(n => n.type === 'concept');
+    const labels = conceptNodes.map(n => n.label);
+    expect(labels).toContain('sprintconductor');
+  });
+
+  it('limits concepts to 8 per lesson', () => {
+    extractAndStoreEntities(
+      [{ category: 'lesson', content: 'authentication authorization validation serialization deserialization optimization internationalization localization configuration initialization verification specification implementation', confidence: 5 }],
+      'Phase 110',
+    );
+
+    const nodeCalls = vi.mocked(addNodes).mock.calls;
+    const allNodes = nodeCalls.flatMap(call => call[0]);
+    const conceptNodes = allNodes.filter(n => n.type === 'concept');
+    // Should be limited to 8 concepts max per lesson
+    expect(conceptNodes.length).toBeLessThanOrEqual(8);
   });
 });

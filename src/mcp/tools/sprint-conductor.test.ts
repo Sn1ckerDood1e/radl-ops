@@ -13,6 +13,7 @@ vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   renameSync: vi.fn(),
   unlinkSync: vi.fn(),
+  statSync: vi.fn(() => ({ mtimeMs: 0 })),
 }));
 
 vi.mock('../../config/logger.js', () => ({
@@ -70,6 +71,11 @@ vi.mock('../../config/paths.js', () => ({
     sprintScript: '/tmp/test.sh',
     compoundScript: '/tmp/test-compound.sh',
   })),
+}));
+
+vi.mock('../../knowledge/reasoning-bank.js', () => ({
+  getCachedContext: vi.fn(() => null),
+  cacheContext: vi.fn(),
 }));
 
 // Extract handlers by registering with a mock server
