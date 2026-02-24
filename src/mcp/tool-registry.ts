@@ -41,7 +41,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'causal_extract', 'causal_query', 'inverse_bloom',
       'trust_report', 'trust_record',
       'speculative_validate', 'cognitive_load',
-      'record_review', 'resolve_review',
+      'record_review', 'resolve_review', 'spec_compliance', 'tool_guide',
       'production_status', 'session_health', 'alert_check',
     ],
     defaultEnabled: true,
