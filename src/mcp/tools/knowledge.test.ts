@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
+import { recordRetrievals, getPromotionCandidates } from '../../knowledge/fts-index.js';
 
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
@@ -17,6 +18,12 @@ vi.mock('../../config/logger.js', () => ({
 
 vi.mock('../with-error-tracking.js', () => ({
   withErrorTracking: vi.fn((_name: string, handler: Function) => handler),
+}));
+
+vi.mock('../../knowledge/fts-index.js', () => ({
+  recordRetrievals: vi.fn(),
+  getPromotionCandidates: vi.fn().mockReturnValue([]),
+  getStaleEntries: vi.fn().mockReturnValue([]),
 }));
 
 // We can't easily test through McpServer, so we test the knowledge search
@@ -311,6 +318,71 @@ describe('Knowledge Query Tool', () => {
       const text = result.content[0].text;
 
       expect(text).not.toContain('Deferred Items');
+    });
+  });
+
+  describe('retrieval tracking and promotion', () => {
+    it('records retrievals for search results', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      await handler({ type: undefined, query: 'CSRF' });
+
+      expect(recordRetrievals).toHaveBeenCalledOnce();
+      const entryIds = vi.mocked(recordRetrievals).mock.calls[0][0];
+      expect(entryIds.length).toBeGreaterThan(0);
+      expect(entryIds[0]).toMatch(/^pattern-/);
+    });
+
+    it('does not record retrievals for no-results queries', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      await handler({ type: undefined, query: 'xylophone' });
+
+      expect(recordRetrievals).not.toHaveBeenCalled();
+    });
+
+    it('does not record retrievals for non-search queries', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      await handler({ type: undefined, query: undefined });
+
+      expect(recordRetrievals).not.toHaveBeenCalled();
+    });
+
+    it('shows promotion hint when candidates exist', async () => {
+      mockFiles();
+      vi.mocked(getPromotionCandidates).mockReturnValue([
+        { entryId: 'pattern-1', count: 5, lastRetrieved: '2026-02-20' },
+        { entryId: 'lesson-2', count: 3, lastRetrieved: '2026-02-19' },
+      ]);
+
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'CSRF' });
+      const text = result.content[0].text;
+
+      expect(text).toContain('Promotion hint');
+      expect(text).toContain('2 entries retrieved 3+ times');
+    });
+
+    it('does not show promotion hint when no candidates', async () => {
+      mockFiles();
+      vi.mocked(getPromotionCandidates).mockReturnValue([]);
+
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'CSRF' });
+      const text = result.content[0].text;
+
+      expect(text).not.toContain('Promotion hint');
+    });
+
+    it('includes entryId in structured results', async () => {
+      mockFiles();
+      const handler = await getHandler();
+      const result = await handler({ type: undefined, query: 'CSRF' });
+
+      const structured = result.structuredContent;
+      expect(structured.results[0]).toHaveProperty('type');
+      expect(structured.results[0]).toHaveProperty('score');
     });
   });
 });

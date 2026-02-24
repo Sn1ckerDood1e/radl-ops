@@ -151,7 +151,7 @@ async function collectResults(batchId: string): Promise<BatchResult[]> {
         custom_id: result.custom_id,
         success: false,
         error: result.result.type === 'errored'
-          ? String(result.result.error)
+          ? JSON.stringify(result.result.error)
           : `Batch item ${result.result.type}`,
       });
     }

@@ -222,4 +222,50 @@ describe('Evaluator-Optimizer Loop', () => {
       expect(result.evaluations[0].weaknesses).toContain('Unable to parse structured evaluation');
     });
   });
+
+  describe('extended thinking', () => {
+    it('passes thinking config to evaluator when enabled', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(9, true));
+
+      const thinkingConfig: EvalOptConfig = {
+        ...baseConfig,
+        enableThinking: true,
+        thinkingBudget: 4096,
+      };
+
+      await runEvalOptLoop('Test', thinkingConfig);
+
+      // Second call is the evaluator
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
+      expect(evalCall.max_tokens).toBeGreaterThanOrEqual(4096 + 1024);
+    });
+
+    it('omits thinking config when disabled', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(9, true));
+
+      await runEvalOptLoop('Test', baseConfig);
+
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toBeUndefined();
+    });
+
+    it('uses default thinking budget of 2048', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(9, true));
+
+      const thinkingConfig: EvalOptConfig = {
+        ...baseConfig,
+        enableThinking: true,
+        // No thinkingBudget specified — should default to 2048
+      };
+
+      await runEvalOptLoop('Test', thinkingConfig);
+
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
+    });
+  });
 });
