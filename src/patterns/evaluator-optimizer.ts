@@ -86,6 +86,10 @@ export interface EvalOptConfig {
   maxIterations?: number;
   /** Evaluation criteria the evaluator should check */
   evaluationCriteria: string[];
+  /** Enable extended thinking for evaluator (deeper quality assessment, Sonnet/Opus only) */
+  enableThinking?: boolean;
+  /** Thinking budget in tokens (default 2048) */
+  thinkingBudget?: number;
 }
 
 /**
@@ -121,6 +125,8 @@ export async function runEvalOptLoop(
     qualityThreshold = 7,
     maxIterations = 3,
     evaluationCriteria,
+    enableThinking = false,
+    thinkingBudget = 2048,
   } = evalConfig;
 
   const generatorRoute = getRoute(generatorTaskType);
@@ -202,15 +208,30 @@ export async function runEvalOptLoop(
 
     let evalResponse: Anthropic.Message;
     try {
+      // Cap thinking budget to prevent cost injection
+      const MAX_THINKING_BUDGET = 8192;
+      const safeBudget = Math.min(thinkingBudget, MAX_THINKING_BUDGET);
+
+      // Build eval params — thinking and tool_choice are incompatible in Anthropic API,
+      // so when thinking is enabled we omit tools/tool_choice and fall back to text parsing
+      const evalCreateParams: Anthropic.MessageCreateParamsNonStreaming = enableThinking
+        ? {
+            model: evaluatorRoute.model,
+            max_tokens: Math.max(evaluatorRoute.maxTokens, safeBudget + 1024),
+            system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
+            messages: [{ role: 'user', content: evalUserMessage }],
+            thinking: { type: 'enabled', budget_tokens: safeBudget },
+          }
+        : {
+            model: evaluatorRoute.model,
+            max_tokens: evaluatorRoute.maxTokens,
+            system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
+            messages: [{ role: 'user', content: evalUserMessage }],
+            tools: [EVAL_RESULT_TOOL],
+            tool_choice: { type: 'tool', name: 'evaluation_result' },
+          };
       evalResponse = await withRetry(
-        () => getAnthropicClient().messages.create({
-          model: evaluatorRoute.model,
-          max_tokens: evaluatorRoute.maxTokens,
-          system: [{ type: 'text', text: evalSystemMessage, cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: evalUserMessage }],
-          tools: [EVAL_RESULT_TOOL],
-          tool_choice: { type: 'tool', name: 'evaluation_result' },
-        }),
+        () => getAnthropicClient().messages.create(evalCreateParams),
         { maxRetries: 3, baseDelayMs: 1000 },
       );
     } catch (error) {

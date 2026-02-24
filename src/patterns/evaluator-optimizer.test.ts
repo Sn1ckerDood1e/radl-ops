@@ -222,4 +222,74 @@ describe('Evaluator-Optimizer Loop', () => {
       expect(result.evaluations[0].weaknesses).toContain('Unable to parse structured evaluation');
     });
   });
+
+  describe('extended thinking', () => {
+    it('passes thinking config to evaluator when enabled', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      // When thinking is enabled, tool_use is not available — evaluator returns text JSON
+      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(9, true, 'Excellent')));
+
+      const thinkingConfig: EvalOptConfig = {
+        ...baseConfig,
+        enableThinking: true,
+        thinkingBudget: 4096,
+      };
+
+      await runEvalOptLoop('Test', thinkingConfig);
+
+      // Second call is the evaluator
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
+      expect(evalCall.max_tokens).toBeGreaterThanOrEqual(4096 + 1024);
+      // Thinking mode must NOT include tools/tool_choice (API incompatibility)
+      expect(evalCall.tools).toBeUndefined();
+      expect(evalCall.tool_choice).toBeUndefined();
+    });
+
+    it('omits thinking config when disabled and uses tool_choice', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeToolMessage(9, true));
+
+      await runEvalOptLoop('Test', baseConfig);
+
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toBeUndefined();
+      // Non-thinking mode uses structured tool_use
+      expect(evalCall.tools).toBeDefined();
+      expect(evalCall.tool_choice).toEqual({ type: 'tool', name: 'evaluation_result' });
+    });
+
+    it('uses default thinking budget of 2048', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(8, true)));
+
+      const thinkingConfig: EvalOptConfig = {
+        ...baseConfig,
+        enableThinking: true,
+        // No thinkingBudget specified — should default to 2048
+      };
+
+      await runEvalOptLoop('Test', thinkingConfig);
+
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toEqual({ type: 'enabled', budget_tokens: 2048 });
+    });
+
+    it('caps thinking budget at 8192', async () => {
+      mockCreate.mockResolvedValueOnce(makeMessage('Content'));
+      mockCreate.mockResolvedValueOnce(makeMessage(makeEvalJson(9, true)));
+
+      const thinkingConfig: EvalOptConfig = {
+        ...baseConfig,
+        enableThinking: true,
+        thinkingBudget: 100000, // Way over the cap
+      };
+
+      await runEvalOptLoop('Test', thinkingConfig);
+
+      const evalCall = mockCreate.mock.calls[1][0];
+      expect(evalCall.thinking).toEqual({ type: 'enabled', budget_tokens: 8192 });
+      expect(evalCall.max_tokens).toBeGreaterThanOrEqual(8192 + 1024);
+    });
+  });
 });

@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
+import { recordRetrievals, getPromotionCandidates, getStaleEntries } from '../../knowledge/fts-index.js';
 
 interface Pattern {
   id: number;
@@ -64,6 +65,7 @@ interface TeamRun {
 
 interface ScoredEntry {
   type: 'pattern' | 'lesson' | 'decision' | 'deferred' | 'team-run';
+  entryId: string;
   score: number;
   text: string;
 }
@@ -168,7 +170,7 @@ export function registerKnowledgeTools(server: McpServer): void {
         for (const p of data?.patterns ?? []) {
           const score = scoreEntry(keywords, [p.name, p.description, p.example ?? '']);
           if (score > 0) {
-            scored.push({ type: 'pattern', score, text: formatPattern(p) });
+            scored.push({ type: 'pattern', entryId: `pattern-${p.id}`, score, text: formatPattern(p) });
           }
         }
       }
@@ -178,7 +180,7 @@ export function registerKnowledgeTools(server: McpServer): void {
         for (const l of data?.lessons ?? []) {
           const score = scoreEntry(keywords, [l.situation, l.learning]);
           if (score > 0) {
-            scored.push({ type: 'lesson', score, text: formatLesson(l) });
+            scored.push({ type: 'lesson', entryId: `lesson-${l.id}`, score, text: formatLesson(l) });
           }
         }
       }
@@ -190,7 +192,7 @@ export function registerKnowledgeTools(server: McpServer): void {
             d.title, d.context ?? '', d.alternatives ?? '', d.rationale,
           ]);
           if (score > 0) {
-            scored.push({ type: 'decision', score, text: formatDecision(d) });
+            scored.push({ type: 'decision', entryId: `decision-${d.id}`, score, text: formatDecision(d) });
           }
         }
       }
@@ -201,7 +203,7 @@ export function registerKnowledgeTools(server: McpServer): void {
         for (const d of data?.items ?? []) {
           const score = scoreEntry(keywords, [d.title, d.reason, d.effort, d.sprintPhase]);
           if (score > 0) {
-            scored.push({ type: 'deferred', score, text: formatDeferred(d) });
+            scored.push({ type: 'deferred', entryId: `deferred-${d.id}`, score, text: formatDeferred(d) });
           }
         }
       }
@@ -214,7 +216,7 @@ export function registerKnowledgeTools(server: McpServer): void {
             r.recipe, r.sprintPhase, r.model, r.outcome, r.lessonsLearned ?? '',
           ]);
           if (score > 0) {
-            scored.push({ type: 'team-run', score, text: formatTeamRun(r) });
+            scored.push({ type: 'team-run', entryId: `team-run-${r.id}`, score, text: formatTeamRun(r) });
           }
         }
       }
@@ -245,6 +247,28 @@ export function registerKnowledgeTools(server: McpServer): void {
         lines.push(entry.text);
       }
 
+      // Track retrieval counts for knowledge promotion
+      try {
+        recordRetrievals(top.map(e => e.entryId));
+      } catch {
+        // Non-critical: don't fail the query if tracking fails
+      }
+
+      // Check for promotion candidates that overlap with current results
+      try {
+        const candidates = getPromotionCandidates();
+        if (candidates.length > 0) {
+          const candidateIds = new Set(candidates.map(c => c.entryId));
+          const returningCandidates = top.filter(e => candidateIds.has(e.entryId));
+          if (returningCandidates.length > 0) {
+            lines.push('');
+            lines.push(`_Promotion hint: ${returningCandidates.length} returned entries retrieved 3+ times — consider crystallize_propose._`);
+          }
+        }
+      } catch {
+        // Non-critical
+      }
+
       logger.info('Knowledge searched', { query, type: queryType, matches: scored.length });
       return {
         content: [{ type: 'text' as const, text: lines.join('\n') }],
@@ -254,6 +278,7 @@ export function registerKnowledgeTools(server: McpServer): void {
           totalMatches: scored.length,
           results: top.map(entry => ({
             type: entry.type,
+            entryId: entry.entryId,
             score: entry.score,
             text: entry.text,
           })),

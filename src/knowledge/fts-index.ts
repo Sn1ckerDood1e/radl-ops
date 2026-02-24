@@ -93,6 +93,15 @@ function getDb(): Database.Database {
     );
   `);
 
+  // Retrieval tracking table for usage-based knowledge promotion
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS retrieval_counts (
+      entry_id TEXT PRIMARY KEY,
+      count INTEGER DEFAULT 0,
+      last_retrieved_at TEXT
+    );
+  `);
+
   dbInstance = db;
   return db;
 }
@@ -278,6 +287,19 @@ export function initFtsIndex(): void {
 // ============================================
 
 /**
+ * Sanitize a user-supplied query string for FTS5 MATCH.
+ * Strips FTS5 metacharacters that could cause parse errors or wildcard DoS.
+ * Joins remaining tokens with OR for multi-word queries.
+ */
+function sanitizeFtsQuery(raw: string): string {
+  // Strip FTS5 special characters: quotes, wildcards, negation, grouping, column prefix
+  const stripped = raw.replace(/["*\-^():]/g, ' ').trim();
+  if (!stripped) return '';
+  // Join tokens with OR for broad matching
+  return stripped.split(/\s+/).filter(Boolean).join(' OR ');
+}
+
+/**
  * Search the FTS5 index using BM25 ranking with optional time decay.
  *
  * Returns results sorted by combined score (FTS5 BM25 * time decay).
@@ -294,23 +316,15 @@ export function searchFts(options: SearchOptions): SearchResult[] {
 
   if (!query.trim()) return [];
 
+  // Sanitize query for FTS5 — strip metacharacters that could cause parse errors or DoS
+  const safeQuery = sanitizeFtsQuery(query);
+  if (!safeQuery) return [];
+
   const db = getDb();
 
   // FTS5 match query with BM25 ranking
   // bm25() returns negative values (lower = better match), so we negate it
-  const rows = db.prepare(`
-    SELECT
-      text,
-      id,
-      source,
-      source_id,
-      date,
-      -bm25(knowledge_fts) as fts_score
-    FROM knowledge_fts
-    WHERE knowledge_fts MATCH ?
-    ORDER BY fts_score DESC
-    LIMIT ?
-  `).all(query, maxResults * 3) as Array<{
+  let rows: Array<{
     text: string;
     id: string;
     source: string;
@@ -318,6 +332,29 @@ export function searchFts(options: SearchOptions): SearchResult[] {
     date: string;
     fts_score: number;
   }>;
+  try {
+    rows = db.prepare(`
+      SELECT
+        text,
+        id,
+        source,
+        source_id,
+        date,
+        -bm25(knowledge_fts) as fts_score
+      FROM knowledge_fts
+      WHERE knowledge_fts MATCH ?
+      ORDER BY fts_score DESC
+      LIMIT ?
+    `).all(safeQuery, maxResults * 3) as typeof rows;
+  } catch (error) {
+    // FTS5 query syntax can still fail on edge cases — return empty instead of crashing
+    logger.warn('FTS5 query failed, returning empty results', {
+      query,
+      safeQuery,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
 
   // Apply time decay and compute combined scores
   const results: SearchResult[] = rows.map(row => {
@@ -362,4 +399,99 @@ export function isFtsAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+// ============================================
+// Retrieval Tracking & Knowledge Promotion
+// ============================================
+
+const PROMOTION_THRESHOLD = 3;
+const STALE_DAYS = 60;
+
+/**
+ * Record a retrieval for one or more knowledge entry IDs.
+ * Called by knowledge_query after returning search results.
+ */
+export function recordRetrievals(entryIds: string[]): void {
+  if (entryIds.length === 0) return;
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  const upsert = db.prepare(`
+    INSERT INTO retrieval_counts (entry_id, count, last_retrieved_at)
+    VALUES (?, 1, ?)
+    ON CONFLICT(entry_id) DO UPDATE SET
+      count = count + 1,
+      last_retrieved_at = ?
+  `);
+
+  const batchUpsert = db.transaction((ids: string[]) => {
+    for (const id of ids) {
+      upsert.run(id, now, now);
+    }
+  });
+
+  batchUpsert(entryIds);
+}
+
+export interface PromotionCandidate {
+  entryId: string;
+  count: number;
+  lastRetrieved: string;
+}
+
+/**
+ * Find knowledge entries that have been retrieved >= PROMOTION_THRESHOLD times.
+ * These are candidates for crystallization (crystallize_propose).
+ */
+export function getPromotionCandidates(): PromotionCandidate[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT entry_id, count, last_retrieved_at
+    FROM retrieval_counts
+    WHERE count >= ?
+    ORDER BY count DESC
+  `).all(PROMOTION_THRESHOLD) as Array<{
+    entry_id: string;
+    count: number;
+    last_retrieved_at: string;
+  }>;
+
+  return rows.map(r => ({
+    entryId: r.entry_id,
+    count: r.count,
+    lastRetrieved: r.last_retrieved_at,
+  }));
+}
+
+/**
+ * Find knowledge entries with 0 retrievals in the last STALE_DAYS.
+ * These are candidates for archival.
+ */
+export function getStaleEntries(): PromotionCandidate[] {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - STALE_DAYS * 86_400_000).toISOString();
+
+  // Entries in FTS5 with no retrieval record OR retrieved infrequently and not recently
+  const rows = db.prepare(`
+    SELECT f.id as entry_id,
+           COALESCE(r.count, 0) as count,
+           COALESCE(r.last_retrieved_at, f.date) as last_retrieved_at
+    FROM knowledge_fts f
+    LEFT JOIN retrieval_counts r ON r.entry_id = f.id
+    WHERE r.entry_id IS NULL
+       OR (r.last_retrieved_at < ? AND r.count < 2)
+    ORDER BY last_retrieved_at ASC
+    LIMIT 20
+  `).all(cutoff) as Array<{
+    entry_id: string;
+    count: number;
+    last_retrieved_at: string;
+  }>;
+
+  return rows.map(r => ({
+    entryId: r.entry_id,
+    count: r.count,
+    lastRetrieved: r.last_retrieved_at,
+  }));
 }

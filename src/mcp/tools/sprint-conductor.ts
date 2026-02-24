@@ -712,6 +712,8 @@ async function runConductorPipeline(
         'Follows established Radl patterns',
         'Includes migration strategy if DB changes needed',
       ],
+      enableThinking: true,
+      thinkingBudget: 2048,
     });
 
     totalCost += evalOptResult.totalCostUsd;
