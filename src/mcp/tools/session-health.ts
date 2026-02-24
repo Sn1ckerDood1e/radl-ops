@@ -229,7 +229,7 @@ export function registerSessionHealthTools(server: McpServer): void {
     {
       record_commit: z.boolean().optional()
         .describe('Set to true to record a git commit event (call this from commit hooks)'),
-      record_tool: z.string().max(50).optional()
+      record_tool: z.string().max(50).regex(/^[a-z_][a-z0-9_]*$/).optional()
         .describe('Record a tool call event (tool name). Used by hook integration.'),
       record_success: z.boolean().optional()
         .describe('Whether the recorded tool call succeeded (default true)'),

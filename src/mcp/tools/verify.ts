@@ -13,9 +13,33 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { execSync, execFileSync } from 'child_process';
 import { existsSync } from 'fs';
+import { resolve, normalize } from 'path';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
+
+/**
+ * Validate that a file path is contained within allowed directories.
+ * Prevents path traversal via absolute paths or '..' sequences.
+ */
+function validateFilePath(file: string): string {
+  const config = getConfig();
+  const allowedBases = [config.radlDir, config.radlOpsDir];
+  const absolute = file.startsWith('/')
+    ? resolve(normalize(file))
+    : resolve(config.radlDir, file);
+
+  if (file.includes('..')) {
+    throw new Error(`Path traversal not allowed: ${file}`);
+  }
+
+  const allowed = allowedBases.some(base => absolute.startsWith(base + '/') || absolute === base);
+  if (!allowed) {
+    throw new Error(`File path not allowed: ${file}. Must be under radlDir or radlOpsDir.`);
+  }
+
+  return absolute;
+}
 
 interface CheckResult {
   name: string;
@@ -51,17 +75,25 @@ function runCheck(name: string, command: string): CheckResult {
 // ============================================
 
 function checkExists(files: string[]): CheckResult[] {
-  const radlDir = getConfig().radlDir;
   return files.map(file => {
     const start = Date.now();
-    const fullPath = file.startsWith('/') ? file : `${radlDir}/${file}`;
-    const found = existsSync(fullPath);
-    return {
-      name: `Exists: ${file}`,
-      passed: found,
-      output: found ? 'File found' : `NOT FOUND: ${file}`,
-      durationMs: Date.now() - start,
-    };
+    try {
+      const fullPath = validateFilePath(file);
+      const found = existsSync(fullPath);
+      return {
+        name: `Exists: ${file}`,
+        passed: found,
+        output: found ? 'File found' : `NOT FOUND: ${file}`,
+        durationMs: Date.now() - start,
+      };
+    } catch (err) {
+      return {
+        name: `Exists: ${file}`,
+        passed: false,
+        output: err instanceof Error ? err.message : 'Invalid path',
+        durationMs: Date.now() - start,
+      };
+    }
   });
 }
 
@@ -77,12 +109,17 @@ const PLACEHOLDER_PATTERNS = [
 ];
 
 function checkSubstantive(files: string[]): CheckResult[] {
-  const radlDir = getConfig().radlDir;
   const results: CheckResult[] = [];
 
   for (const file of files) {
     const start = Date.now();
-    const fullPath = file.startsWith('/') ? file : `${radlDir}/${file}`;
+    let fullPath: string;
+    try {
+      fullPath = validateFilePath(file);
+    } catch (err) {
+      results.push({ name: `Substantive: ${file}`, passed: false, output: err instanceof Error ? err.message : 'Invalid path', durationMs: Date.now() - start });
+      continue;
+    }
     if (!existsSync(fullPath)) {
       results.push({ name: `Substantive: ${file}`, passed: false, output: 'File not found', durationMs: Date.now() - start });
       continue;
@@ -121,7 +158,12 @@ function checkWired(files: string[]): CheckResult[] {
 
   for (const file of files) {
     const start = Date.now();
-    const fullPath = file.startsWith('/') ? file : `${radlDir}/${file}`;
+    try {
+      validateFilePath(file);
+    } catch (err) {
+      results.push({ name: `Wired: ${file}`, passed: false, output: err instanceof Error ? err.message : 'Invalid path', durationMs: Date.now() - start });
+      continue;
+    }
 
     // Check if the file is imported by at least one other file
     const basename = file.split('/').pop()?.replace(/\.(ts|tsx|js|jsx)$/, '') || file;

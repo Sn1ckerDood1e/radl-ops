@@ -30,7 +30,7 @@ function getChangedFiles(): string[] {
   try {
     const output = execFileSync('git', ['diff', '--name-only', 'main...HEAD'], {
       encoding: 'utf-8',
-      cwd: getConfig().radlOpsDir,
+      cwd: getConfig().radlDir,
       timeout: 10000,
     });
     return output.trim().split('\n').filter(Boolean);
@@ -44,7 +44,7 @@ function getChangedFiles(): string[] {
  */
 function grepChangedFiles(pattern: string, changedFiles: string[]): boolean {
   if (changedFiles.length === 0) return false;
-  const radlDir = getConfig().radlOpsDir;
+  const radlDir = getConfig().radlDir;
   try {
     execFileSync('grep', ['-l', '-r', '-E', pattern, ...changedFiles.map(f => `${radlDir}/${f}`)], {
       encoding: 'utf-8',
@@ -104,7 +104,7 @@ export function registerSpecComplianceTools(server: McpServer): void {
       task_id: z.number().optional()
         .describe('Task ID this compliance check is for (for tracking)'),
     },
-    { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
     withErrorTracking('spec_compliance', async ({ criteria, task_id }) => {
       const changedFiles = getChangedFiles();
 
@@ -121,9 +121,9 @@ export function registerSpecComplianceTools(server: McpServer): void {
         const now = new Date().toISOString();
         const findings: ReviewFinding[] = failedCriteria.map(r => ({
           id: randomUUID().substring(0, 8),
-          severity: 'HIGH' as const,
+          severity: 'MEDIUM' as const,
           file: 'spec-compliance',
-          description: `Criterion not met: ${r.criterion} — ${r.evidence}`,
+          description: `Criterion not met: ${r.criterion.replace(/[\r\n]/g, ' ').substring(0, 200)} — ${r.evidence}`,
           reviewer: 'spec-compliance',
           resolved: false,
           recordedAt: now,

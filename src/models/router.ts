@@ -206,7 +206,7 @@ export function getRouteWithFallback(
   }
 
   // Try fallback chain
-  const fallbacks = FALLBACK_CHAINS[base.model];
+  const fallbacks = FALLBACK_CHAINS[base.model] ?? [];
   for (const fallbackModel of fallbacks) {
     if (!unavailableModels.includes(fallbackModel)) {
       const pricing = MODEL_PRICING[fallbackModel];
