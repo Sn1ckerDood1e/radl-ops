@@ -30,6 +30,7 @@ import { proposeChecksFromLessons } from './crystallization.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
+import { searchFts, isFtsAvailable } from '../../knowledge/fts-index.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
 import { session } from './shared/session-state.js';
 
@@ -165,6 +166,25 @@ function getCurrentBranch(): string {
 interface TeamSuggestion {
   recipe: string;
   reason: string;
+}
+
+/**
+ * Proactive knowledge retrieval: auto-search knowledge base using sprint title keywords.
+ * Returns formatted hints for the sprint start output.
+ */
+function getProactiveKnowledge(title: string): string {
+  if (!isFtsAvailable()) return '';
+
+  const results = searchFts({ query: title, maxResults: 3 });
+  if (results.length === 0) return '';
+
+  const lines = ['\nRelevant knowledge for this sprint:'];
+  for (const result of results) {
+    const sourceLabel = result.source.charAt(0).toUpperCase() + result.source.slice(1);
+    const text = result.text.length > 120 ? result.text.substring(0, 120) + '...' : result.text;
+    lines.push(`  - [${sourceLabel}] ${text}`);
+  }
+  return lines.join('\n');
 }
 
 function getTeamSuggestion(
@@ -507,6 +527,14 @@ export function registerSprintTools(server: McpServer): void {
       // Clear previous review findings for new sprint
       clearFindings();
 
+      // Proactive knowledge retrieval: surface relevant patterns for this sprint
+      let knowledgeHints = '';
+      try {
+        knowledgeHints = getProactiveKnowledge(title);
+      } catch {
+        // Non-critical: don't block sprint start
+      }
+
       const taskAdvisory = (!task_count || task_count === 0)
         ? 'WARNING: No task breakdown provided. Create a task list (TaskCreate) before starting work to prevent scope creep.\n\n'
         : `Task plan: ${task_count} tasks\n`;
@@ -547,7 +575,7 @@ export function registerSprintTools(server: McpServer): void {
         }
       }
 
-      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}${calendarNote}` }] };
+      return { content: [{ type: 'text' as const, text: `${taskAdvisory}Branch: ${branch}\n${output}${teamSuggestion}${deferredTriage}${cognitiveAdvisory}${knowledgeHints}${calendarNote}` }] };
     })
   );
 
