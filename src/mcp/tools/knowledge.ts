@@ -13,6 +13,7 @@ import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
 import { recordRetrievals, getPromotionCandidates, getStaleEntries } from '../../knowledge/fts-index.js';
+import { findNodesByKeywords, getNeighbors, getGraphStats, type GraphNode } from '../../knowledge/graph.js';
 
 interface Pattern {
   id: number;
@@ -221,6 +222,12 @@ export function registerKnowledgeTools(server: McpServer): void {
         }
       }
 
+      // Fusion retrieval: enrich with graph neighbors
+      const graphNeighborResults = fusionRetrieveFromGraph(keywords, scored);
+      if (graphNeighborResults.length > 0) {
+        scored.push(...graphNeighborResults);
+      }
+
       if (scored.length === 0) {
         logger.info('Knowledge search: no results', { query, type: queryType });
         return {
@@ -237,9 +244,15 @@ export function registerKnowledgeTools(server: McpServer): void {
         };
       }
 
-      // Sort by score descending, take top 10
+      // Sort by score descending, deduplicate by entryId, take top 10
+      const seenIds = new Set<string>();
       const top = [...scored]
         .sort((a, b) => b.score - a.score)
+        .filter(entry => {
+          if (seenIds.has(entry.entryId)) return false;
+          seenIds.add(entry.entryId);
+          return true;
+        })
         .slice(0, 10);
 
       const lines = [`## Search results for '${query}' (${scored.length} matches, showing top ${top.length})`, ''];
@@ -407,4 +420,88 @@ function formatAll(queryType: string, depth: string = 'standard'): { text: strin
 
   logger.info('Knowledge queried', { type: queryType });
   return { text: lines.join('\n'), structured };
+}
+
+// ============================================
+// Fusion Retrieval (Graph + FTS5)
+// ============================================
+
+/**
+ * Retrieve graph neighbors that complement FTS5 results.
+ * 1. Find graph nodes matching search keywords
+ * 2. For each matched node, get 1-hop neighbors
+ * 3. Score neighbors based on parent match quality and edge weight
+ * 4. Return as ScoredEntry items (with graph-sourced tag)
+ *
+ * Zero-cost: no AI calls, pure graph traversal.
+ */
+function fusionRetrieveFromGraph(
+  keywords: string[],
+  existingResults: ScoredEntry[],
+): ScoredEntry[] {
+  try {
+    const stats = getGraphStats();
+    if (stats.nodes === 0) return [];
+
+    // Find graph nodes matching keywords
+    const matchedNodes = findNodesByKeywords(keywords, 5);
+    if (matchedNodes.length === 0) return [];
+
+    const existingIds = new Set(existingResults.map(e => e.entryId));
+    const graphResults: ScoredEntry[] = [];
+
+    for (const node of matchedNodes) {
+      const neighbors = getNeighbors(node.id);
+
+      for (const neighbor of neighbors) {
+        const neighborNode = neighbor.node;
+        const graphEntryId = `graph-${neighborNode.id}`;
+
+        // Skip if already in FTS5 results
+        if (existingIds.has(graphEntryId)) continue;
+        existingIds.add(graphEntryId);
+
+        // Score: parent relevance (keywords matched) * edge weight
+        const parentScore = keywords.filter(k =>
+          node.label.toLowerCase().includes(k.toLowerCase())
+        ).length;
+        const score = parentScore * neighbor.edge.weight * 0.5; // Discount graph results slightly
+
+        if (score > 0) {
+          const props = neighborNode.properties as Record<string, unknown>;
+          const label = props.fullContent
+            ? String(props.fullContent).substring(0, 200)
+            : neighborNode.label;
+
+          graphResults.push({
+            type: mapNodeTypeToEntryType(neighborNode.type),
+            entryId: graphEntryId,
+            score,
+            text: `- [GRAPH] **${neighborNode.type}**: ${label} _(via ${neighbor.edge.relationship} → ${node.label})_`,
+          });
+        }
+      }
+    }
+
+    if (graphResults.length > 0) {
+      logger.info('Fusion retrieval: graph neighbors found', {
+        matchedNodes: matchedNodes.length,
+        graphResults: graphResults.length,
+      });
+    }
+
+    return graphResults;
+  } catch {
+    // Non-critical: graph may not exist yet
+    return [];
+  }
+}
+
+function mapNodeTypeToEntryType(nodeType: string): ScoredEntry['type'] {
+  switch (nodeType) {
+    case 'pattern': return 'pattern';
+    case 'lesson': return 'lesson';
+    case 'decision': return 'decision';
+    default: return 'lesson'; // concepts, sprints, etc. map to lesson
+  }
 }
