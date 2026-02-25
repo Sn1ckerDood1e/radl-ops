@@ -17,6 +17,7 @@ import { trackUsage } from '../models/token-tracker.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
 import { withRetry } from '../utils/retry.js';
+import { getProjectConfig } from '../config/project-config.js';
 
 /**
  * Tool definition for structured evaluation output.
@@ -122,8 +123,8 @@ export async function runEvalOptLoop(
   const {
     generatorTaskType,
     evaluatorTaskType = 'review',
-    qualityThreshold = 7,
-    maxIterations = 3,
+    qualityThreshold = getProjectConfig().qualityThreshold,
+    maxIterations = getProjectConfig().maxIterations,
     evaluationCriteria,
     enableThinking = false,
     thinkingBudget = 2048,
