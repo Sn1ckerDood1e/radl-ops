@@ -4,7 +4,9 @@
 
 set -e
 
-BRIEFING_DIR="/home/hb/radl-ops/briefings"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+BRIEFING_DIR="$RADL_OPS_DIR/briefings"
 DATE=$(date +%Y-%m-%d)
 DAY_OF_WEEK=$(date +%u)  # 1=Monday, 6=Saturday, 7=Sunday
 LOCK_FILE="/tmp/radl-briefing-$DATE.lock"
@@ -23,8 +25,8 @@ if [ "$DAY_OF_WEEK" -eq 7 ]; then
     exit 0
 elif [ "$DAY_OF_WEEK" -eq 6 ]; then
     # Saturday - run weekly briefing
-    /home/hb/radl-ops/scripts/weekly-briefing.sh
+    "$RADL_OPS_DIR/scripts/weekly-briefing.sh"
 else
     # Monday-Friday - run daily briefing
-    /home/hb/radl-ops/scripts/daily-briefing.sh
+    "$RADL_OPS_DIR/scripts/daily-briefing.sh"
 fi

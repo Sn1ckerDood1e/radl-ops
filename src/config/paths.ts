@@ -19,7 +19,9 @@ export interface PathConfig {
   compoundScript: string;
 }
 
-const ALLOWED_BASE_DIRS = ['/home/hb', '/tmp'];
+const ALLOWED_BASE_DIRS = process.env.RADL_OPS_ALLOWED_DIRS
+  ? process.env.RADL_OPS_ALLOWED_DIRS.split(',').map(d => d.trim())
+  : ['/home/hb', '/tmp'];
 
 function validatePath(rawPath: string, label: string): string {
   const absolutePath = resolve(normalize(rawPath));

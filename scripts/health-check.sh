@@ -5,8 +5,11 @@
 
 set -e
 
+# Resolve directories
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+
 # Load environment
-source /home/hb/radl-ops/.env 2>/dev/null || true
+source "$RADL_OPS_DIR/.env" 2>/dev/null || true
 
 JSON_OUTPUT=false
 if [ "$1" = "--json" ]; then

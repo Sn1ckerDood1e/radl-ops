@@ -9,7 +9,9 @@
 
 set -e
 
-BRIEFING_DIR="/home/hb/radl-ops/briefings"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+BRIEFING_DIR="$RADL_OPS_DIR/briefings"
 DATE=$(date +%Y-%m-%d)
 DAY_NAME=$(date +%A)
 BRIEFING_FILE="$BRIEFING_DIR/daily-$DATE.md"
@@ -26,11 +28,11 @@ if command -v claude &>/dev/null; then
 elif [ -n "$NODE_VERSION" ] && [ -x "$NVM_CLAUDE" ]; then
     CLAUDE_BIN="$NVM_CLAUDE"
 else
-    CLAUDE_BIN="/home/hb/.nvm/versions/node/v22.22.0/bin/claude"
+    CLAUDE_BIN="$HOME/.nvm/versions/node/v22.22.0/bin/claude"
 fi
 
 # Change to radl-ops directory for CLAUDE.md context
-cd /home/hb/radl-ops
+cd "$RADL_OPS_DIR"
 
 if [ ! -x "$CLAUDE_BIN" ]; then
     echo "[$DATE] ERROR: Claude binary not found at $CLAUDE_BIN"

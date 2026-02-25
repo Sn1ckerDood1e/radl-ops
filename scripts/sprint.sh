@@ -11,10 +11,14 @@
 
 set -e
 
-# Load environment
-source /home/hb/radl-ops/.env 2>/dev/null || true
+# Resolve directories
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+RADL_DIR="${RADL_DIR:-/home/hb/radl}"
 
-SPRINT_DIR="/home/hb/radl/.planning/sprints"
+# Load environment
+source "$RADL_OPS_DIR/.env" 2>/dev/null || true
+
+SPRINT_DIR="$RADL_DIR/.planning/sprints"
 CURRENT_SPRINT="$SPRINT_DIR/current.json"
 
 mkdir -p "$SPRINT_DIR"
@@ -279,13 +283,13 @@ cmd_analytics() {
   echo "=== Sprint Analytics ==="
   echo ""
 
-  python3 << 'EOF'
+  python3 << EOF
 import json
 import os
 from datetime import datetime
 from pathlib import Path
 
-sprint_dir = Path('/home/hb/radl/.planning/sprints')
+sprint_dir = Path('$RADL_DIR/.planning/sprints')
 completed_files = sorted(sprint_dir.glob('completed-*.json'), reverse=True)
 
 if not completed_files:
@@ -447,7 +451,7 @@ cmd_complete() {
   mv "$CURRENT_SPRINT" "$SPRINT_DIR/completed-$sprint_id.json"
 
   # Update STATE.md with sprint info
-  STATE_FILE="/home/hb/radl/.planning/STATE.md"
+  STATE_FILE="$RADL_DIR/.planning/STATE.md"
   if [ -f "$STATE_FILE" ]; then
     # Update Last Sprint and Actual time in STATE.md
     python3 << PYEOF
@@ -535,7 +539,7 @@ PYEOF
   }"
 
   # Auto-trigger compound learning extraction
-  COMPOUND_SCRIPT="/home/hb/radl-ops/scripts/compound.sh"
+  COMPOUND_SCRIPT="$RADL_OPS_DIR/scripts/compound.sh"
   if [ -x "$COMPOUND_SCRIPT" ]; then
     echo ""
     echo "Extracting compound learnings..."
