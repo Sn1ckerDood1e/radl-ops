@@ -1,1 +1,404 @@
-{ "decisions": [] }
+{
+  "decisions": [
+    {
+      "id": 1,
+      "domain": "estimation",
+      "decision": "Actual: 30 minutes",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "failure",
+      "sprint": "Phase 89",
+      "recordedAt": "2026-02-18T19:48:28.136Z"
+    },
+    {
+      "id": 2,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 89",
+      "recordedAt": "2026-02-18T19:48:28.136Z"
+    },
+    {
+      "id": 3,
+      "domain": "estimation",
+      "decision": "Actual: 30 minutes",
+      "aiRecommended": "Estimated: 1 hour",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 90",
+      "recordedAt": "2026-02-19T13:13:02.307Z"
+    },
+    {
+      "id": 4,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 90",
+      "recordedAt": "2026-02-19T13:13:02.308Z"
+    },
+    {
+      "id": 5,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 3 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 91",
+      "recordedAt": "2026-02-19T14:09:06.167Z"
+    },
+    {
+      "id": 6,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 91",
+      "recordedAt": "2026-02-19T14:09:06.168Z"
+    },
+    {
+      "id": 7,
+      "domain": "estimation",
+      "decision": "Actual: 1 hour",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 92",
+      "recordedAt": "2026-02-19T15:07:40.335Z"
+    },
+    {
+      "id": 8,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 92",
+      "recordedAt": "2026-02-19T15:07:40.336Z"
+    },
+    {
+      "id": 9,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 3 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 96",
+      "recordedAt": "2026-02-20T14:30:08.031Z"
+    },
+    {
+      "id": 10,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 96",
+      "recordedAt": "2026-02-20T14:30:08.032Z"
+    },
+    {
+      "id": 11,
+      "domain": "estimation",
+      "decision": "Actual: 15 minutes",
+      "aiRecommended": "Estimated: 30 minutes",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 97",
+      "recordedAt": "2026-02-21T10:33:40.356Z"
+    },
+    {
+      "id": 12,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 97",
+      "recordedAt": "2026-02-21T10:33:40.358Z"
+    },
+    {
+      "id": 13,
+      "domain": "estimation",
+      "decision": "Actual: 1 hour",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 100",
+      "recordedAt": "2026-02-21T13:12:00.624Z"
+    },
+    {
+      "id": 14,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 100",
+      "recordedAt": "2026-02-21T13:12:00.625Z"
+    },
+    {
+      "id": 15,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 3 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 101",
+      "recordedAt": "2026-02-21T22:38:02.212Z"
+    },
+    {
+      "id": 16,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 101",
+      "recordedAt": "2026-02-21T22:38:02.214Z"
+    },
+    {
+      "id": 17,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 4 hours",
+      "humanOverride": false,
+      "outcome": "failure",
+      "sprint": "Phase 102",
+      "recordedAt": "2026-02-22T01:31:05.436Z"
+    },
+    {
+      "id": 18,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 102",
+      "recordedAt": "2026-02-22T01:31:05.437Z"
+    },
+    {
+      "id": 19,
+      "domain": "estimation",
+      "decision": "Actual: 2 hours",
+      "aiRecommended": "Estimated: 3 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 103",
+      "recordedAt": "2026-02-22T13:29:10.402Z"
+    },
+    {
+      "id": 20,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 103",
+      "recordedAt": "2026-02-22T13:29:10.403Z"
+    },
+    {
+      "id": 21,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 3 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 104",
+      "recordedAt": "2026-02-22T18:36:22.828Z"
+    },
+    {
+      "id": 22,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 104",
+      "recordedAt": "2026-02-22T18:36:22.829Z"
+    },
+    {
+      "id": 23,
+      "domain": "estimation",
+      "decision": "Actual: 15 minutes",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "failure",
+      "sprint": "Phase 105",
+      "recordedAt": "2026-02-23T16:02:03.648Z"
+    },
+    {
+      "id": 24,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 105",
+      "recordedAt": "2026-02-23T16:02:03.649Z"
+    },
+    {
+      "id": 25,
+      "domain": "estimation",
+      "decision": "Actual: 20 minutes",
+      "aiRecommended": "Estimated: 2 hours",
+      "humanOverride": false,
+      "outcome": "failure",
+      "sprint": "Phase 106",
+      "recordedAt": "2026-02-23T16:08:30.770Z"
+    },
+    {
+      "id": 26,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 106",
+      "recordedAt": "2026-02-23T16:08:30.771Z"
+    },
+    {
+      "id": 27,
+      "domain": "estimation",
+      "decision": "Actual: 0.5 hours",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "failure",
+      "sprint": "Phase 107",
+      "recordedAt": "2026-02-23T16:25:30.348Z"
+    },
+    {
+      "id": 28,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 107",
+      "recordedAt": "2026-02-23T16:25:30.349Z"
+    },
+    {
+      "id": 29,
+      "domain": "estimation",
+      "decision": "Actual: 1 hour",
+      "aiRecommended": "Estimated: 2 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 110",
+      "recordedAt": "2026-02-24T12:58:44.447Z"
+    },
+    {
+      "id": 30,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 110",
+      "recordedAt": "2026-02-24T12:58:44.448Z"
+    },
+    {
+      "id": 31,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 2 hours",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 111",
+      "recordedAt": "2026-02-24T13:23:24.294Z"
+    },
+    {
+      "id": 32,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 111",
+      "recordedAt": "2026-02-24T13:23:24.295Z"
+    },
+    {
+      "id": 33,
+      "domain": "estimation",
+      "decision": "Actual: 1.5 hours",
+      "aiRecommended": "Estimated: 2 hours",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 112",
+      "recordedAt": "2026-02-24T13:49:29.534Z"
+    },
+    {
+      "id": 34,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 112",
+      "recordedAt": "2026-02-24T13:49:29.534Z"
+    },
+    {
+      "id": 35,
+      "domain": "estimation",
+      "decision": "Actual: 1 hour",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "partial",
+      "sprint": "Phase 113",
+      "recordedAt": "2026-02-25T00:44:14.562Z"
+    },
+    {
+      "id": 36,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 7/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 113",
+      "recordedAt": "2026-02-25T00:44:14.564Z"
+    },
+    {
+      "id": 37,
+      "domain": "estimation",
+      "decision": "Actual: 0.75 hours",
+      "aiRecommended": "Estimated: 1 hour",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 113",
+      "recordedAt": "2026-02-25T00:57:52.080Z"
+    },
+    {
+      "id": 38,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 113",
+      "recordedAt": "2026-02-25T00:57:52.081Z"
+    },
+    {
+      "id": 39,
+      "domain": "estimation",
+      "decision": "Actual: 25 minutes",
+      "aiRecommended": "Estimated: 1.5 hours",
+      "humanOverride": false,
+      "outcome": "failure",
+      "sprint": "Phase 114",
+      "recordedAt": "2026-02-25T01:32:18.472Z"
+    },
+    {
+      "id": 40,
+      "domain": "bloom-extraction",
+      "decision": "Quality score: 8/10",
+      "aiRecommended": "Target: 7/10",
+      "humanOverride": false,
+      "outcome": "success",
+      "sprint": "Phase 114",
+      "recordedAt": "2026-02-25T01:32:18.473Z"
+    }
+  ]
+}
