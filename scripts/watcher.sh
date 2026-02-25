@@ -274,6 +274,8 @@ process_issue() {
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
   # Run claude -p
+  # Unset CLAUDECODE to avoid "nested session" error when watcher is started from within Claude Code
+  unset CLAUDECODE
   log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
   local claude_exit=0
   timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
