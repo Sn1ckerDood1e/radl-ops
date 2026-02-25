@@ -147,6 +147,22 @@ mcp__radl-ops__enable_tools({ group: "content", action: "enable" })
 
 Hook scripts live in `scripts/hooks/`. Agent hooks are configured in Claude Code settings.
 
+## Issue Watcher — Autonomous Dispatcher
+
+Polls GitHub Issues for `approved` label, runs `claude -p` to implement, creates PRs.
+
+```bash
+scripts/watcher.sh start    # Launch daemon in tmux
+scripts/watcher.sh stop     # Kill the daemon
+scripts/watcher.sh status   # Running state + queue depth
+scripts/watcher.sh logs     # Tail latest log
+scripts/setup-labels.sh     # Create labels (one-time)
+```
+
+**Workflow:** Create issue → add `approved` label → watcher picks up within 60s → PR created or failure commented.
+
+**Safety:** Serial execution, 2h timeout, $5 budget cap, 75 max turns per issue. All work on `auto/issue-<num>-<slug>` branches.
+
 ## Skills
 
 ### `/sprint-execute` — Autonomous Sprint
