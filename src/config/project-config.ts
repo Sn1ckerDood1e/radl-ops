@@ -65,14 +65,19 @@ const DEFAULT_CONFIG: ProjectConfig = {
 let cachedProjectConfig: ProjectConfig | null = null;
 
 /**
- * Deep merge source into target, returning a new object.
- * Only merges known keys from the default config shape.
+ * Validate and apply known overrides onto defaults.
+ * Unknown keys are silently ignored. Invalid values fall back to defaults.
+ * Returns a new object; does not mutate either argument.
  */
 function mergeConfig(
   defaults: ProjectConfig,
   overrides: Record<string, unknown>,
 ): ProjectConfig {
-  const result = { ...defaults };
+  const result: ProjectConfig = {
+    ...defaults,
+    features: { ...defaults.features },
+    models: { ...defaults.models },
+  };
 
   if (typeof overrides.defaultEffort === 'string' &&
     ['instant', 'light', 'deep', 'exhaustive'].includes(overrides.defaultEffort)) {
@@ -91,7 +96,6 @@ function mergeConfig(
 
   if (typeof overrides.features === 'object' && overrides.features !== null) {
     const featOverrides = overrides.features as Record<string, unknown>;
-    result.features = { ...defaults.features };
     for (const key of Object.keys(defaults.features) as Array<keyof ProjectConfig['features']>) {
       if (typeof featOverrides[key] === 'boolean') {
         result.features[key] = featOverrides[key] as boolean;
@@ -102,7 +106,6 @@ function mergeConfig(
   if (typeof overrides.models === 'object' && overrides.models !== null) {
     const modelOverrides = overrides.models as Record<string, unknown>;
     const validModels = ['haiku', 'sonnet', 'opus'];
-    result.models = { ...defaults.models };
     for (const key of Object.keys(defaults.models) as Array<keyof ProjectConfig['models']>) {
       if (typeof modelOverrides[key] === 'string' && validModels.includes(modelOverrides[key] as string)) {
         result.models[key] = modelOverrides[key] as ProjectConfig['models'][typeof key];
@@ -133,8 +136,12 @@ function loadProjectConfig(): ProjectConfig {
     });
 
     return merged;
-  } catch {
-    // File doesn't exist or is invalid — use defaults
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      logger.warn('Invalid .radl-ops.json — using defaults', {
+        error: error.message,
+      });
+    }
     return { ...DEFAULT_CONFIG, features: { ...DEFAULT_CONFIG.features }, models: { ...DEFAULT_CONFIG.models } };
   }
 }
