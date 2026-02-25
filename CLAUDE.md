@@ -23,7 +23,7 @@ All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to tog
 | Tool | Group | Description |
 |------|-------|-------------|
 | `enable_tools` | meta | Enable/disable tool groups on demand |
-| `daily_briefing` | content | Daily briefing via eval-opt quality loop (Haiku generates, Sonnet evaluates) |
+| `daily_briefing` | content | Daily briefing via eval-opt quality loop. Pass `create_issues: true` to auto-create draft GitHub issues from deferred items + production alerts (max 3/briefing). |
 | `weekly_briefing` | content | Weekly briefing via eval-opt quality loop |
 | `roadmap_ideas` | content | Brainstorm features via Opus |
 | `social_ideas` | content | Content ideas with Radl brand context |

@@ -51,6 +51,7 @@ Steps:
 2. Check production health: mcp__radl-ops__production_status({})
 3. Generate and send briefing: mcp__radl-ops__daily_briefing({
      deliver_via_gmail: true,
+     create_issues: true,
      monitoring_context: '<production status from step 2>'
    })
 
