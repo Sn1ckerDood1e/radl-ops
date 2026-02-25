@@ -9,6 +9,7 @@
 import { recordError, clearError } from '../guardrails/iron-laws.js';
 import { logger } from '../config/logger.js';
 import { recordToolCall } from './tools/shared/session-state.js';
+import { startSpan, endSpan } from '../observability/tracer.js';
 
 /**
  * MCP tool handler return type — index signature required by MCP SDK
@@ -38,16 +39,20 @@ export function withErrorTracking<T>(
   handler: ToolHandler<T>
 ): ToolHandler<T> {
   return async (params: T, extra?: unknown): Promise<ToolResult> => {
+    const spanId = startSpan(`tool:${toolName}`, { tags: { tool: toolName } });
     try {
       const result = await handler(params, extra);
       clearError(toolName);
       recordToolCall(toolName, true);
+      endSpan(spanId, { status: 'ok' });
       return result;
     } catch (error) {
       recordToolCall(toolName, false);
       const count = recordError(toolName);
       const msg = error instanceof Error ? error.message : 'Unknown error';
       logger.error(`Tool ${toolName} failed (strike ${count}/3)`, { error: msg });
+
+      endSpan(spanId, { status: 'error', error: msg });
 
       if (count >= 3) {
         return {

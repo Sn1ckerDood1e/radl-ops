@@ -359,10 +359,10 @@ describe('crystallize_propose filtering', () => {
   it('filters lessons by frequency >= min_frequency', async () => {
     const lessonsData = {
       lessons: [
-        { id: 1, situation: '[lesson] Phase 1', learning: 'Always check auth', date: '2026-01-01', frequency: 5, lastSeenAt: '2026-01-10' },
-        { id: 2, situation: '[lesson] Phase 2', learning: 'Validate inputs', date: '2026-01-02', frequency: 1, lastSeenAt: '2026-01-05' },
-        { id: 3, situation: '[lesson] Phase 3', learning: 'Trace data flow', date: '2026-01-03', frequency: 3, lastSeenAt: '2026-01-08' },
-        { id: 4, situation: '[lesson] Phase 4', learning: 'Test edge cases', date: '2026-01-04' },
+        { id: 1, situation: '[lesson] Phase 1', learning: 'Always check auth middleware is applied to protected routes', date: '2026-01-01', frequency: 5, lastSeenAt: '2026-01-10' },
+        { id: 2, situation: '[lesson] Phase 2', learning: 'Validate all user inputs with Zod schemas at boundary', date: '2026-01-02', frequency: 1, lastSeenAt: '2026-01-05' },
+        { id: 3, situation: '[lesson] Phase 3', learning: 'Trace data flow from server to client in both directions', date: '2026-01-03', frequency: 3, lastSeenAt: '2026-01-08' },
+        { id: 4, situation: '[lesson] Phase 4', learning: 'Test edge cases including empty arrays and null values', date: '2026-01-04' },
       ],
     };
 
@@ -565,8 +565,8 @@ describe('proposeChecksFromLessons', () => {
   it('proposes checks and saves them when qualifying lessons exist', async () => {
     writeFileSync(join(tempDir, 'lessons.json'), JSON.stringify({
       lessons: [
-        { id: 1, situation: 'auth check', learning: 'Always verify auth', date: '2026-01-01', frequency: 5 },
-        { id: 2, situation: 'data flow', learning: 'Trace full path', date: '2026-01-02', frequency: 3 },
+        { id: 1, situation: 'auth check', learning: 'Always verify auth middleware is applied to all protected routes', date: '2026-01-01', frequency: 5 },
+        { id: 2, situation: 'data flow', learning: 'Trace full data path from server component to client render', date: '2026-01-02', frequency: 3 },
       ],
     }));
 

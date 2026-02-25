@@ -14,6 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ModelId, TaskType } from '../types/index.js';
 import { getRoute, calculateCost } from '../models/router.js';
 import { trackUsage } from '../models/token-tracker.js';
+import { startSpan, endSpan } from '../observability/tracer.js';
 import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
 import { withRetry } from '../utils/retry.js';
@@ -152,6 +153,9 @@ export async function runEvalOptLoop(
 
     // Step 1: Generate (with cached system message for prompt reuse across iterations)
     let genResponse: Anthropic.Message;
+    const genSpanId = startSpan('eval-opt:generator', {
+      tags: { step: 'generator', iteration: String(iteration) },
+    });
     try {
       genResponse = await withRetry(
         () => getAnthropicClient().messages.create({
@@ -166,6 +170,7 @@ export async function runEvalOptLoop(
       const msg = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Generator API call failed', { iteration, error: msg });
       errors.push(`Generator failed (iteration ${iteration}): ${msg}`);
+      endSpan(genSpanId, { status: 'error', error: msg, model: generatorRoute.model });
       terminationReason = 'error';
       break;
     }
@@ -197,6 +202,14 @@ export async function runEvalOptLoop(
       genCacheRead,
       genCacheWrite
     );
+    endSpan(genSpanId, {
+      status: 'ok',
+      model: generatorRoute.model,
+      inputTokens: genResponse.usage.input_tokens,
+      outputTokens: genResponse.usage.output_tokens,
+      cacheReadTokens: genCacheRead,
+      cacheWriteTokens: genCacheWrite,
+    });
 
     currentOutput = genResponse.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -207,6 +220,9 @@ export async function runEvalOptLoop(
     const evalUserMessage = buildEvalUserMessage(currentOutput);
 
     let evalResponse: Anthropic.Message;
+    const evalSpanId = startSpan('eval-opt:evaluator', {
+      tags: { step: 'evaluator', iteration: String(iteration) },
+    });
     try {
       // Cap thinking budget to prevent cost injection
       const MAX_THINKING_BUDGET = 8192;
@@ -238,6 +254,7 @@ export async function runEvalOptLoop(
       const msg = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Evaluator API call failed', { iteration, error: msg });
       errors.push(`Evaluator failed (iteration ${iteration}): ${msg}`);
+      endSpan(evalSpanId, { status: 'error', error: msg, model: evaluatorRoute.model });
       terminationReason = 'error';
       break;
     }
@@ -270,6 +287,14 @@ export async function runEvalOptLoop(
       cacheRead,
       cacheWrite
     );
+    endSpan(evalSpanId, {
+      status: 'ok',
+      model: evaluatorRoute.model,
+      inputTokens: evalResponse.usage.input_tokens,
+      outputTokens: evalResponse.usage.output_tokens,
+      cacheReadTokens: cacheRead,
+      cacheWriteTokens: cacheWrite,
+    });
 
     // Extract structured evaluation from tool_use block (preferred) or fall back to text parsing
     const evalResult = parseEvalFromToolUse(evalResponse) ?? parseEvalFromText(evalResponse);
