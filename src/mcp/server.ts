@@ -182,7 +182,11 @@ server.tool(
 registry.applyDefaults();
 
 initTokenTracker();
-initFtsIndex();
+try {
+  initFtsIndex();
+} catch (err) {
+  logger.warn('FTS5 index init failed (non-fatal)', { error: err instanceof Error ? err.stack : String(err) });
+}
 try {
   initVecTable();
   indexAllKnowledge();
