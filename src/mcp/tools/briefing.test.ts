@@ -68,6 +68,12 @@ vi.mock('../../config/index.js', () => ({
   config: mockConfig,
 }));
 
+const mockCreateIssuesFromBriefing = vi.fn();
+
+vi.mock('./shared/issue-generator.js', () => ({
+  createIssuesFromBriefing: (...args: unknown[]) => mockCreateIssuesFromBriefing(...args),
+}));
+
 const mockExistsSync = vi.fn();
 const mockReadFileSync = vi.fn();
 const mockReaddirSync = vi.fn();
@@ -131,6 +137,7 @@ beforeEach(() => {
   mockSendGmail.mockResolvedValue({ messageId: 'briefing-msg-1' });
   mockExistsSync.mockReturnValue(false); // No deferred.json by default
   mockReaddirSync.mockReturnValue([]); // No sprint files by default
+  mockCreateIssuesFromBriefing.mockReturnValue({ created: [], skipped: [], errors: [] });
 });
 
 // ─── Daily Briefing ─────────────────────────────────────────────────────────
@@ -319,6 +326,129 @@ describe('daily briefing Gmail delivery', () => {
 
     expect(text).toContain('Gmail delivery failed');
     expect(text).toContain('Rate limit exceeded');
+  });
+});
+
+// ─── Issue creation ─────────────────────────────────────────────────────────
+
+describe('daily briefing create_issues', () => {
+  it('does not create issues when create_issues is not set', async () => {
+    await handlers['daily_briefing']({});
+
+    expect(mockCreateIssuesFromBriefing).not.toHaveBeenCalled();
+  });
+
+  it('creates issues from small deferred items when create_issues=true', async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify({
+      items: [
+        { title: 'Fix RLS policy', effort: 'small', sprintPhase: 'Phase 90', resolved: false },
+        { title: 'Big refactor', effort: 'large', sprintPhase: 'Phase 88', resolved: false },
+        { title: 'Done item', effort: 'small', sprintPhase: 'Phase 45', resolved: true },
+      ],
+    }));
+    mockCreateIssuesFromBriefing.mockReturnValue({
+      created: [{ number: 1, title: 'Fix RLS policy', url: 'url/1' }],
+      skipped: [],
+      errors: [],
+    });
+
+    const result = await handlers['daily_briefing']({ create_issues: true });
+    const text = result.content[0].text;
+
+    expect(mockCreateIssuesFromBriefing).toHaveBeenCalledTimes(1);
+    const items = mockCreateIssuesFromBriefing.mock.calls[0][0];
+    // Should only include small deferred items (not large, not resolved)
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe('Fix RLS policy');
+    expect(items[0].source).toContain('deferred-item');
+    expect(text).toContain('#1');
+  });
+
+  it('creates issue from monitoring errors when create_issues=true', async () => {
+    mockCreateIssuesFromBriefing.mockReturnValue({
+      created: [{ number: 5, title: 'Fix: Build error on deploy', url: 'url/5' }],
+      skipped: [],
+      errors: [],
+    });
+
+    const result = await handlers['daily_briefing']({
+      create_issues: true,
+      monitoring_context: 'Vercel: OK\nBuild error on deploy: timeout after 120s\nSupabase: OK',
+    });
+    const text = result.content[0].text;
+
+    const items = mockCreateIssuesFromBriefing.mock.calls[0][0];
+    expect(items.some((i: { source: string }) => i.source === 'production-alert')).toBe(true);
+    expect(text).toContain('#5');
+  });
+
+  it('reports skipped duplicates in output', async () => {
+    mockCreateIssuesFromBriefing.mockReturnValue({
+      created: [],
+      skipped: ['Fix RLS policy'],
+      errors: [],
+    });
+
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify({
+      items: [
+        { title: 'Fix RLS policy', effort: 'small', sprintPhase: 'Phase 90', resolved: false },
+      ],
+    }));
+
+    const result = await handlers['daily_briefing']({ create_issues: true });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Skipped (duplicate)');
+    expect(text).toContain('Fix RLS policy');
+  });
+
+  it('reports errors in output', async () => {
+    mockCreateIssuesFromBriefing.mockReturnValue({
+      created: [],
+      skipped: [],
+      errors: ['gh CLI not available'],
+    });
+
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify({
+      items: [
+        { title: 'Something', effort: 'small', sprintPhase: 'Phase 1', resolved: false },
+      ],
+    }));
+
+    const result = await handlers['daily_briefing']({ create_issues: true });
+    const text = result.content[0].text;
+
+    expect(text).toContain('Issue errors');
+    expect(text).toContain('gh CLI not available');
+  });
+
+  it('reports no actionable items when deferred is empty and no errors', async () => {
+    const result = await handlers['daily_briefing']({ create_issues: true });
+    const text = result.content[0].text;
+
+    expect(text).toContain('No actionable items');
+  });
+
+  it('ignores monitoring lines with "0 errors"', async () => {
+    mockCreateIssuesFromBriefing.mockReturnValue({
+      created: [],
+      skipped: [],
+      errors: [],
+    });
+
+    await handlers['daily_briefing']({
+      create_issues: true,
+      monitoring_context: 'Vercel: 0 errors in last 24h\nAll healthy',
+    });
+
+    // Should not create any production alert issues
+    if (mockCreateIssuesFromBriefing.mock.calls.length > 0) {
+      const items = mockCreateIssuesFromBriefing.mock.calls[0][0];
+      expect(items.every((i: { source: string }) => i.source !== 'production-alert')).toBe(true);
+    }
   });
 });
 

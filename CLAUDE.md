@@ -23,7 +23,7 @@ All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to tog
 | Tool | Group | Description |
 |------|-------|-------------|
 | `enable_tools` | meta | Enable/disable tool groups on demand |
-| `daily_briefing` | content | Daily briefing via eval-opt quality loop (Haiku generates, Sonnet evaluates) |
+| `daily_briefing` | content | Daily briefing via eval-opt quality loop. Pass `create_issues: true` to auto-create draft GitHub issues from deferred items + production alerts (max 3/briefing). |
 | `weekly_briefing` | content | Weekly briefing via eval-opt quality loop |
 | `roadmap_ideas` | content | Brainstorm features via Opus |
 | `social_ideas` | content | Content ideas with Radl brand context |
@@ -238,6 +238,39 @@ npm run typecheck
 /home/hb/radl-ops/scripts/compound.sh extract  # legacy fallback
 ```
 
+## Issue Watcher (Autonomous Dispatcher)
+
+GitHub Issues as work queue, `claude -p` as execution engine, tmux as daemon.
+
+**Label workflow:** `approved` → `in-progress` → `completed` / `failed`
+
+```bash
+# Management commands
+scripts/watcher.sh start    # Launch in tmux session
+scripts/watcher.sh stop     # Kill the session
+scripts/watcher.sh status   # Running state + queue depth
+scripts/watcher.sh logs     # Tail latest log
+
+# One-time setup
+scripts/setup-labels.sh     # Create GitHub labels
+```
+
+**Safety controls:**
+- Serial execution only (one issue at a time)
+- 2-hour timeout per issue (`WATCHER_TIMEOUT`)
+- $5 budget cap per issue (`WATCHER_MAX_BUDGET`)
+- 75 max turns per issue (`WATCHER_MAX_TURNS`)
+- `auto/issue-<num>-<slug>` branch naming
+- Logs: `logs/watcher/<date>-issue-<num>.log`
+
+**Creating issues for the watcher:**
+1. Create GitHub issue with clear title and description
+2. Include acceptance criteria in the issue body
+3. Add the `approved` label (watcher picks it up within 60s)
+4. Monitor via GitHub notifications for PR or failure comment
+
+**Prompt template:** `scripts/watcher-prompt.md`
+
 ## Automated Tasks (Cron)
 
 Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
@@ -245,6 +278,7 @@ Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
 | Schedule | Script | Purpose |
 |----------|--------|---------|
 | @reboot | briefing-on-wake.sh | Daily/weekly briefing on WSL start |
+| @reboot | watcher.sh start | Issue watcher daemon |
 | 0 0 * * * | cleanup-logs.sh | Delete usage logs older than 90 days |
 | 0 18 * * * | cost-alert.sh | Slack alert if daily spend exceeds threshold |
 
