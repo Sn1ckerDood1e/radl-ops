@@ -4,7 +4,8 @@
 
 set -e
 
-source /home/hb/radl-ops/.env
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+source "$RADL_OPS_DIR/.env"
 
 MESSAGE="$1"
 

@@ -13,8 +13,8 @@
 
 set -e
 
-RADL_OPS_DIR="/home/hb/radl-ops"
-RADL_DIR="/home/hb/radl"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+RADL_DIR="${RADL_DIR:-/home/hb/radl}"
 KNOWLEDGE_DIR="$RADL_OPS_DIR/knowledge"
 SPRINT_DIR="$RADL_DIR/.planning/sprints"
 COMPOUND_DIR="$KNOWLEDGE_DIR/compounds"
@@ -158,12 +158,12 @@ PYEOF
     echo "=== Compound Engineering: Summarize ==="
     echo ""
 
-    python3 << 'PYEOF'
+    python3 << PYEOF
 import json
 import os
 from pathlib import Path
 
-compound_dir = Path('/home/hb/radl-ops/knowledge/compounds')
+compound_dir = Path('$COMPOUND_DIR')
 if not compound_dir.exists():
     print("No compound data found.")
     exit(0)
@@ -221,12 +221,12 @@ PYEOF
     echo ""
 
     # Show this week's compounds
-    python3 << 'PYEOF'
+    python3 << PYEOF
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
-compound_dir = Path('/home/hb/radl-ops/knowledge/compounds')
+compound_dir = Path('$COMPOUND_DIR')
 if not compound_dir.exists():
     print("No compound data found.")
     exit(0)
@@ -273,12 +273,12 @@ PYEOF
     echo "=== Compound Engineering: Merge ==="
     echo ""
 
-    python3 << 'PYEOF'
+    python3 << PYEOF
 import json
 from pathlib import Path
 from datetime import datetime
 
-knowledge_dir = Path('/home/hb/radl-ops/knowledge')
+knowledge_dir = Path('$KNOWLEDGE_DIR')
 compound_dir = knowledge_dir / 'compounds'
 
 if not compound_dir.exists():

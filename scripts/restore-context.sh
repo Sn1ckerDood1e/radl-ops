@@ -5,9 +5,10 @@
 
 set -e
 
-SPRINT_DIR="/home/hb/radl/.planning/sprints"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+RADL_DIR="${RADL_DIR:-/home/hb/radl}"
+SPRINT_DIR="$RADL_DIR/.planning/sprints"
 CURRENT_SPRINT="$SPRINT_DIR/current.json"
-RADL_DIR="/home/hb/radl"
 
 echo "=== CONTEXT RESTORATION SUMMARY ==="
 echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
@@ -16,11 +17,11 @@ echo ""
 # --- Current Sprint Status ---
 echo "## Current Sprint"
 if [ -f "$CURRENT_SPRINT" ]; then
-  python3 << 'EOF'
+  python3 << EOF
 import json
 from datetime import datetime
 
-with open('/home/hb/radl/.planning/sprints/current.json', 'r') as f:
+with open('$CURRENT_SPRINT', 'r') as f:
     data = json.load(f)
 
 print(f"Phase: {data.get('phase', 'Unknown')}")
@@ -93,12 +94,12 @@ echo ""
 
 # --- Knowledge Base ---
 echo "## Key Decisions"
-if [ -f "/home/hb/radl-ops/knowledge/decisions.json" ]; then
-  python3 << 'EOF'
+if [ -f "$RADL_OPS_DIR/knowledge/decisions.json" ]; then
+  python3 << EOF
 import json
 from pathlib import Path
 
-decisions_file = Path('/home/hb/radl-ops/knowledge/decisions.json')
+decisions_file = Path('$RADL_OPS_DIR/knowledge/decisions.json')
 if decisions_file.exists():
     with open(decisions_file, 'r') as f:
         decisions = json.load(f)['decisions']
@@ -115,12 +116,12 @@ fi
 echo ""
 
 echo "## Lessons Learned"
-if [ -f "/home/hb/radl-ops/knowledge/lessons.json" ]; then
-  python3 << 'EOF'
+if [ -f "$RADL_OPS_DIR/knowledge/lessons.json" ]; then
+  python3 << EOF
 import json
 from pathlib import Path
 
-lessons_file = Path('/home/hb/radl-ops/knowledge/lessons.json')
+lessons_file = Path('$RADL_OPS_DIR/knowledge/lessons.json')
 if lessons_file.exists():
     with open(lessons_file, 'r') as f:
         lessons = json.load(f)['lessons']
@@ -136,12 +137,12 @@ fi
 echo ""
 
 echo "## Established Patterns"
-if [ -f "/home/hb/radl-ops/knowledge/patterns.json" ]; then
-  python3 << 'EOF'
+if [ -f "$RADL_OPS_DIR/knowledge/patterns.json" ]; then
+  python3 << EOF
 import json
 from pathlib import Path
 
-patterns_file = Path('/home/hb/radl-ops/knowledge/patterns.json')
+patterns_file = Path('$RADL_OPS_DIR/knowledge/patterns.json')
 if patterns_file.exists():
     with open(patterns_file, 'r') as f:
         patterns = json.load(f)['patterns']
@@ -158,11 +159,11 @@ echo ""
 
 # --- Sprint Velocity ---
 echo "## Sprint Velocity (calibration)"
-python3 << 'EOF'
+python3 << EOF
 import json
 from pathlib import Path
 
-sprint_dir = Path('/home/hb/radl/.planning/sprints')
+sprint_dir = Path('$SPRINT_DIR')
 completed = sorted(sprint_dir.glob('completed-*.json'), reverse=True)[:10]
 
 if not completed:

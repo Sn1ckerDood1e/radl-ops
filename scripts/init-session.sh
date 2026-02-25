@@ -14,8 +14,8 @@
 
 set -e
 
-RADL_OPS_DIR="/home/hb/radl-ops"
-RADL_DIR="/home/hb/radl"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+RADL_DIR="${RADL_DIR:-/home/hb/radl}"
 LOGS_DIR="$RADL_OPS_DIR/logs"
 SPRINT_DIR="$RADL_DIR/.planning/sprints"
 KNOWLEDGE_DIR="$RADL_OPS_DIR/knowledge"
@@ -59,11 +59,11 @@ echo ""
 echo "## Sprint State"
 CURRENT_SPRINT="$SPRINT_DIR/current.json"
 if [ -f "$CURRENT_SPRINT" ]; then
-  python3 << 'PYEOF'
+  python3 << PYEOF
 import json
 
 try:
-    with open('/home/hb/radl/.planning/sprints/current.json', 'r') as f:
+    with open('$CURRENT_SPRINT', 'r') as f:
         data = json.load(f)
     print(f"  Phase: {data.get('phase', 'Unknown')}")
     print(f"  Title: {data.get('title', 'Unknown')}")
@@ -94,11 +94,11 @@ echo ""
 # 4. Knowledge Base Summary
 # ============================================
 echo "## Knowledge Base (Apply These!)"
-python3 << 'PYEOF'
+python3 << PYEOF
 import json
 from pathlib import Path
 
-kb_dir = Path('/home/hb/radl-ops/knowledge')
+kb_dir = Path('$KNOWLEDGE_DIR')
 
 # Patterns - show ALL, these should be applied
 patterns_file = kb_dir / 'patterns.json'

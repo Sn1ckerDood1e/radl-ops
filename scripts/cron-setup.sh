@@ -12,13 +12,15 @@
 
 set -euo pipefail
 
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+
 CRONTAB_ENTRIES="# Radl-Ops automated tasks
-@reboot sleep 30 && /home/hb/radl-ops/scripts/briefing-on-wake.sh >> /tmp/radl-briefing.log 2>&1
-0 7 * * 1-5 /home/hb/radl-ops/scripts/daily-briefing.sh >> /tmp/radl-daily-briefing.log 2>&1
-0 7 * * 6 /home/hb/radl-ops/scripts/weekly-briefing.sh >> /tmp/radl-weekly-briefing.log 2>&1
-0 0 * * * /home/hb/radl-ops/scripts/cleanup-logs.sh >> /tmp/radl-cleanup.log 2>&1
-0 18 * * * /home/hb/radl-ops/scripts/cost-alert.sh >> /tmp/radl-cost-alert.log 2>&1
-*/5 * * * * /home/hb/radl-ops/node_modules/.bin/tsx /home/hb/radl-ops/scripts/alert-poll.ts >> /tmp/radl-alert-poll.log 2>&1"
+@reboot sleep 30 && $RADL_OPS_DIR/scripts/briefing-on-wake.sh >> /tmp/radl-briefing.log 2>&1
+0 7 * * 1-5 $RADL_OPS_DIR/scripts/daily-briefing.sh >> /tmp/radl-daily-briefing.log 2>&1
+0 7 * * 6 $RADL_OPS_DIR/scripts/weekly-briefing.sh >> /tmp/radl-weekly-briefing.log 2>&1
+0 0 * * * $RADL_OPS_DIR/scripts/cleanup-logs.sh >> /tmp/radl-cleanup.log 2>&1
+0 18 * * * $RADL_OPS_DIR/scripts/cost-alert.sh >> /tmp/radl-cost-alert.log 2>&1
+*/5 * * * * $RADL_OPS_DIR/node_modules/.bin/tsx $RADL_OPS_DIR/scripts/alert-poll.ts >> /tmp/radl-alert-poll.log 2>&1"
 
 # Preserve existing non-radl-ops cron jobs
 EXISTING=$(crontab -l 2>/dev/null | grep -v 'radl-ops' | grep -v '^# Radl-Ops' || true)

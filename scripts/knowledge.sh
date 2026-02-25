@@ -10,7 +10,9 @@
 
 set -e
 
-KNOWLEDGE_DIR="/home/hb/radl-ops/knowledge"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+RADL_DIR="${RADL_DIR:-/home/hb/radl}"
+KNOWLEDGE_DIR="$RADL_OPS_DIR/knowledge"
 DECISIONS_FILE="$KNOWLEDGE_DIR/decisions.json"
 PATTERNS_FILE="$KNOWLEDGE_DIR/patterns.json"
 LESSONS_FILE="$KNOWLEDGE_DIR/lessons.json"
@@ -62,7 +64,7 @@ decision = {
     "alternatives": """$alternatives""",
     "rationale": """$rationale""",
     "date": datetime.now().isoformat(),
-    "phase": "$(cat /home/hb/radl/.planning/STATE.md 2>/dev/null | grep -A1 '| Phase |' | tail -1 | sed 's/.*| //' | sed 's/ |.*//' || echo 'Unknown')"
+    "phase": "$(cat $RADL_DIR/.planning/STATE.md 2>/dev/null | grep -A1 '| Phase |' | tail -1 | sed 's/.*| //' | sed 's/ |.*//' || echo 'Unknown')"
 }
 
 data['decisions'].append(decision)
@@ -213,13 +215,13 @@ cmd_context() {
   echo "Generated: $(date '+%Y-%m-%d %H:%M')"
   echo ""
 
-  python3 << 'PYEOF'
+  python3 << PYEOF
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
 # Current sprint status
-sprint_file = Path('/home/hb/radl/.planning/sprints/current.json')
+sprint_file = Path('$RADL_DIR/.planning/sprints/current.json')
 if sprint_file.exists():
     with open(sprint_file, 'r') as f:
         sprint = json.load(f)
@@ -239,7 +241,7 @@ else:
     print()
 
 # Recent decisions (last 5)
-decisions_file = Path('/home/hb/radl-ops/knowledge/decisions.json')
+decisions_file = Path('$KNOWLEDGE_DIR/decisions.json')
 if decisions_file.exists():
     with open(decisions_file, 'r') as f:
         decisions = json.load(f)['decisions']
@@ -251,7 +253,7 @@ if decisions_file.exists():
         print()
 
 # Recent lessons (last 3)
-lessons_file = Path('/home/hb/radl-ops/knowledge/lessons.json')
+lessons_file = Path('$KNOWLEDGE_DIR/lessons.json')
 if lessons_file.exists():
     with open(lessons_file, 'r') as f:
         lessons = json.load(f)['lessons']
@@ -262,7 +264,7 @@ if lessons_file.exists():
         print()
 
 # Key patterns
-patterns_file = Path('/home/hb/radl-ops/knowledge/patterns.json')
+patterns_file = Path('$KNOWLEDGE_DIR/patterns.json')
 if patterns_file.exists():
     with open(patterns_file, 'r') as f:
         patterns = json.load(f)['patterns']
@@ -273,7 +275,7 @@ if patterns_file.exists():
         print()
 
 # Sprint velocity
-sprint_dir = Path('/home/hb/radl/.planning/sprints')
+sprint_dir = Path('$RADL_DIR/.planning/sprints')
 completed = sorted(sprint_dir.glob('completed-*.json'), reverse=True)[:5]
 if completed:
     print("## Recent Sprint Velocity")
@@ -290,7 +292,7 @@ if completed:
     print()
 
 # Current state from STATE.md
-state_file = Path('/home/hb/radl/.planning/STATE.md')
+state_file = Path('$RADL_DIR/.planning/STATE.md')
 if state_file.exists():
     print("## Project State")
     with open(state_file, 'r') as f:
@@ -324,11 +326,11 @@ cmd_export() {
 
   # Full decisions list
   echo "## All Architectural Decisions"
-  python3 << 'PYEOF'
+  python3 << PYEOF
 import json
 from pathlib import Path
 
-decisions_file = Path('/home/hb/radl-ops/knowledge/decisions.json')
+decisions_file = Path('$KNOWLEDGE_DIR/decisions.json')
 if decisions_file.exists():
     with open(decisions_file, 'r') as f:
         decisions = json.load(f)['decisions']
@@ -347,13 +349,13 @@ cmd_list() {
   echo "=== Knowledge Base Summary ==="
   echo ""
 
-  python3 << 'PYEOF'
+  python3 << PYEOF
 import json
 from pathlib import Path
 
-decisions_file = Path('/home/hb/radl-ops/knowledge/decisions.json')
-patterns_file = Path('/home/hb/radl-ops/knowledge/patterns.json')
-lessons_file = Path('/home/hb/radl-ops/knowledge/lessons.json')
+decisions_file = Path('$KNOWLEDGE_DIR/decisions.json')
+patterns_file = Path('$KNOWLEDGE_DIR/patterns.json')
+lessons_file = Path('$KNOWLEDGE_DIR/lessons.json')
 
 d_count = 0
 p_count = 0
