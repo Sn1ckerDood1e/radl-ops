@@ -253,6 +253,17 @@ echo ""
 echo "SELF-CORRECTION: After every commit, verify with 'npm run typecheck' before proceeding to next task. Never stack commits without typechecking."
 echo ""
 
+# ─── Session recovery (optional JSONL scanning) ─────────────────────────────
+
+RECOVER_SCRIPT="/home/hb/radl-ops/scripts/session-recover.ts"
+if [ -f "$RECOVER_SCRIPT" ] && command -v npx &>/dev/null; then
+  RECOVERY=$(npx --yes tsx "$RECOVER_SCRIPT" --hours 12 2>/dev/null | head -20)
+  if [ -n "$RECOVERY" ] && [ "$RECOVERY" != "No recent sessions found." ]; then
+    echo "$RECOVERY"
+    echo ""
+  fi
+fi
+
 # ─── Iron laws reinforcement (bottom placement for recency effect) ────────────
 
 echo "IRON LAWS: No push to main | No delete prod data | No commit secrets | 3-strike stop | No modify CI/CD | No force push"
