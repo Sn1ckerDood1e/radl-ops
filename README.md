@@ -6,9 +6,9 @@ Built for [Radl](https://github.com/Sn1ckerDood1e/Radl) (rowing team management 
 
 ## What It Does
 
-**Layer 1: MCP Tools (Intelligence)** — 48 tools across 3 groups + 1 meta, providing sprint orchestration, closed-loop intelligence (antibodies, crystallization, causal graphs, speculative validation), compound learning extraction, zero-cost verification, and AI-powered task decomposition.
+**Layer 1: MCP Tools (Intelligence)** — 56 tools across 3 groups + 1 meta, providing sprint orchestration, closed-loop intelligence (antibodies, crystallization, causal graphs, speculative validation), compound learning extraction, zero-cost verification, production monitoring, and AI-powered task decomposition.
 
-**Layer 2: Hooks (Enforcement)** — 10 hooks across 7 Claude Code lifecycle events. Every quality gate fires automatically: sprint tracking, branch protection, typecheck after edit, pre-push verification, build self-healing.
+**Layer 2: Hooks (Enforcement)** — 13 hooks across 7 Claude Code lifecycle events. Every quality gate fires automatically: sprint tracking, branch protection, typecheck after edit, pre-push verification, commit spot-checks, build self-healing.
 
 **Layer 3: Skills (Autonomous Workflows)** — `/sprint-execute` chains everything into a single command: research, spec, decompose, branch, implement, review, PR, learn. Human approves the spec; everything else is automated.
 
@@ -17,7 +17,7 @@ Built for [Radl](https://github.com/Sn1ckerDood1e/Radl) (rowing team management 
 ```
 Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
                                     |
-                                    +-- 48 tools (3 groups + 1 meta: core, content, advanced, meta)
+                                    +-- 56 tools (3 groups + 1 meta: core, content, advanced, meta)
                                     +-- 3 resources (sprint state, iron laws, tool groups)
                                     +-- 3 prompts (sprint-start, sprint-review, code-review)
                                     +-- Sprint conductor pipeline:
@@ -41,8 +41,13 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
                                     |   +-- Tool forge (Sonnet code gen from checks)
                                     |   +-- Counterfactual analysis (alternative outcome reasoning)
                                     +-- Knowledge infrastructure:
-                                    |   +-- FTS5 BM25 search (better-sqlite3, embedding-ready)
+                                    |   +-- FTS5 BM25 search (better-sqlite3)
+                                    |   +-- Vector similarity search (sqlite-vec, optional)
                                     |   +-- MITRE ATLAS threat model (knowledge/threats.yaml)
+                                    +-- Production monitoring:
+                                    |   +-- Aggregated health (Vercel + Supabase + Sentry)
+                                    |   +-- Session health tracking (rabbit hole detection)
+                                    |   +-- Alert checking (critical production alerts)
                                     +-- Sprint tools (auto compound extract + trust decisions)
                                     +-- Briefing tools (eval-opt: Haiku+Sonnet)
                                     +-- Social tools (Sonnet + brand context + withRetry)
@@ -92,37 +97,41 @@ Add to `~/.mcp.json`:
 
 ```bash
 npm run typecheck   # Type checking
-npm run test        # 801 tests
+npm run test        # 1204 tests
 ```
 
 ## MCP Tools
 
 ### Tool Groups (Dynamic Loading)
 
-| Group | Default | Tools |
-|-------|---------|-------|
-| **core** | Enabled | sprint management, health check, iron laws, cost report, knowledge query, verify patterns, team recipes, audit triage, sprint advisor, review pipeline, sprint decompose, sprint conductor, verify data flow, pre-flight check, spot check diff, deferred triage, sprint retrospective, auto prioritize, spec to tests, crystallize (propose/approve/demote/list), antibody (create/list/disable), causal (extract/query), inverse bloom, trust (report/record), speculative validate, cognitive load |
-| **content** | Disabled | daily/weekly briefings, social content tools, roadmap ideas |
-| **advanced** | Disabled | eval-opt content generation, compound learning extraction, tool forge, counterfactual analysis |
-| **meta** | Always | enable_tools (toggle groups at runtime) |
+All groups are enabled by default. Toggle at runtime with `enable_tools`.
 
-Enable disabled groups at runtime:
+| Group | Tools | Count |
+|-------|-------|-------|
+| **core** | sprint management, health check, iron laws, cost report, knowledge query, verify patterns, team recipes, audit triage, sprint advisor, review pipeline, sprint decompose, sprint conductor, verify data flow, pre-flight check, spot check diff, deferred triage, sprint retrospective, auto prioritize, spec to tests, crystallize (propose/approve/demote/list), antibody (create/list/disable), causal (extract/query), inverse bloom, trust (report/record), speculative validate, cognitive load, review tracker (record/resolve), spec compliance, tool guide, production status, session health, alert check, trace report | 45 |
+| **content** | daily/weekly briefings, daily summary, social content tools, roadmap ideas | 7 |
+| **advanced** | eval-opt content generation, compound learning extraction, tool forge, counterfactual analysis | 4 |
+| **meta** | enable_tools (toggle groups at runtime) | 1 |
+
 ```
-mcp__radl-ops__enable_tools({ group: "content", action: "enable" })
+mcp__radl-ops__enable_tools({ group: "content", action: "disable" })
 ```
 
 ### Key Tools
 
 | Tool | Cost | Description |
 |------|------|-------------|
-| `sprint_conductor` | ~$0.15 | Full sprint orchestration: knowledge → eval-opt spec → decompose → inverse bloom → speculative validate → checkpointed plan |
+| `sprint_conductor` | ~$0.15 | Full sprint orchestration: knowledge -> eval-opt spec -> decompose -> inverse bloom -> speculative validate -> checkpointed plan |
 | `sprint_decompose` | ~$0.03 | AI-powered task breakdown with dependency DAG and file ownership |
 | `speculative_validate` | $0 | Pre-validate tasks against antibodies, crystallized checks, causal graph, data flow coverage |
-| `verify_data_flow` | $0 | Check field wiring across Schema → Migration → Validation → API Handler → Client |
+| `verify_data_flow` | $0 | Check field wiring across Schema -> Migration -> Validation -> API Handler -> Client |
 | `pre_flight_check` | $0 | Pre-push verification: branch, sprint, clean tree, typecheck, secrets scan |
 | `inverse_bloom` | $0 | Inject time-decay weighted knowledge into task descriptions |
 | `cognitive_load` | $0 | Predict context window overflow with calibration data |
 | `verify_patterns` | $0 | Detect code drift against knowledge base patterns |
+| `production_status` | $0 | Aggregated production health (Vercel + Supabase + Sentry) |
+| `session_health` | $0 | Session progress tracking and rabbit hole detection |
+| `alert_check` | $0 | Check for critical production alerts |
 | `compound_extract` | ~$0.05 | Extract reusable lessons via 4-stage Bloom pipeline |
 | `sprint_complete` | $0* | Complete sprint, auto-extract learnings, record trust decisions, compare validation warnings |
 
@@ -130,7 +139,7 @@ mcp__radl-ops__enable_tools({ group: "content", action: "enable" })
 
 ## Hooks
 
-10 hooks across 7 Claude Code lifecycle events:
+13 hooks across 7 Claude Code lifecycle events:
 
 | Hook | Event | Purpose |
 |------|-------|---------|
@@ -141,8 +150,11 @@ mcp__radl-ops__enable_tools({ group: "content", action: "enable" })
 | Push Pre-Flight | PreToolUse (Bash) | Runs pre_flight_check before git push |
 | Branch Guard | PreToolUse (Bash) | Blocks pushes to main/master |
 | Typecheck After Edit | PostToolUse (Edit/Write) | Runs tsc after editing .ts/.tsx files |
+| Commit Spot-Check | PostToolUse (Bash) | AI spot-check of committed diffs |
+| Post-Commit Verify | PostToolUse (Bash) | Reminds to verify patterns and record session metrics |
 | Task Review Detector | TaskCompleted | Inspects git diff for new patterns, recommends review |
 | Session Verify | Stop | Verifies STATE.md updated, sprint tracked, no uncommitted changes |
+| Session Stop | Stop | Final session cleanup checklist |
 | Build Self-Healer | PostToolUseFailure | Auto-diagnoses build/typecheck failures |
 
 Hook scripts live in `scripts/hooks/`. Agent hooks are configured in Claude Code settings.
@@ -191,7 +203,7 @@ Sprint N                          Sprint N+1
 |--------|---------|------|
 | **Immune System** | Antibodies from bugs prevent recurrence. Chain matching for related patterns. | $0.01/create |
 | **Crystallization** | Promote high-frequency lessons to automated checks. Propose/approve/demote lifecycle. | $0.01/propose |
-| **Causal Graphs** | Extract decision→outcome pairs. BFS traversal for related chains. | $0.01/extract |
+| **Causal Graphs** | Extract decision->outcome pairs. BFS traversal for related chains. | $0.01/extract |
 | **Inverse Bloom** | Inject knowledge into task descriptions. 30-day half-life time decay. | $0 |
 | **Speculative Validation** | 5 pre-checks: data flow, antibodies, crystallized, genome, causal. | $0 |
 | **Quality Ratchet** | Trust tracking per domain. Success/override rates. False positive monitoring. | $0 |
@@ -221,11 +233,11 @@ radl-ops maintains a knowledge base that grows with every sprint:
 - **compounds/** — AI-extracted learnings via Bloom taxonomy pipeline
 - **antibodies.json** — Bug patterns that must never recur
 - **crystallized.json** — Lessons promoted to automated checks
-- **causal-graph.json** — Decision→outcome pairs for causal reasoning
+- **causal-graph.json** — Decision->outcome pairs for causal reasoning
 - **trust-ledger.json** — Trust decisions per domain (estimation, bloom, validation)
 - **threats.yaml** — MITRE ATLAS threat model for security reasoning
 
-Knowledge is automatically queried by `sprint_conductor` when planning, injected via `inverse_bloom` into task descriptions, and validated via `speculative_validate` before execution.
+Knowledge is indexed into FTS5 (BM25 text search) and optionally sqlite-vec (vector similarity) at startup. Automatically queried by `sprint_conductor` when planning, injected via `inverse_bloom` into task descriptions, and validated via `speculative_validate` before execution.
 
 ## Model Routing
 
@@ -249,7 +261,7 @@ radl-ops/
       tool-registry.ts       # Dynamic tool group management
       resources.ts           # MCP resources (sprint state, iron laws)
       prompts.ts             # MCP prompt templates
-      tools/                 # 48 tool implementations + tests
+      tools/                 # 56 tool implementations + tests
         sprint.ts            # Sprint lifecycle (auto trust + validation follow-up)
         sprint-conductor.ts  # Full sprint orchestration pipeline
         sprint-decompose.ts  # AI task decomposition
@@ -264,6 +276,10 @@ radl-ops/
         counterfactual.ts    # Alternative outcome reasoning
         data-flow-verifier.ts # Zero-cost field lifecycle check
         pre-flight.ts        # Zero-cost pre-push verification
+        production-status.ts # Aggregated production health
+        session-health.ts    # Session tracking + rabbit hole detection
+        alert-check.ts       # Critical production alerts
+        trace-report.ts      # Execution trace reporting
         shared/              # Shared utilities
           task-verifier.ts   # Antfarm verify-then-retry protocol
           agent-output-parser.ts  # KEY:VALUE structured output parsing
@@ -272,6 +288,8 @@ radl-ops/
         ...
     knowledge/
       fts-index.ts           # FTS5 BM25 search (better-sqlite3)
+      vector.ts              # Vector similarity search (sqlite-vec)
+      graph.ts               # Knowledge graph traversal
     models/
       router.ts              # Model routing (Haiku/Sonnet/Opus)
       token-tracker.ts       # Cost analytics with daily rotation
@@ -280,9 +298,9 @@ radl-ops/
       bloom-orchestrator.ts  # 4-stage Bloom taxonomy pipeline
     guardrails/
       iron-laws.ts           # Non-negotiable constraints
-    config/                  # Logger, paths, Anthropic client
+    config/                  # Logger, paths, Anthropic client, project config
   scripts/
-    hooks/                   # 10 hook scripts for Claude Code
+    hooks/                   # 13 hook scripts for Claude Code
     sprint.sh                # Sprint management CLI
     compound.sh              # Learning extraction CLI
     ...
@@ -296,10 +314,22 @@ radl-ops/
 ## Development
 
 ```bash
-npm run test          # Run all tests (801)
+npm run test          # Run all tests (1204)
 npm run typecheck     # TypeScript checking
+npm run build         # Compile to dist/
 npm run mcp           # Start MCP server (for debugging)
 ```
+
+## CI Pipeline
+
+GitHub Actions run on every PR:
+
+| Check | Purpose |
+|-------|---------|
+| **quality** | TypeScript typecheck |
+| **audit** | npm audit for vulnerabilities |
+| **coverage** | Test suite + coverage report |
+| **ai-review** | Claude Code automated PR review |
 
 ## Future Roadmap
 
@@ -307,7 +337,7 @@ npm run mcp           # Start MCP server (for debugging)
 CI pipeline that auto-merges PRs when all checks pass (tests, typecheck, review approval). Currently PRs are created automatically but merged manually.
 
 ### Production Monitoring Feedback Loop
-Deploy → observe errors (Sentry) → auto-create issues → learn from fixes → prevent recurrence. Close the loop between shipping and learning.
+Deploy -> observe errors (Sentry) -> auto-create issues -> learn from fixes -> prevent recurrence. Close the loop between shipping and learning.
 
 ### Multi-Sprint Planning
 Roadmap-level orchestration that sequences multiple sprints toward a milestone. Currently each sprint is planned independently; multi-sprint planning would optimize the order and parallelize across sprints.
@@ -316,7 +346,7 @@ Roadmap-level orchestration that sequences multiple sprints toward a milestone. 
 Track which model produces the best results per task type and auto-adjust routing. Currently routing is static (Haiku for drafts, Sonnet for evaluation, Opus for reasoning).
 
 ### Embedding-Based Knowledge Search
-Upgrade FTS5 BM25 search with vector embeddings for semantic similarity. The FTS5 interface is already embedding-ready — needs a vector store and embedding model integration.
+Upgrade FTS5 BM25 search with dense vector embeddings for semantic similarity. sqlite-vec is wired and the interface is embedding-ready — needs an embedding model integration for automatic indexing.
 
 ## License
 
