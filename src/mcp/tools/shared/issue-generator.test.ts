@@ -38,11 +38,11 @@ function makeInput(overrides: Partial<IssueInput> = {}): IssueInput {
   };
 }
 
-/** Check if an execFileSync call matches a given subcommand */
+/** Check if an execFileSync call's args array contains a given subcommand */
 function argsInclude(args: unknown[], subcommand: string): boolean {
   // args = [binary, argsArray, options]
   const cmdArgs = args[1] as string[];
-  return Array.isArray(cmdArgs) && cmdArgs.some(a => a === subcommand || a.includes(subcommand));
+  return Array.isArray(cmdArgs) && cmdArgs.includes(subcommand);
 }
 
 beforeEach(() => {

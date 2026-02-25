@@ -25,9 +25,14 @@ if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
   exit 0
 fi
 
-# If state file doesn't exist or says "stopped", watcher was intentionally off
-state=$(cat "$STATE_FILE" 2>/dev/null || echo "unknown")
-if [ "$state" = "stopped" ] || [ "$state" = "unknown" ]; then
+# If state file doesn't exist, watcher was never started — don't auto-start
+if [ ! -f "$STATE_FILE" ]; then
+  exit 0
+fi
+
+# If state says "stopped", watcher was intentionally killed — don't restart
+state=$(cat "$STATE_FILE" 2>/dev/null || echo "")
+if [ "$state" = "stopped" ]; then
   exit 0
 fi
 

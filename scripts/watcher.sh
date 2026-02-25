@@ -68,12 +68,20 @@ render_prompt() {
   local issue_body="$3"
   local branch_name="$4"
 
-  sed \
-    -e "s|{{ISSUE_NUM}}|$issue_num|g" \
-    -e "s|{{ISSUE_TITLE}}|$issue_title|g" \
-    -e "s|{{BRANCH_NAME}}|$branch_name|g" \
-    "$PROMPT_TEMPLATE" | \
-  awk -v body="$issue_body" '{gsub(/\{\{ISSUE_BODY\}\}/, body); print}'
+  # Use awk for all substitutions — safe for arbitrary characters in issue content
+  # (sed with | delimiter breaks on pipe characters in titles)
+  awk \
+    -v num="$issue_num" \
+    -v title="$issue_title" \
+    -v body="$issue_body" \
+    -v branch="$branch_name" \
+    '{
+      gsub(/\{\{ISSUE_NUM\}\}/, num);
+      gsub(/\{\{ISSUE_TITLE\}\}/, title);
+      gsub(/\{\{ISSUE_BODY\}\}/, body);
+      gsub(/\{\{BRANCH_NAME\}\}/, branch);
+      print
+    }' "$PROMPT_TEMPLATE"
 }
 
 gh_api() {
@@ -122,6 +130,7 @@ cmd_start() {
     exit 1
   fi
 
+  write_state "starting"
   echo "Starting watcher in tmux session '$TMUX_SESSION'..."
   tmux new-session -d -s "$TMUX_SESSION" "$RADL_OPS_DIR/scripts/watcher.sh run"
   echo "Watcher started. Use 'watcher.sh logs' to follow output."
@@ -230,6 +239,12 @@ if issues:
   issue_title=$(echo "$first_issue" | sed -n '2p')
   issue_body=$(echo "$first_issue" | tail -n +3)
 
+  # Validate issue_num is an integer
+  if ! [[ "$issue_num" =~ ^[0-9]+$ ]]; then
+    log "ERROR: Invalid issue number '$issue_num', skipping"
+    return
+  fi
+
   process_issue "$issue_num" "$issue_title" "$issue_body"
 }
 
@@ -278,7 +293,8 @@ process_issue() {
   unset CLAUDECODE
   log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
 
-  timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
+  # Start in new process group so cancel can kill the entire tree
+  setsid timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
     --max-turns "$MAX_TURNS" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$MAX_BUDGET" \
@@ -293,14 +309,27 @@ process_issue() {
     labels=$("$GH" issue view "$issue_num" --repo "$REPO" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
     if echo "$labels" | grep -q "^cancel$"; then
       log "CANCELLED: Issue #$issue_num cancelled via label"
-      kill "$claude_pid" 2>/dev/null || true
+      kill -TERM -"$claude_pid" 2>/dev/null || kill "$claude_pid" 2>/dev/null || true
+      sleep 2
+      kill -KILL -"$claude_pid" 2>/dev/null || true
       wait "$claude_pid" 2>/dev/null || true
+      remove_label "$issue_num" "cancel"
       fail_issue "$issue_num" "Cancelled by user via \`cancel\` label." "$log_file" "$branch_name"
       return
     fi
     sleep 15
   done
   wait "$claude_pid" || claude_exit=$?
+
+  # Check for late cancel (label added in last polling window after claude finished)
+  local post_labels
+  post_labels=$("$GH" issue view "$issue_num" --repo "$REPO" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+  if echo "$post_labels" | grep -q "^cancel$"; then
+    log "CANCELLED (late): Issue #$issue_num had cancel label set after completion"
+    remove_label "$issue_num" "cancel"
+    fail_issue "$issue_num" "Cancelled by user via \`cancel\` label (late)." "$log_file" "$branch_name"
+    return
+  fi
 
   if [ "$claude_exit" -eq 124 ]; then
     log "TIMEOUT: Issue #$issue_num exceeded ${TIMEOUT}s"
