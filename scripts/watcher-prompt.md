@@ -13,8 +13,10 @@ This issue was pre-approved by the user. Proceed without asking for confirmation
 4. Implement the feature/fix described above
 5. Run `npm run typecheck` after every change
 6. Commit per-task with conventional commits (feat/fix/refactor)
-7. Log progress: mcp__radl-ops__sprint_progress after each commit
-8. When done: mcp__radl-ops__sprint_complete
+7. After each commit, post a progress update on the issue so the user can monitor from their phone:
+   Run: `gh issue comment {{ISSUE_NUM}} --repo Sn1ckerDood1e/Radl --body "Progress: <what you just completed>"`
+8. Log progress: mcp__radl-ops__sprint_progress after each commit
+9. When done: mcp__radl-ops__sprint_complete
 
 ## Autonomy Rules (OVERRIDE for this session)
 

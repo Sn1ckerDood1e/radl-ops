@@ -273,16 +273,34 @@ process_issue() {
   local prompt
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
-  # Run claude -p
+  # Run claude -p in background so we can check for cancel label
   # Unset CLAUDECODE to avoid "nested session" error when watcher is started from within Claude Code
   unset CLAUDECODE
   log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
-  local claude_exit=0
+
   timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
     --max-turns "$MAX_TURNS" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$MAX_BUDGET" \
-    >> "$log_file" 2>&1 || claude_exit=$?
+    >> "$log_file" 2>&1 &
+  local claude_pid=$!
+
+  # Monitor for cancel label while claude runs
+  local claude_exit=0
+  while kill -0 "$claude_pid" 2>/dev/null; do
+    # Check if cancel label was added
+    local labels
+    labels=$("$GH" issue view "$issue_num" --repo "$REPO" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+    if echo "$labels" | grep -q "^cancel$"; then
+      log "CANCELLED: Issue #$issue_num cancelled via label"
+      kill "$claude_pid" 2>/dev/null || true
+      wait "$claude_pid" 2>/dev/null || true
+      fail_issue "$issue_num" "Cancelled by user via \`cancel\` label." "$log_file" "$branch_name"
+      return
+    fi
+    sleep 15
+  done
+  wait "$claude_pid" || claude_exit=$?
 
   if [ "$claude_exit" -eq 124 ]; then
     log "TIMEOUT: Issue #$issue_num exceeded ${TIMEOUT}s"
@@ -305,6 +323,16 @@ process_issue() {
     log "WARNING: No commits made for issue #$issue_num"
     fail_issue "$issue_num" "Claude completed but made no commits. The issue may need a clearer description." "$log_file" "$branch_name"
     return
+  fi
+
+  # Build gate: verify typecheck passes before creating PR
+  log "Running typecheck for issue #$issue_num..."
+  local typecheck_ok=true
+  npm run typecheck >> "$log_file" 2>&1 || typecheck_ok=false
+
+  if [ "$typecheck_ok" = false ]; then
+    log "WARNING: Typecheck failed for issue #$issue_num, PR will be created anyway"
+    comment_issue "$issue_num" "Warning: \`npm run typecheck\` failed on this branch. PR created but may need fixes."
   fi
 
   # Push and create PR

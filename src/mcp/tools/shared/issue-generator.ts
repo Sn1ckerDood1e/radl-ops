@@ -5,7 +5,7 @@
  * into actionable GitHub issues for the watcher to pick up.
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { logger } from '../../../config/logger.js';
 
 const GH_BIN = process.env.GH_BIN || 'gh';
@@ -28,7 +28,7 @@ export interface CreatedIssue {
 
 function ghAvailable(): boolean {
   try {
-    execSync(`${GH_BIN} auth status`, { timeout: 5000, stdio: 'pipe' });
+    execFileSync(GH_BIN, ['auth', 'status'], { timeout: 5000, stdio: 'pipe' });
     return true;
   } catch {
     return false;
@@ -66,10 +66,14 @@ export function findDuplicateIssues(title: string, repo: string = DEFAULT_REPO):
     if (words.length === 0) return false;
 
     const query = words.join(' ');
-    const result = execSync(
-      `${GH_BIN} issue list --repo "${repo}" --state open --search "${query}" --json number,title --limit 5`,
-      { timeout: 10000, stdio: 'pipe' },
-    );
+    const result = execFileSync(GH_BIN, [
+      'issue', 'list',
+      '--repo', repo,
+      '--state', 'open',
+      '--search', query,
+      '--json', 'number,title',
+      '--limit', '5',
+    ], { timeout: 10000, stdio: 'pipe' });
 
     const issues = JSON.parse(result.toString()) as Array<{ number: number; title: string }>;
 
@@ -106,13 +110,20 @@ export function createDraftIssue(
   repo: string = DEFAULT_REPO,
 ): CreatedIssue | null {
   const body = formatIssueBody(input);
-  const labelArg = labels.map(l => `--label "${l}"`).join(' ');
+
+  // Use execFileSync with argument array to prevent shell injection
+  // (issue titles from AI-generated content could contain backticks, $(), etc.)
+  const args = [
+    'issue', 'create',
+    '--repo', repo,
+    '--title', input.title,
+    '--body', body,
+    ...labels.flatMap(l => ['--label', l]),
+    '--json', 'number,title,url',
+  ];
 
   try {
-    const result = execSync(
-      `${GH_BIN} issue create --repo "${repo}" --title "${input.title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"').replace(/\n/g, '\\n')}" ${labelArg} --json number,title,url`,
-      { timeout: 15000, stdio: 'pipe' },
-    );
+    const result = execFileSync(GH_BIN, args, { timeout: 15000, stdio: 'pipe' });
 
     const parsed = JSON.parse(result.toString()) as CreatedIssue;
     logger.info('Draft issue created', {

@@ -14,9 +14,9 @@ vi.mock('../../../config/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-const mockExecSync = vi.fn();
+const mockExecFileSync = vi.fn();
 vi.mock('child_process', () => ({
-  execSync: (...args: unknown[]) => mockExecSync(...args),
+  execFileSync: (...args: unknown[]) => mockExecFileSync(...args),
 }));
 
 import {
@@ -38,11 +38,19 @@ function makeInput(overrides: Partial<IssueInput> = {}): IssueInput {
   };
 }
 
+/** Check if an execFileSync call matches a given subcommand */
+function argsInclude(args: unknown[], subcommand: string): boolean {
+  // args = [binary, argsArray, options]
+  const cmdArgs = args[1] as string[];
+  return Array.isArray(cmdArgs) && cmdArgs.some(a => a === subcommand || a.includes(subcommand));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: gh auth succeeds
-  mockExecSync.mockImplementation((cmd: string) => {
-    if (cmd.includes('auth status')) return Buffer.from('Logged in');
+  mockExecFileSync.mockImplementation((...args: unknown[]) => {
+    const cmdArgs = args[1] as string[];
+    if (Array.isArray(cmdArgs) && cmdArgs.includes('status')) return Buffer.from('Logged in');
     return Buffer.from('[]');
   });
 });
@@ -82,8 +90,8 @@ describe('formatIssueBody', () => {
 
 describe('findDuplicateIssues', () => {
   it('returns false when no matching issues exist', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue list')) return Buffer.from('[]');
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'list')) return Buffer.from('[]');
       return Buffer.from('');
     });
 
@@ -91,8 +99,8 @@ describe('findDuplicateIssues', () => {
   });
 
   it('returns true when similar issue exists (60%+ word match)', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue list')) {
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'list')) {
         return Buffer.from(JSON.stringify([
           { number: 42, title: 'Fix RLS policy for equipment table' },
         ]));
@@ -104,8 +112,8 @@ describe('findDuplicateIssues', () => {
   });
 
   it('returns false when existing issue is different enough', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue list')) {
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'list')) {
         return Buffer.from(JSON.stringify([
           { number: 1, title: 'Implement attendance tracking for practices' },
         ]));
@@ -117,8 +125,8 @@ describe('findDuplicateIssues', () => {
   });
 
   it('returns false when gh fails (allows creation)', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue list')) throw new Error('gh not found');
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'list')) throw new Error('gh not found');
       return Buffer.from('');
     });
 
@@ -134,8 +142,8 @@ describe('findDuplicateIssues', () => {
 
 describe('createDraftIssue', () => {
   it('creates issue via gh CLI and returns parsed result', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue create')) {
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'create')) {
         return Buffer.from(JSON.stringify({
           number: 99,
           title: 'Fix RLS policy for equipment',
@@ -153,8 +161,8 @@ describe('createDraftIssue', () => {
   });
 
   it('returns null when gh fails', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue create')) throw new Error('rate limit');
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'create')) throw new Error('rate limit');
       return Buffer.from('');
     });
 
@@ -164,10 +172,11 @@ describe('createDraftIssue', () => {
   });
 
   it('passes draft and watcher labels by default', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('issue create')) {
-        expect(cmd).toContain('--label "draft"');
-        expect(cmd).toContain('--label "watcher"');
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'create')) {
+        const cmdArgs = args[1] as string[];
+        expect(cmdArgs).toContain('draft');
+        expect(cmdArgs).toContain('watcher');
         return Buffer.from(JSON.stringify({ number: 1, title: 'Test', url: 'url' }));
       }
       return Buffer.from('');
@@ -182,10 +191,10 @@ describe('createDraftIssue', () => {
 describe('createIssuesFromBriefing', () => {
   it('creates issues for each input item', () => {
     let createCount = 0;
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('auth status')) return Buffer.from('OK');
-      if (cmd.includes('issue list')) return Buffer.from('[]');
-      if (cmd.includes('issue create')) {
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'status')) return Buffer.from('OK');
+      if (argsInclude(args, 'list')) return Buffer.from('[]');
+      if (argsInclude(args, 'create')) {
         createCount++;
         return Buffer.from(JSON.stringify({
           number: createCount,
@@ -206,10 +215,10 @@ describe('createIssuesFromBriefing', () => {
 
   it('limits to 3 issues per briefing', () => {
     let createCount = 0;
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('auth status')) return Buffer.from('OK');
-      if (cmd.includes('issue list')) return Buffer.from('[]');
-      if (cmd.includes('issue create')) {
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'status')) return Buffer.from('OK');
+      if (argsInclude(args, 'list')) return Buffer.from('[]');
+      if (argsInclude(args, 'create')) {
         createCount++;
         return Buffer.from(JSON.stringify({
           number: createCount,
@@ -228,9 +237,9 @@ describe('createIssuesFromBriefing', () => {
   });
 
   it('skips duplicates', () => {
-    mockExecSync.mockImplementation((cmd: string) => {
-      if (cmd.includes('auth status')) return Buffer.from('OK');
-      if (cmd.includes('issue list')) {
+    mockExecFileSync.mockImplementation((...args: unknown[]) => {
+      if (argsInclude(args, 'status')) return Buffer.from('OK');
+      if (argsInclude(args, 'list')) {
         return Buffer.from(JSON.stringify([
           { number: 10, title: 'Fix RLS policy for equipment' },
         ]));
@@ -245,7 +254,7 @@ describe('createIssuesFromBriefing', () => {
   });
 
   it('returns error when gh is not available', () => {
-    mockExecSync.mockImplementation(() => {
+    mockExecFileSync.mockImplementation(() => {
       throw new Error('gh not found');
     });
 

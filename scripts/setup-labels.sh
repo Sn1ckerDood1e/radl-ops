@@ -31,5 +31,6 @@ create_label "failed"      "D73A4A" "Autonomous execution failed"
 create_label "draft"       "E4E669" "Created by briefing, awaiting approval"
 create_label "hold"        "F9D0C4" "Prevent auto-merge"
 create_label "watcher"     "BFD4F2" "Created/managed by watcher system"
+create_label "cancel"      "D93F0B" "Cancel in-progress watcher execution"
 
 echo "Done. Labels created on $REPO."
