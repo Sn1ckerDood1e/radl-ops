@@ -133,7 +133,43 @@ function analyzeSession(): HealthSignal[] {
     });
   }
 
-  // Signal 7: Session duration warning
+  // Signal 7: Stuck — many tool calls since last commit
+  if (session.lastCommitAt) {
+    const callsSinceCommit = session.toolCalls.filter(c => c.timestamp > session.lastCommitAt!).length;
+    if (callsSinceCommit >= 20) {
+      signals.push({
+        id: 'stuck',
+        severity: callsSinceCommit >= 30 ? 'critical' : 'warning',
+        message: `${callsSinceCommit} tool calls since last commit. Possibly stuck — consider a different approach or break the problem down.`,
+        metric: `${callsSinceCommit} calls since commit`,
+      });
+    }
+  }
+
+  // Signal 8: Looping — rapid consecutive calls (< 30s apart each)
+  if (last30min.length >= 5) {
+    // Sort chronologically (oldest first) to ensure gap calculation is correct
+    const sorted = [...last30min].sort((a, b) => a.timestamp - b.timestamp);
+    let rapidCount = 0;
+    for (let i = sorted.length - 1; i > 0; i--) {
+      const gap = sorted[i].timestamp - sorted[i - 1].timestamp;
+      if (gap < 30_000) {
+        rapidCount++;
+      } else {
+        break;
+      }
+    }
+    if (rapidCount >= 5) {
+      signals.push({
+        id: 'looping',
+        severity: rapidCount >= 10 ? 'critical' : 'warning',
+        message: `${rapidCount + 1} rapid-fire tool calls (< 30s apart). Possible retry loop — stop and reassess.`,
+        metric: `${rapidCount + 1} calls in rapid succession`,
+      });
+    }
+  }
+
+  // Signal 9: Session duration warning
   if (sessionMinutes > 120) {
     signals.push({
       id: 'long_session',
@@ -193,7 +229,7 @@ export function registerSessionHealthTools(server: McpServer): void {
     {
       record_commit: z.boolean().optional()
         .describe('Set to true to record a git commit event (call this from commit hooks)'),
-      record_tool: z.string().max(50).optional()
+      record_tool: z.string().max(50).regex(/^[a-z_][a-z0-9_]*$/).optional()
         .describe('Record a tool call event (tool name). Used by hook integration.'),
       record_success: z.boolean().optional()
         .describe('Whether the recorded tool call succeeded (default true)'),

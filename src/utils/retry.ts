@@ -21,8 +21,22 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
 /** HTTP status codes that should trigger a retry */
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 503]);
 
+/** HTTP status code indicating rate limiting — candidate for model fallback */
+const RATE_LIMIT_STATUS = 429;
+
 /** HTTP status codes that indicate permanent failure — never retry */
 const PERMANENT_STATUS_CODES = new Set([400, 401, 403]);
+
+/**
+ * Check if an error is a rate limit (429) — signals model fallback candidate.
+ */
+export function isRateLimitError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const status = (error as unknown as Record<string, unknown>).status;
+    return typeof status === 'number' && status === RATE_LIMIT_STATUS;
+  }
+  return false;
+}
 
 /**
  * Check if an error is retryable based on its status code.
