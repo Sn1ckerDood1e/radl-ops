@@ -144,10 +144,12 @@ export function initVecTable(): void {
     );
   `);
 
-  // Metadata table to map vec_items rowids to knowledge entry IDs
+  // Metadata table to map integer rowids to knowledge entry IDs.
+  // Uses AUTOINCREMENT to guarantee monotonic integer IDs that
+  // sqlite-vec's vec0 virtual table requires.
   db.exec(`
     CREATE TABLE IF NOT EXISTS vec_metadata (
-      rowid INTEGER PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       entry_id TEXT NOT NULL UNIQUE
     );
   `);
@@ -158,31 +160,35 @@ export function initVecTable(): void {
 }
 
 /**
+ * Convert a Float32Array embedding to a Buffer for sqlite-vec binding.
+ */
+function embeddingToBuffer(embedding: Float32Array): Buffer {
+  return Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
+}
+
+/**
  * Upsert an embedding for a knowledge entry.
  */
 export function upsertEmbedding(id: string, embedding: Float32Array): void {
   const db = getDbForGraph();
+  const buf = embeddingToBuffer(embedding);
 
   // Check if entry already exists
   const existing = db.prepare(
-    'SELECT rowid FROM vec_metadata WHERE entry_id = ?'
-  ).get(id) as { rowid: number } | undefined;
+    'SELECT id FROM vec_metadata WHERE entry_id = ?'
+  ).get(id) as { id: number } | undefined;
 
   if (existing) {
+    const rid = BigInt(existing.id);
     // Delete old vector and re-insert
-    db.prepare('DELETE FROM vec_items WHERE rowid = ?').run(existing.rowid);
-    db.prepare('INSERT INTO vec_items(rowid, embedding) VALUES (?, ?)').run(
-      existing.rowid,
-      embedding.buffer as ArrayBuffer
-    );
+    db.prepare('DELETE FROM vec_items WHERE rowid = ?').run(rid);
+    db.prepare('INSERT INTO vec_items(rowid, embedding) VALUES (?, ?)').run(rid, buf);
   } else {
-    // Insert new metadata row to get a rowid
+    // Insert metadata first to get an integer id.
+    // sqlite-vec requires BigInt for rowid params — JS number is rejected.
     const result = db.prepare('INSERT INTO vec_metadata (entry_id) VALUES (?)').run(id);
-    const rowid = result.lastInsertRowid;
-    db.prepare('INSERT INTO vec_items(rowid, embedding) VALUES (?, ?)').run(
-      rowid,
-      embedding.buffer as ArrayBuffer
-    );
+    const rid = BigInt(result.lastInsertRowid);
+    db.prepare('INSERT INTO vec_items(rowid, embedding) VALUES (?, ?)').run(rid, buf);
   }
 }
 
@@ -197,25 +203,40 @@ export function searchByVector(
   const db = getDbForGraph();
 
   try {
-    const rows = db.prepare(`
-      SELECT v.rowid, v.distance, m.entry_id
-      FROM vec_items v
-      JOIN vec_metadata m ON m.rowid = v.rowid
-      WHERE v.embedding MATCH ?
-      ORDER BY v.distance
+    // sqlite-vec vec0 KNN queries cannot be JOINed — the LIMIT is lost
+    // in the query plan. Two-step: search vectors, then lookup metadata.
+    const vecRows = db.prepare(`
+      SELECT rowid, distance
+      FROM vec_items
+      WHERE embedding MATCH ?
+      ORDER BY distance
       LIMIT ?
-    `).all(queryVec.buffer as ArrayBuffer, limit) as Array<{
+    `).all(embeddingToBuffer(queryVec), limit) as Array<{
       rowid: number;
       distance: number;
+    }>;
+
+    if (vecRows.length === 0) return [];
+
+    // Batch lookup entry_ids from metadata
+    const placeholders = vecRows.map(() => '?').join(',');
+    const metaRows = db.prepare(
+      `SELECT id, entry_id FROM vec_metadata WHERE id IN (${placeholders})`
+    ).all(...vecRows.map(r => r.rowid)) as Array<{
+      id: number;
       entry_id: string;
     }>;
 
-    return rows.map(row => ({
-      id: row.entry_id,
-      distance: row.distance,
-      // Convert distance to a 0-1 similarity score (1 = most similar)
-      score: Math.max(0, 1 - row.distance),
-    }));
+    const metaMap = new Map(metaRows.map(m => [m.id, m.entry_id]));
+
+    return vecRows
+      .filter(row => metaMap.has(row.rowid))
+      .map(row => ({
+        id: metaMap.get(row.rowid)!,
+        distance: row.distance,
+        // Convert distance to a 0-1 similarity score (1 = most similar)
+        score: Math.max(0, 1 - row.distance),
+      }));
   } catch (error) {
     logger.warn('Vector search failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -257,7 +278,8 @@ export function indexAllKnowledge(): number {
     for (const item of items) {
       const embedding = generateEmbedding(item.text);
       const result = insertMeta.run(item.id);
-      insertVec.run(result.lastInsertRowid, embedding.buffer as ArrayBuffer);
+      const rid = BigInt(result.lastInsertRowid);
+      insertVec.run(rid, embeddingToBuffer(embedding));
     }
   });
 

@@ -260,7 +260,7 @@ export function formatRecoveryMarkdown(summaries: SessionSummary[]): string {
       lines.push(`  Top tools: ${topTools.map(t => `${t.tool}(${t.count})`).join(', ')}`);
     }
 
-    if (s.mcpTools.size > 0) {
+    if (s.mcpTools.length > 0) {
       lines.push(`  MCP tools used: ${[...s.mcpTools].join(', ')}`);
     }
 

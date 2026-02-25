@@ -255,7 +255,7 @@ echo ""
 
 # ─── Session recovery (optional JSONL scanning) ─────────────────────────────
 
-RECOVER_SCRIPT="/home/hb/radl-ops/scripts/session-recover.ts"
+RECOVER_SCRIPT="/home/hb/radl-ops/src/scripts/session-recover.ts"
 if [ -f "$RECOVER_SCRIPT" ] && command -v npx &>/dev/null; then
   RECOVERY=$(npx --yes tsx "$RECOVER_SCRIPT" --hours 12 2>/dev/null | head -20)
   if [ -n "$RECOVERY" ] && [ "$RECOVERY" != "No recent sessions found." ]; then
