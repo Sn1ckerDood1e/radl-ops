@@ -105,7 +105,7 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 
 ```
 Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
-                                    ├── tools (54 tools, 3 groups + 1 meta, with annotations)
+                                    ├── tools (56 tools, 3 groups + 1 meta, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
                                     ├── sprint conductor:
