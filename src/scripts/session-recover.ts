@@ -10,7 +10,7 @@
  *   npx tsx scripts/session-recover.ts [--hours 24] [--session <id>]
  */
 
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync, readdirSync, statSync, openSync, readSync, closeSync } from 'fs';
 import { join } from 'path';
 
 // ============================================
@@ -64,27 +64,51 @@ const DEFAULT_HOURS = 24;
 // Parsing
 // ============================================
 
-/**
- * Parse a JSONL session file and extract relevant entries.
- * Streams line-by-line to handle large files efficiently.
- */
-function parseSessionFile(filePath: string): SessionEntry[] {
+/** Max bytes to read from a session file (5 MB). Reads tail for large files. */
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
+/** Max hours to look back (1 week). */
+const MAX_HOURS = 168;
+
+function parseLines(content: string): SessionEntry[] {
   const entries: SessionEntry[] = [];
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    for (const line of content.split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line) as SessionEntry;
-        entries.push(entry);
-      } catch {
-        // Skip malformed lines
-      }
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as SessionEntry;
+      entries.push(entry);
+    } catch {
+      // Skip malformed lines
     }
-  } catch {
-    // Skip unreadable files
   }
   return entries;
+}
+
+/**
+ * Parse a JSONL session file and extract relevant entries.
+ * Reads only the last MAX_FILE_BYTES of large files to avoid OOM.
+ */
+function parseSessionFile(filePath: string): SessionEntry[] {
+  try {
+    const fileSize = statSync(filePath).size;
+    if (fileSize > MAX_FILE_BYTES) {
+      // Read only the tail — most recent context is at end
+      const fd = openSync(filePath, 'r');
+      const buf = Buffer.allocUnsafe(MAX_FILE_BYTES);
+      const offset = fileSize - MAX_FILE_BYTES;
+      readSync(fd, buf, 0, MAX_FILE_BYTES, offset);
+      closeSync(fd);
+      const tail = buf.toString('utf-8');
+      // Skip first (potentially partial) line
+      const firstNewline = tail.indexOf('\n');
+      const safeContent = firstNewline >= 0 ? tail.slice(firstNewline + 1) : tail;
+      return parseLines(safeContent);
+    }
+    return parseLines(readFileSync(filePath, 'utf-8'));
+  } catch {
+    // Skip unreadable files
+    return [];
+  }
 }
 
 /**
@@ -281,7 +305,10 @@ export function recoverSessions(
   hoursBack: number = DEFAULT_HOURS,
   specificSessionId?: string,
 ): SessionSummary[] {
-  const recentSessions = findRecentSessions(hoursBack, specificSessionId);
+  const safeHours = (Number.isFinite(hoursBack) && hoursBack > 0 && hoursBack <= MAX_HOURS)
+    ? hoursBack
+    : DEFAULT_HOURS;
+  const recentSessions = findRecentSessions(safeHours, specificSessionId);
   const summaries: SessionSummary[] = [];
 
   for (const session of recentSessions.slice(0, 5)) {
@@ -307,7 +334,8 @@ if (process.argv[1]?.endsWith('session-recover.ts')) {
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--hours' && args[i + 1]) {
-      hours = parseInt(args[i + 1], 10);
+      const parsed = parseInt(args[i + 1], 10);
+      hours = (Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_HOURS) ? parsed : DEFAULT_HOURS;
       i++;
     } else if (args[i] === '--session' && args[i + 1]) {
       sessionId = args[i + 1];

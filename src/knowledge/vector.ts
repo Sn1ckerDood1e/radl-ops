@@ -54,6 +54,11 @@ function tokenize(text: string): string[] {
  * Selects top VOCAB_SIZE terms by document frequency.
  */
 export function buildVocabulary(documents: string[]): void {
+  if (documents.length === 0) {
+    logger.warn('buildVocabulary called with empty corpus — vocabulary not built');
+    return;
+  }
+
   const docFreq = new Map<string, number>();
   const totalDocs = documents.length;
 
@@ -69,13 +74,16 @@ export function buildVocabulary(documents: string[]): void {
     .sort((a, b) => b[1] - a[1])
     .slice(0, VOCAB_SIZE);
 
-  vocabulary = sorted.map(([term]) => term);
-
-  // Compute IDF weights: log(N / df)
-  idfWeights = new Map();
+  // Build into local variables, then atomically assign
+  const newVocabulary = sorted.map(([term]) => term);
+  const newIdfWeights = new Map<string, number>();
   for (const [term, df] of sorted) {
-    idfWeights.set(term, Math.log(totalDocs / df));
+    newIdfWeights.set(term, Math.log(Math.max(1, totalDocs) / df));
   }
+
+  // Atomic assignment
+  vocabulary = newVocabulary;
+  idfWeights = newIdfWeights;
 
   logger.info('Vector vocabulary built', {
     totalTerms: docFreq.size,
@@ -200,6 +208,7 @@ export function searchByVector(
   queryVec: Float32Array,
   limit: number = 10,
 ): VectorSearchResult[] {
+  const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 100);
   const db = getDbForGraph();
 
   try {
@@ -211,7 +220,7 @@ export function searchByVector(
       WHERE embedding MATCH ?
       ORDER BY distance
       LIMIT ?
-    `).all(embeddingToBuffer(queryVec), limit) as Array<{
+    `).all(embeddingToBuffer(queryVec), safeLimit) as Array<{
       rowid: number;
       distance: number;
     }>;
