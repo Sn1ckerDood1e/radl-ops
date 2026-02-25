@@ -4,7 +4,7 @@
 # Runs as a PostToolUse command hook (silent unless relevant).
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+COMMAND=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('command',''))" 2>/dev/null)
 
 # Exit silently if not a git commit
 if [[ "$COMMAND" != *"git commit"* ]]; then
