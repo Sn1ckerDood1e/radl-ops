@@ -23,7 +23,6 @@ vi.mock('../with-error-tracking.js', () => ({
 vi.mock('../../knowledge/fts-index.js', () => ({
   recordRetrievals: vi.fn(),
   getPromotionCandidates: vi.fn().mockReturnValue([]),
-  getStaleEntries: vi.fn().mockReturnValue([]),
 }));
 
 // We can't easily test through McpServer, so we test the knowledge search

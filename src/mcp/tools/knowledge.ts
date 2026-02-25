@@ -12,7 +12,7 @@ import { readFileSync, existsSync } from 'fs';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
-import { recordRetrievals, getPromotionCandidates, getStaleEntries } from '../../knowledge/fts-index.js';
+import { recordRetrievals, getPromotionCandidates } from '../../knowledge/fts-index.js';
 import { findNodesByKeywords, getNeighbors, type GraphNode } from '../../knowledge/graph.js';
 import {
   isVocabularyReady, isVecAvailable, generateEmbedding, searchByVector,

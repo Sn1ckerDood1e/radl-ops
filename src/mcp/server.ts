@@ -5,7 +5,7 @@
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 54 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
+ * - Tools: 56 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
@@ -74,6 +74,8 @@ import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
 import { initTokenTracker } from '../models/token-tracker.js';
+import { initFtsIndex } from '../knowledge/fts-index.js';
+import { initVecTable, indexAllKnowledge } from '../knowledge/vector.js';
 import { logger } from '../config/logger.js';
 
 const server = new McpServer({
@@ -180,6 +182,17 @@ server.tool(
 registry.applyDefaults();
 
 initTokenTracker();
+try {
+  initFtsIndex();
+} catch (err) {
+  logger.warn('FTS5 index init failed (non-fatal)', { error: err instanceof Error ? err.stack : String(err) });
+}
+try {
+  initVecTable();
+  indexAllKnowledge();
+} catch (err) {
+  logger.warn('Vector search init failed (non-fatal)', { error: err instanceof Error ? err.stack : String(err) });
+}
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

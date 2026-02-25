@@ -42,16 +42,4 @@ done
 CHANGED=$(git -C /home/hb/radl diff --name-only main...HEAD 2>/dev/null | wc -l)
 echo "FILES CHANGED VS MAIN: $CHANGED"
 
-# Unresolved review findings count
-FINDINGS_FILE="/home/hb/radl-ops/knowledge/review-findings.json"
-if [ -f "$FINDINGS_FILE" ]; then
-  UNRESOLVED=$(python3 -c "
-import json
-data = json.load(open('$FINDINGS_FILE'))
-findings = data if isinstance(data, list) else data.get('findings', [])
-print(sum(1 for f in findings if not f.get('resolved', False)))
-" 2>/dev/null || echo "0")
-  echo "UNRESOLVED REVIEW FINDINGS: $UNRESOLVED"
-fi
-
 echo "=== END SNAPSHOT ==="

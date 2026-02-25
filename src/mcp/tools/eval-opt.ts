@@ -9,6 +9,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { TaskType } from '../../types/index.js';
 import { runEvalOptLoop } from '../../patterns/evaluator-optimizer.js';
+import { getProjectConfig } from '../../config/project-config.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 
@@ -62,8 +63,8 @@ export function registerEvalOptTools(server: McpServer): void {
     }: EvalOptParams) => {
       const genModel = generator_model ?? 'haiku';
       const evalModel = evaluator_model ?? 'sonnet';
-      const threshold = quality_threshold ?? 7;
-      const maxIter = max_iterations ?? 3;
+      const threshold = quality_threshold ?? getProjectConfig().qualityThreshold;
+      const maxIter = max_iterations ?? getProjectConfig().maxIterations;
 
       logger.info('Eval-opt generate requested', {
         generatorModel: genModel,

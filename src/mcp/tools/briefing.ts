@@ -12,6 +12,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { runEvalOptLoop } from '../../patterns/evaluator-optimizer.js';
+import { getProjectConfig } from '../../config/project-config.js';
 import { getAnthropicClient } from '../../config/anthropic.js';
 import { getRoute } from '../../models/router.js';
 import { getCostSummaryForBriefing } from '../../models/token-tracker.js';
@@ -214,7 +215,7 @@ Keep it brief and actionable. Use bullet points.`;
       const result = await runEvalOptLoop(prompt, {
         generatorTaskType: 'briefing',
         evaluatorTaskType: 'review',
-        qualityThreshold: 7,
+        qualityThreshold: getProjectConfig().qualityThreshold,
         maxIterations: 2,
         evaluationCriteria: DAILY_BRIEFING_CRITERIA,
       });
@@ -309,7 +310,7 @@ Be thorough but organized. Use headers and bullet points.`;
       const result = await runEvalOptLoop(prompt, {
         generatorTaskType: 'briefing',
         evaluatorTaskType: 'review',
-        qualityThreshold: 7,
+        qualityThreshold: getProjectConfig().qualityThreshold,
         maxIterations: 2,
         evaluationCriteria: WEEKLY_BRIEFING_CRITERIA,
       });
