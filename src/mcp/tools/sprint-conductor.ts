@@ -791,7 +791,7 @@ async function runConductorPipeline(
       generatorTaskType: 'planning' as TaskType,
       evaluatorTaskType: 'architecture' as TaskType,
       qualityThreshold,
-      maxIterations: 3,
+      maxIterations: getProjectConfig().maxIterations,
       evaluationCriteria: [
         'Clear scope with specific acceptance criteria',
         'Addresses edge cases and error handling',
