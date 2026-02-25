@@ -11,6 +11,10 @@ set -e
 
 RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
+# Load nvm — required for cron which doesn't source .bashrc
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
 BRIEFING_DIR="$RADL_OPS_DIR/briefings"
 DATE=$(date +%Y-%m-%d)
 DAY_NAME=$(date +%A)
@@ -40,6 +44,9 @@ if [ ! -x "$CLAUDE_BIN" ]; then
 fi
 
 echo "[$DATE] Generating daily briefing for $DAY_NAME with Gmail delivery..."
+
+# Unset CLAUDECODE to avoid "nested session" error if invoked from within Claude Code
+unset CLAUDECODE
 
 # Generate and deliver briefing using Claude Code with MCP tools
 # bypassPermissions: required for autonomous cron execution (no human in the loop)
