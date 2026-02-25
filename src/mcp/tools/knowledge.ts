@@ -14,6 +14,9 @@ import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
 import { recordRetrievals, getPromotionCandidates, getStaleEntries } from '../../knowledge/fts-index.js';
 import { findNodesByKeywords, getNeighbors, type GraphNode } from '../../knowledge/graph.js';
+import {
+  isVocabularyReady, isVecAvailable, generateEmbedding, searchByVector,
+} from '../../knowledge/vector.js';
 
 interface Pattern {
   id: number;
@@ -138,11 +141,14 @@ export function registerKnowledgeTools(server: McpServer): void {
         .describe('Search keyword to filter results (searches names, descriptions, learnings, rationale)'),
       depth: z.enum(['brief', 'standard', 'full']).optional()
         .describe('Detail level: brief (counts only), standard (default), full (all entries with examples)'),
+      use_vectors: z.boolean().optional()
+        .describe('Enable vector similarity search alongside keyword search (default false). Requires index to be built.'),
     },
     { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-    withErrorTracking('knowledge_query', async ({ type, query, depth }) => {
+    withErrorTracking('knowledge_query', async ({ type, query, depth, use_vectors }) => {
       const queryType = type ?? 'all';
       const detailLevel = depth ?? 'standard';
+      const useVectors = use_vectors ?? false;
 
       // Brief mode: counts only, no content
       if (detailLevel === 'brief' && !query) {
@@ -164,7 +170,7 @@ export function registerKnowledgeTools(server: McpServer): void {
 
       // Keyword search mode
       const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const scored: ScoredEntry[] = [];
+      let scored: ScoredEntry[] = [];
 
       if (queryType === 'all' || queryType === 'patterns') {
         const data = loadJson<{ patterns: Pattern[] }>('patterns.json');
@@ -219,6 +225,22 @@ export function registerKnowledgeTools(server: McpServer): void {
           if (score > 0) {
             scored.push({ type: 'team-run', entryId: `team-run-${r.id}`, score, text: formatTeamRun(r) });
           }
+        }
+      }
+
+      // Vector fusion: enrich with semantic similarity when enabled
+      if (useVectors && query) {
+        const { newResults, boosts } = vectorFusionSearch(query, scored);
+        // Apply boosts immutably
+        if (boosts.size > 0) {
+          scored = scored.map(e =>
+            boosts.has(e.entryId)
+              ? { ...e, score: e.score + boosts.get(e.entryId)! }
+              : e
+          );
+        }
+        if (newResults.length > 0) {
+          scored.push(...newResults);
         }
       }
 
@@ -501,5 +523,64 @@ function mapNodeTypeToEntryType(nodeType: string): ScoredEntry['type'] {
     case 'lesson': return 'lesson';
     case 'decision': return 'decision';
     default: return 'lesson'; // concepts, sprints, etc. map to lesson
+  }
+}
+
+// ============================================
+// Vector Fusion Search
+// ============================================
+
+/**
+ * Search by vector similarity and return entries not already in keyword results.
+ * Zero-cost when vectors aren't available (returns empty immediately).
+ */
+function vectorFusionSearch(
+  query: string,
+  existingResults: ScoredEntry[],
+): { newResults: ScoredEntry[]; boosts: Map<string, number> } {
+  const empty = { newResults: [], boosts: new Map<string, number>() };
+  try {
+    if (!isVecAvailable() || !isVocabularyReady()) return empty;
+
+    const queryVec = generateEmbedding(query);
+    const vecResults = searchByVector(queryVec, 10);
+
+    const existingIds = new Set(existingResults.map(e => e.entryId));
+    const newResults: ScoredEntry[] = [];
+    const boosts = new Map<string, number>();
+
+    for (const vr of vecResults) {
+      if (existingIds.has(vr.id)) {
+        // Record boost for existing result (applied immutably by caller)
+        boosts.set(vr.id, vr.score * 0.5);
+        continue;
+      }
+
+      // Parse entry type from ID (format: "type-number")
+      const dashIdx = vr.id.indexOf('-');
+      const entryType = dashIdx > 0 ? vr.id.substring(0, dashIdx) : 'lesson';
+
+      newResults.push({
+        type: mapNodeTypeToEntryType(entryType),
+        entryId: vr.id,
+        score: vr.score * 0.7, // Discount vector-only results slightly
+        text: `- [VEC] _(similarity: ${(vr.score * 100).toFixed(0)}%)_ ${vr.id}`,
+      });
+    }
+
+    if (newResults.length > 0 || boosts.size > 0) {
+      logger.info('Vector fusion: added results', {
+        vectorResults: vecResults.length,
+        newResults: newResults.length,
+        boostedExisting: boosts.size,
+      });
+    }
+
+    return { newResults, boosts };
+  } catch (error) {
+    logger.warn('vectorFusionSearch failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return empty;
   }
 }
