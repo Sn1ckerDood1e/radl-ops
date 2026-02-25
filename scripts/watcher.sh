@@ -196,8 +196,7 @@ process_queue() {
     --label "approved" \
     --state open \
     --json number,title,body \
-    --sort created \
-    --order asc \
+    --search "sort:created-asc" \
     --limit 10 2>/dev/null || echo "[]")
 
   local count
