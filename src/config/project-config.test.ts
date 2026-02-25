@@ -111,8 +111,8 @@ describe('mergeConfig (via getProjectConfig)', () => {
   });
 
   it('should accept boundary values for qualityThreshold', () => {
-    mockReadFileSync.mockReturnValue(JSON.stringify({ qualityThreshold: 0 }));
-    expect(getProjectConfig().qualityThreshold).toBe(0);
+    mockReadFileSync.mockReturnValue(JSON.stringify({ qualityThreshold: 1 }));
+    expect(getProjectConfig().qualityThreshold).toBe(1);
 
     resetProjectConfig();
     mockReadFileSync.mockReturnValue(JSON.stringify({ qualityThreshold: 10 }));
@@ -120,7 +120,7 @@ describe('mergeConfig (via getProjectConfig)', () => {
   });
 
   it('should ignore qualityThreshold out of range', () => {
-    mockReadFileSync.mockReturnValue(JSON.stringify({ qualityThreshold: -1 }));
+    mockReadFileSync.mockReturnValue(JSON.stringify({ qualityThreshold: 0 }));
     expect(getProjectConfig().qualityThreshold).toBe(7);
 
     resetProjectConfig();

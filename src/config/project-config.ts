@@ -85,7 +85,7 @@ function mergeConfig(
   }
 
   if (typeof overrides.qualityThreshold === 'number' &&
-    overrides.qualityThreshold >= 0 && overrides.qualityThreshold <= 10) {
+    overrides.qualityThreshold >= 1 && overrides.qualityThreshold <= 10) {
     result.qualityThreshold = overrides.qualityThreshold;
   }
 
