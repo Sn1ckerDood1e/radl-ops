@@ -14,6 +14,7 @@
  */
 
 import Database from 'better-sqlite3';
+import * as sqliteVec from 'sqlite-vec';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getConfig } from '../config/paths.js';
@@ -81,6 +82,15 @@ function getDb(): Database.Database {
 
   // Enable WAL mode for better concurrent read performance
   db.pragma('journal_mode = WAL');
+
+  // Load sqlite-vec extension for vector search
+  try {
+    sqliteVec.load(db);
+  } catch (error) {
+    logger.warn('Failed to load sqlite-vec extension', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   // Create FTS5 virtual table if it doesn't exist
   db.exec(`
@@ -318,6 +328,19 @@ export function initFtsIndex(): void {
   }
 }
 
+/**
+ * Check if the sqlite-vec extension is loaded and available.
+ */
+export function isVecExtensionLoaded(): boolean {
+  try {
+    const db = getDb();
+    db.prepare("SELECT vec_version()").get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================
 // Search
 // ============================================
@@ -396,7 +419,7 @@ export function searchFts(options: SearchOptions): SearchResult[] {
   const results: SearchResult[] = rows.map(row => {
     const decay = timeDecay(row.date, timeDecayHalfLife);
     const ftsScore = row.fts_score * decay;
-    const combinedScore = ftsScore * ftsWeight + (0) * vectorWeight;
+    const combinedScore = ftsScore * ftsWeight;
 
     return {
       id: row.id,
