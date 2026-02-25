@@ -24,6 +24,7 @@ import { join } from 'path';
 import { getConfig } from '../../config/paths.js';
 import { sendGmail, isGoogleConfigured } from '../../integrations/google.js';
 import { config } from '../../config/index.js';
+import { createIssuesFromBriefing, type IssueInput } from './shared/issue-generator.js';
 
 interface DeferredItem {
   title: string;
@@ -171,9 +172,11 @@ export function registerBriefingTools(server: McpServer): void {
         .describe('Send briefing via Gmail after generation. Requires Google OAuth credentials.'),
       recipient: z.string().email().max(100).optional()
         .describe('Email recipient (defaults to GOOGLE_BRIEFING_RECIPIENT config)'),
+      create_issues: z.boolean().optional()
+        .describe('Create draft GitHub issues from actionable briefing items (deferred items, production alerts). Max 3 issues per briefing.'),
     },
     { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    withErrorTracking('daily_briefing', async ({ github_context, monitoring_context, calendar_context, deferred_context, custom_focus, deliver_via_gmail, recipient }) => {
+    withErrorTracking('daily_briefing', async ({ github_context, monitoring_context, calendar_context, deferred_context, custom_focus, deliver_via_gmail, recipient, create_issues }) => {
       const costSummary = getCostSummaryForBriefing();
       const date = new Date().toISOString().split('T')[0];
 
@@ -254,7 +257,66 @@ Keep it brief and actionable. Use bullet points.`;
         }
       }
 
-      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta + deliveryNote }] };
+      // Issue creation from briefing items
+      let issueNote = '';
+      if (create_issues) {
+        const issueInputs: IssueInput[] = [];
+
+        // Source 1: Small deferred items (most actionable for watcher)
+        const unresolved = deferredStore.items.filter(i => !i.resolved);
+        const smallDeferred = unresolved.filter(i => i.effort === 'small');
+        for (const item of smallDeferred.slice(0, 3)) {
+          issueInputs.push({
+            title: item.title,
+            description: `Deferred tech debt from ${item.sprintPhase}.\n\n${item.title}`,
+            criteria: ['Implementation addresses the deferred item', 'npm run typecheck passes', 'No regressions introduced'],
+            effort: item.effort,
+            source: `deferred-item (${item.sprintPhase})`,
+          });
+        }
+
+        // Source 2: Production alerts from monitoring_context
+        if (monitoring_context && monitoring_context.toLowerCase().includes('error')) {
+          // Extract actionable errors — look for lines with error indicators
+          const lines = monitoring_context.split('\n');
+          for (const line of lines) {
+            const lower = line.toLowerCase();
+            if ((lower.includes('error') || lower.includes('fail') || lower.includes('critical'))
+                && !lower.includes('0 error') && !lower.includes('no error')) {
+              issueInputs.push({
+                title: `Fix: ${line.trim().slice(0, 80)}`,
+                description: `Production alert detected in daily briefing.\n\n**Alert:** ${line.trim()}\n\n**Full monitoring context:**\n${monitoring_context}`,
+                criteria: ['Root cause identified and fixed', 'Error no longer appears in monitoring', 'npm run typecheck passes'],
+                effort: 'small',
+                source: 'production-alert',
+              });
+              break; // Max 1 production alert issue per briefing
+            }
+          }
+        }
+
+        if (issueInputs.length > 0) {
+          const { created, skipped, errors: issueErrors } = createIssuesFromBriefing(issueInputs);
+
+          const parts: string[] = [];
+          if (created.length > 0) {
+            parts.push(`**Issues created:** ${created.map(i => `#${i.number}`).join(', ')}`);
+          }
+          if (skipped.length > 0) {
+            parts.push(`**Skipped (duplicate):** ${skipped.join(', ')}`);
+          }
+          if (issueErrors.length > 0) {
+            parts.push(`**Issue errors:** ${issueErrors.join(', ')}`);
+          }
+          if (parts.length > 0) {
+            issueNote = '\n\n' + parts.join('\n');
+          }
+        } else {
+          issueNote = '\n\n**No actionable items for issue creation.**';
+        }
+      }
+
+      return { content: [{ type: 'text' as const, text: result.finalOutput + errorInfo + meta + deliveryNote + issueNote }] };
     })
   );
 
