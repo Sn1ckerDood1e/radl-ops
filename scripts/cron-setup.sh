@@ -4,6 +4,7 @@
 #
 # Jobs installed:
 #   @reboot      - briefing on WSL start
+#   @reboot      - issue watcher daemon (30s delay for network)
 #   7am Mon-Fri  - daily briefing via Gmail
 #   7am Saturday - weekly briefing via Gmail
 #   midnight     - log cleanup (90-day retention)
@@ -14,6 +15,7 @@ set -euo pipefail
 
 CRONTAB_ENTRIES="# Radl-Ops automated tasks
 @reboot sleep 30 && /home/hb/radl-ops/scripts/briefing-on-wake.sh >> /tmp/radl-briefing.log 2>&1
+@reboot sleep 30 && /home/hb/radl-ops/scripts/watcher.sh start >> /tmp/radl-watcher-boot.log 2>&1
 0 7 * * 1-5 /home/hb/radl-ops/scripts/daily-briefing.sh >> /tmp/radl-daily-briefing.log 2>&1
 0 7 * * 6 /home/hb/radl-ops/scripts/weekly-briefing.sh >> /tmp/radl-weekly-briefing.log 2>&1
 0 0 * * * /home/hb/radl-ops/scripts/cleanup-logs.sh >> /tmp/radl-cleanup.log 2>&1
