@@ -187,7 +187,7 @@ try {
   initVecTable();
   indexAllKnowledge();
 } catch (err) {
-  logger.warn('Vector search init failed (non-fatal)', { error: String(err) });
+  logger.warn('Vector search init failed (non-fatal)', { error: err instanceof Error ? err.stack : String(err) });
 }
 
 async function main(): Promise<void> {
