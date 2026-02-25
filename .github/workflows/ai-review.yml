@@ -1,0 +1,32 @@
+name: AI Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    # Skip bot PRs and draft PRs
+    if: github.actor != 'dependabot[bot]' && !github.event.pull_request.draft
+    steps:
+      - uses: anthropics/claude-code-action@6ae1b29ba24a87419d013ae521ac0720d5771505 # v1.0.58
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR for:
+            1. Code quality (naming, structure, dead code)
+            2. Security issues (injection, auth bypass, secrets)
+            3. Test coverage gaps
+            4. Breaking changes or regressions
+
+            Focus on CRITICAL and HIGH severity issues. Be concise.
+            Do not suggest stylistic changes or add comments for working code.
+          use_sticky_comment: true

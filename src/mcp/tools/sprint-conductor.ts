@@ -22,6 +22,7 @@ import { getAnthropicClient } from '../../config/anthropic.js';
 import { logger } from '../../config/logger.js';
 import { withErrorTracking } from '../with-error-tracking.js';
 import { getConfig } from '../../config/paths.js';
+import { getProjectConfig } from '../../config/project-config.js';
 import { getIronLaws } from '../../guardrails/iron-laws.js';
 import { runEvalOptLoop } from '../../patterns/evaluator-optimizer.js';
 import type { TaskType } from '../../types/index.js';
@@ -1026,7 +1027,7 @@ export function registerSprintConductorTools(server: McpServer): void {
     withErrorTracking('sprint_conductor', async ({ feature, context, quality_threshold, parallel, effort }) => {
       const threshold = quality_threshold ?? 8;
       const enableParallel = parallel ?? true;
-      const effortLevel = effort ?? 'deep';
+      const effortLevel = effort ?? getProjectConfig().defaultEffort;
 
       logger.info('Sprint conductor requested', {
         featureLength: feature.length,
