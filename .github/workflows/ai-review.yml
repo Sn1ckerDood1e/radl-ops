@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     # Skip bot PRs and draft PRs
     if: github.actor != 'dependabot[bot]' && !github.event.pull_request.draft
+    # Non-blocking: don't fail PRs if API key is missing or review fails
+    continue-on-error: true
     steps:
       - uses: anthropics/claude-code-action@6ae1b29ba24a87419d013ae521ac0720d5771505 # v1.0.58
         with:
