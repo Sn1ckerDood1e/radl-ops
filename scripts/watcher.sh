@@ -23,6 +23,7 @@ POLL_INTERVAL="${WATCHER_POLL_INTERVAL:-60}"
 MAX_TURNS="${WATCHER_MAX_TURNS:-75}"
 MAX_BUDGET="${WATCHER_MAX_BUDGET:-5.00}"
 TIMEOUT="${WATCHER_TIMEOUT:-7200}"
+MAX_SUBISSUES="${WATCHER_MAX_SUBISSUES:-5}"
 REPO="${WATCHER_REPO:-Sn1ckerDood1e/Radl}"
 TMUX_SESSION="radl-watcher"
 LOG_DIR="$RADL_OPS_DIR/logs/watcher"
@@ -68,18 +69,27 @@ render_prompt() {
   local issue_body="$3"
   local branch_name="$4"
 
-  # Use awk for all substitutions — safe for arbitrary characters in issue content
-  # (sed with | delimiter breaks on pipe characters in titles)
+  # Sanitize replacement strings for awk gsub:
+  # - & expands to matched text in gsub replacement (must escape as \&)
+  # - \ must be escaped first to prevent double-escaping
+  # - awk -v interprets \n as real newline (must escape as \\n)
+  local safe_title safe_body safe_branch
+  safe_title=$(printf '%s' "$issue_title" | sed 's/\\/\\\\/g; s/&/\\&/g')
+  safe_body=$(printf '%s' "$issue_body" | sed 's/\\/\\\\/g; s/&/\\&/g')
+  safe_branch=$(printf '%s' "$branch_name" | sed 's/\\/\\\\/g; s/&/\\&/g')
+
   awk \
     -v num="$issue_num" \
-    -v title="$issue_title" \
-    -v body="$issue_body" \
-    -v branch="$branch_name" \
+    -v title="$safe_title" \
+    -v body="$safe_body" \
+    -v branch="$safe_branch" \
+    -v repo="$REPO" \
     '{
       gsub(/\{\{ISSUE_NUM\}\}/, num);
       gsub(/\{\{ISSUE_TITLE\}\}/, title);
       gsub(/\{\{ISSUE_BODY\}\}/, body);
       gsub(/\{\{BRANCH_NAME\}\}/, branch);
+      gsub(/\{\{REPO\}\}/, repo);
       print
     }' "$PROMPT_TEMPLATE"
 }
@@ -155,9 +165,14 @@ cmd_status() {
 
     # Show approved issues waiting
     local queue
-    queue=$("$GH" issue list --repo "$REPO" --label "approved" --state open --json number,title 2>/dev/null || echo "[]")
+    queue=$("$GH" issue list --repo "$REPO" --label "approved" --state open --json number,title,labels 2>/dev/null || echo "[]")
     local count
-    count=$(echo "$queue" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+    count=$(echo "$queue" | python3 -c "
+import sys, json
+SKIP = {'failed', 'decomposed', 'in-progress'}
+issues = json.load(sys.stdin)
+print(sum(1 for i in issues if not ({l['name'] for l in i.get('labels',[])} & SKIP)))
+" 2>/dev/null || echo "?")
     echo "Queue:   $count approved issues waiting"
 
     # Show in-progress issues
@@ -344,11 +359,30 @@ process_issue() {
   fi
 
   # Check if Claude decomposed the issue into sub-issues instead of implementing
-  local latest_comment
-  latest_comment=$("$GH" issue view "$issue_num" --repo "$REPO" \
-    --json comments --jq '[.comments[].body] | last' 2>/dev/null || echo "")
-  if echo "$latest_comment" | grep -qi "Decomposed into"; then
+  # Search ALL comments (not just last) — Claude may post progress after the decompose summary
+  local all_comments
+  all_comments=$("$GH" issue view "$issue_num" --repo "$REPO" \
+    --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+  if echo "$all_comments" | grep -qi "Decomposed into"; then
     log "DECOMPOSED: Issue #$issue_num was broken into sub-issues"
+
+    # Guard against unbounded sub-issue fanout (budget protection)
+    local subissue_count
+    subissue_count=$("$GH" issue list --repo "$REPO" \
+      --label "approved" --label "watcher" --state open \
+      --json number --jq 'length' 2>/dev/null || echo "0")
+    if [ "$subissue_count" -gt "$MAX_SUBISSUES" ]; then
+      log "WARNING: Decompose created $subissue_count sub-issues (max $MAX_SUBISSUES)"
+      comment_issue "$issue_num" "Warning: $subissue_count sub-issues queued (limit: $MAX_SUBISSUES). Watcher paused — review and remove excess \`approved\` labels before restarting."
+      remove_label "$issue_num" "in-progress"
+      add_label "$issue_num" "decomposed"
+      cd "$RADL_DIR"
+      git checkout main >> "$log_file" 2>&1 || true
+      git branch -D "$branch_name" >> "$log_file" 2>&1 || true
+      write_state "paused-decompose-overflow"
+      return
+    fi
+
     remove_label "$issue_num" "in-progress"
     remove_label "$issue_num" "approved"
     add_label "$issue_num" "decomposed"

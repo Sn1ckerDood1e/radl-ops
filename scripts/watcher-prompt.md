@@ -16,10 +16,11 @@ Before implementing anything, assess the scope of this issue:
 - Examples: "Fix settings page layout", "Add RSVP button to practice detail"
 
 **BROAD task** (decompose first):
-- Mentions "audit", "review", "all pages", "every", or "redesign"
-- Affects many pages or features without a single clear deliverable
+- Primary action is "audit", "review all", "every page", "redesign", or "overhaul"
+- Affects the whole app, all pages, or multiple unrelated features
 - Would require multiple hours of exploration + implementation
 - Examples: "UI/UX audit of the whole app", "Make everything responsive"
+- Note: A task like "Review error handling in auth module" is FOCUSED (specific scope)
 
 ### If BROAD → DECOMPOSE (do NOT implement)
 
@@ -28,16 +29,16 @@ Before implementing anything, assess the scope of this issue:
    - A specific, actionable title (e.g., "Fix text overflow on equipment cards")
    - A clear description with acceptance criteria
    - Estimated scope (which files/pages are affected)
-3. Create each sub-issue on GitHub:
+3. Create each sub-issue on GitHub (MAXIMUM 5 — do not exceed this limit):
    ```
-   gh issue create --repo Sn1ckerDood1e/Radl \
+   gh issue create --repo {{REPO}} \
      --title "Sub-issue title" \
      --body "Description with acceptance criteria. Part of #{{ISSUE_NUM}}." \
      --label approved --label watcher
    ```
 4. Post a summary comment on THIS issue:
    ```
-   gh issue comment {{ISSUE_NUM}} --repo Sn1ckerDood1e/Radl \
+   gh issue comment {{ISSUE_NUM}} --repo {{REPO}} \
      --body "Decomposed into: #X, #Y, #Z, #W. The watcher will execute these automatically."
    ```
    The comment MUST contain the phrase "Decomposed into" — the watcher looks for this.
@@ -54,7 +55,7 @@ Before implementing anything, assess the scope of this issue:
 5. Run `npm run typecheck` after every change
 6. Commit per-task with conventional commits (feat/fix/refactor)
 7. After each commit, post a progress update on the issue so the user can monitor from their phone:
-   Run: `gh issue comment {{ISSUE_NUM}} --repo Sn1ckerDood1e/Radl --body "Progress: <what you just completed>"`
+   Run: `gh issue comment {{ISSUE_NUM}} --repo {{REPO}} --body "Progress: <what you just completed>"`
 8. Log progress: mcp__radl-ops__sprint_progress after each commit
 9. When done: mcp__radl-ops__sprint_complete
 
