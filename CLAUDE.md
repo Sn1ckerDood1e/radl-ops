@@ -291,6 +291,10 @@ When a large/vague issue is approved (e.g., "audit all UI/UX"), Claude automatic
 
 **Prompt template:** `scripts/watcher-prompt.md`
 
+**Intelligence (auto-wired):**
+- **Pre-prompt knowledge injection** — `scripts/watcher-knowledge.mjs` runs inverse bloom against the knowledge base before each `claude -p` call. Surfaces relevant patterns, lessons, antibodies, and causal nodes as a "Watch out for" section appended to the prompt. Zero-cost (~200ms, no AI calls).
+- **Failure antibody creation** — `scripts/watcher-antibody.mjs` auto-creates an antibody via Haiku (~$0.001) when an issue fails (excluding cancellations). Future inverse bloom runs will surface the antibody for similar issues, creating a learning loop.
+
 ## Automated Tasks (Cron)
 
 Install with: `bash /home/hb/radl-ops/scripts/cron-setup.sh`
