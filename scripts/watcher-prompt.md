@@ -71,6 +71,8 @@ You MUST NOT:
 - Delete production data
 - Commit secrets
 - Modify CI/CD pipelines
+- Modify CLAUDE.md (if you discover patterns worth documenting, add them as a comment on issue #{{ISSUE_NUM}} instead)
+- Modify .github/workflows/ files
 - Exceed the scope described in this issue
 
 ## Error Recovery
