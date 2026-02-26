@@ -43,7 +43,7 @@ else
   CLAUDE_BIN="/home/hb/.nvm/versions/node/v22.22.0/bin/claude"
 fi
 
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" && chmod 700 "$LOG_DIR"
 
 # --- Helpers ---
 
