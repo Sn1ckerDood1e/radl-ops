@@ -147,6 +147,8 @@ cmd_start() {
 }
 
 cmd_stop() {
+  # Kill any lingering antibody processes before killing tmux
+  pkill -f "watcher-antibody.mjs" 2>/dev/null || true
   if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
     tmux kill-session -t "$TMUX_SESSION"
     write_state "stopped"
@@ -230,9 +232,10 @@ process_queue() {
     --search "sort:created-asc" \
     --limit 10 2>/dev/null || echo "[]")
 
-  # Filter and extract the first actionable issue (skip failed/decomposed/in-progress)
-  local first_issue
-  first_issue=$(echo "$issues" | python3 -c "
+  # Filter and extract the first actionable issue as JSON (skip failed/decomposed/in-progress)
+  # Uses JSON protocol to avoid newline-in-title corruption (HIGH-2 security fix)
+  local first_issue_json
+  first_issue_json=$(echo "$issues" | python3 -c "
 import sys, json
 SKIP_LABELS = {'failed', 'decomposed', 'in-progress'}
 issues = json.load(sys.stdin)
@@ -240,20 +243,19 @@ for i in issues:
     labels = {l['name'] for l in i.get('labels', [])}
     if labels & SKIP_LABELS:
         continue
-    title = i['title'].replace(\"'\", \"'\\\\''\")
-    body = (i.get('body') or '(no description)').replace(\"'\", \"'\\\\''\")
-    print(f\"{i['number']}\\n{title}\\n{body}\")
+    out = json.dumps({'num': i['number'], 'title': i['title'], 'body': i.get('body') or '(no description)'})
+    print(out)
     break
 " 2>/dev/null || echo "")
 
-  if [ -z "$first_issue" ]; then
+  if [ -z "$first_issue_json" ]; then
     return
   fi
 
   local issue_num issue_title issue_body
-  issue_num=$(echo "$first_issue" | head -1)
-  issue_title=$(echo "$first_issue" | sed -n '2p')
-  issue_body=$(echo "$first_issue" | tail -n +3)
+  issue_num=$(echo "$first_issue_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['num'])" 2>/dev/null)
+  issue_title=$(echo "$first_issue_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['title'])" 2>/dev/null)
+  issue_body=$(echo "$first_issue_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['body'])" 2>/dev/null)
 
   # Validate issue_num is an integer
   if ! [[ "$issue_num" =~ ^[0-9]+$ ]]; then
@@ -306,8 +308,9 @@ process_issue() {
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
   # Inject knowledge context from inverse bloom (zero-cost, ~200ms)
+  # Cap issue_body to 4000 chars before passing (MEDIUM-1 security fix)
   local knowledge_ctx
-  knowledge_ctx=$(node "$RADL_OPS_DIR/scripts/watcher-knowledge.mjs" "$issue_title" "$issue_body" 2>>"$log_file" || echo "")
+  knowledge_ctx=$(node "$RADL_OPS_DIR/scripts/watcher-knowledge.mjs" "$issue_title" "${issue_body:0:4000}" 2>>"$log_file" || echo "")
   if [ -n "$knowledge_ctx" ]; then
     prompt="${prompt}
 ${knowledge_ctx}"
@@ -498,12 +501,19 @@ fail_issue() {
   comment_issue "$issue_num" "Watcher failed: $reason"
 
   # Auto-create antibody from failure (skips cancellations)
-  # Runs in background (~$0.001 Haiku call) so cleanup isn't blocked
+  # Waits up to 30s then gives up — don't block cleanup indefinitely
   if ! echo "$reason" | grep -qi "cancel"; then
     node "$RADL_OPS_DIR/scripts/watcher-antibody.mjs" \
       "Watcher issue #$issue_num failed: $reason" \
       "watcher-issue-$issue_num" >> "$log_file" 2>&1 &
-    log "Antibody creation triggered for failure"
+    local antibody_pid=$!
+    log "Antibody creation started (pid $antibody_pid)"
+    # Kill after 30s if still running, then wait for exit
+    ( sleep 30 && kill "$antibody_pid" 2>/dev/null ) &
+    local timeout_pid=$!
+    wait "$antibody_pid" 2>/dev/null || true
+    kill "$timeout_pid" 2>/dev/null || true
+    log "Antibody creation complete"
   fi
 
   # Clean up: return to main and delete failed branch
