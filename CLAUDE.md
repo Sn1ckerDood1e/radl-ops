@@ -242,7 +242,9 @@ npm run typecheck
 
 GitHub Issues as work queue, `claude -p` as execution engine, tmux as daemon.
 
-**Label workflow:** `approved` → `in-progress` → `completed` / `failed`
+**Label workflow:**
+- Focused: `approved` → `in-progress` → `completed` / `failed`
+- Broad: `approved` → `in-progress` → `decomposed` (sub-issues created with `approved`)
 
 ```bash
 # Management commands
@@ -261,13 +263,23 @@ scripts/setup-labels.sh     # Create GitHub labels
 - $5 budget cap per issue (`WATCHER_MAX_BUDGET`)
 - 75 max turns per issue (`WATCHER_MAX_TURNS`)
 - `auto/issue-<num>-<slug>` branch naming
+- Skips issues with `failed`, `decomposed`, or `in-progress` labels
 - Logs: `logs/watcher/<date>-issue-<num>.log`
+
+**Auto-decompose for broad issues:**
+When a large/vague issue is approved (e.g., "audit all UI/UX"), Claude automatically:
+1. Reads the codebase to understand scope
+2. Breaks it into 3-5 focused sub-issues via `gh issue create`
+3. Labels sub-issues with `approved` + `watcher` for auto-execution
+4. Labels parent as `decomposed`
+5. Watcher picks up sub-issues one at a time in subsequent poll cycles
 
 **Creating issues for the watcher:**
 1. Create GitHub issue with clear title and description
 2. Include acceptance criteria in the issue body
 3. Add the `approved` label (watcher picks it up within 60s)
 4. Monitor via GitHub notifications for PR or failure comment
+5. For broad tasks: just describe what you want — Claude will decompose automatically
 
 **Prompt template:** `scripts/watcher-prompt.md`
 

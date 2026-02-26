@@ -5,7 +5,47 @@ This issue was pre-approved by the user. Proceed without asking for confirmation
 
 {{ISSUE_BODY}}
 
-## Instructions
+## Step 1: Scope Assessment (DO THIS FIRST)
+
+Before implementing anything, assess the scope of this issue:
+
+**FOCUSED task** (implement directly):
+- Affects 1-5 files with a clear deliverable
+- Can reasonably be completed in under 1 hour
+- Has specific acceptance criteria or a single clear outcome
+- Examples: "Fix settings page layout", "Add RSVP button to practice detail"
+
+**BROAD task** (decompose first):
+- Mentions "audit", "review", "all pages", "every", or "redesign"
+- Affects many pages or features without a single clear deliverable
+- Would require multiple hours of exploration + implementation
+- Examples: "UI/UX audit of the whole app", "Make everything responsive"
+
+### If BROAD → DECOMPOSE (do NOT implement)
+
+1. Read the codebase to understand what actually needs to change
+2. Break the work into 3-5 focused sub-issues, each with:
+   - A specific, actionable title (e.g., "Fix text overflow on equipment cards")
+   - A clear description with acceptance criteria
+   - Estimated scope (which files/pages are affected)
+3. Create each sub-issue on GitHub:
+   ```
+   gh issue create --repo Sn1ckerDood1e/Radl \
+     --title "Sub-issue title" \
+     --body "Description with acceptance criteria. Part of #{{ISSUE_NUM}}." \
+     --label approved --label watcher
+   ```
+4. Post a summary comment on THIS issue:
+   ```
+   gh issue comment {{ISSUE_NUM}} --repo Sn1ckerDood1e/Radl \
+     --body "Decomposed into: #X, #Y, #Z, #W. The watcher will execute these automatically."
+   ```
+   The comment MUST contain the phrase "Decomposed into" — the watcher looks for this.
+5. **STOP. Do not implement anything.** The watcher will pick up sub-issues one at a time.
+
+### If FOCUSED → Continue to Step 2
+
+## Step 2: Implementation (focused tasks only)
 
 1. You are already on branch `{{BRANCH_NAME}}`. Do NOT create a new branch.
 2. Start sprint tracking: mcp__radl-ops__sprint_start
@@ -35,4 +75,4 @@ You MUST NOT:
 ## Error Recovery
 
 If you hit a blocker after 3 attempts, STOP. Do not force it.
-Document what failed in a comment. The user will see it.
+Document what failed in a comment on issue #{{ISSUE_NUM}}. The user will see it.

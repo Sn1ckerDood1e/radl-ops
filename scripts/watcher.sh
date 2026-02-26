@@ -187,6 +187,12 @@ cmd_logs() {
 
 cmd_run() {
   # Main poll loop — runs inside tmux
+  # Unset CLAUDECODE ONCE at startup to prevent "nested session" errors.
+  # The tmux session inherits this from the parent Claude Code session.
+  # Must happen here (not per-issue) because the first claude -p call
+  # would see the inherited variable before per-issue unset takes effect.
+  unset CLAUDECODE
+
   log "Watcher started. Polling $REPO every ${POLL_INTERVAL}s."
   log "Config: max_turns=$MAX_TURNS, max_budget=\$${MAX_BUDGET}, timeout=${TIMEOUT}s"
   write_state "polling"
@@ -199,35 +205,30 @@ cmd_run() {
 
 process_queue() {
   # Fetch open issues with "approved" label, oldest first
+  # Include labels so we can filter out failed/decomposed issues
   local issues
   issues=$("$GH" issue list \
     --repo "$REPO" \
     --label "approved" \
     --state open \
-    --json number,title,body \
+    --json number,title,body,labels \
     --search "sort:created-asc" \
     --limit 10 2>/dev/null || echo "[]")
 
-  local count
-  count=$(echo "$issues" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-
-  if [ "$count" = "0" ]; then
-    return
-  fi
-
-  log "Found $count approved issue(s). Processing oldest first."
-
-  # Process one issue at a time (serial execution)
+  # Filter and extract the first actionable issue (skip failed/decomposed/in-progress)
   local first_issue
   first_issue=$(echo "$issues" | python3 -c "
 import sys, json
+SKIP_LABELS = {'failed', 'decomposed', 'in-progress'}
 issues = json.load(sys.stdin)
-if issues:
-    i = issues[0]
-    # Escape for shell: replace single quotes
+for i in issues:
+    labels = {l['name'] for l in i.get('labels', [])}
+    if labels & SKIP_LABELS:
+        continue
     title = i['title'].replace(\"'\", \"'\\\\''\")
     body = (i.get('body') or '(no description)').replace(\"'\", \"'\\\\''\")
     print(f\"{i['number']}\\n{title}\\n{body}\")
+    break
 " 2>/dev/null || echo "")
 
   if [ -z "$first_issue" ]; then
@@ -245,6 +246,7 @@ if issues:
     return
   fi
 
+  log "Found actionable issue #$issue_num: $issue_title"
   process_issue "$issue_num" "$issue_title" "$issue_body"
 }
 
@@ -289,8 +291,6 @@ process_issue() {
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
   # Run claude -p in background so we can check for cancel label
-  # Unset CLAUDECODE to avoid "nested session" error when watcher is started from within Claude Code
-  unset CLAUDECODE
   log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
 
   # Start in new process group so cancel can kill the entire tree
@@ -340,6 +340,24 @@ process_issue() {
   if [ "$claude_exit" -ne 0 ]; then
     log "FAILED: Claude exited with code $claude_exit for issue #$issue_num"
     fail_issue "$issue_num" "Claude exited with code $claude_exit. Check [watcher logs](branch: \`$branch_name\`)." "$log_file" "$branch_name"
+    return
+  fi
+
+  # Check if Claude decomposed the issue into sub-issues instead of implementing
+  local latest_comment
+  latest_comment=$("$GH" issue view "$issue_num" --repo "$REPO" \
+    --json comments --jq '[.comments[].body] | last' 2>/dev/null || echo "")
+  if echo "$latest_comment" | grep -qi "Decomposed into"; then
+    log "DECOMPOSED: Issue #$issue_num was broken into sub-issues"
+    remove_label "$issue_num" "in-progress"
+    remove_label "$issue_num" "approved"
+    add_label "$issue_num" "decomposed"
+    comment_issue "$issue_num" "Sub-issues created with \`approved\` label. The watcher will process them automatically."
+    # Clean up branch — decompose doesn't produce commits
+    cd "$RADL_DIR"
+    git checkout main >> "$log_file" 2>&1 || true
+    git branch -D "$branch_name" >> "$log_file" 2>&1 || true
+    write_state "polling"
     return
   fi
 
