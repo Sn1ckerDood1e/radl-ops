@@ -305,6 +305,17 @@ process_issue() {
   local prompt
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
+  # Inject knowledge context from inverse bloom (zero-cost, ~200ms)
+  local knowledge_ctx
+  knowledge_ctx=$(node "$RADL_OPS_DIR/scripts/watcher-knowledge.mjs" "$issue_title" "$issue_body" 2>>"$log_file" || echo "")
+  if [ -n "$knowledge_ctx" ]; then
+    prompt="${prompt}
+${knowledge_ctx}"
+    log "Knowledge context injected ($(echo "$knowledge_ctx" | wc -l) lines)"
+  else
+    log "No knowledge context matched for this issue"
+  fi
+
   # Run claude -p in background so we can check for cancel label
   log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
 
@@ -485,6 +496,15 @@ fail_issue() {
   remove_label "$issue_num" "in-progress"
   add_label "$issue_num" "failed"
   comment_issue "$issue_num" "Watcher failed: $reason"
+
+  # Auto-create antibody from failure (skips cancellations)
+  # Runs in background (~$0.001 Haiku call) so cleanup isn't blocked
+  if ! echo "$reason" | grep -qi "cancel"; then
+    node "$RADL_OPS_DIR/scripts/watcher-antibody.mjs" \
+      "Watcher issue #$issue_num failed: $reason" \
+      "watcher-issue-$issue_num" >> "$log_file" 2>&1 &
+    log "Antibody creation triggered for failure"
+  fi
 
   # Clean up: return to main and delete failed branch
   cd "$RADL_DIR"
