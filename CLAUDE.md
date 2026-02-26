@@ -264,7 +264,15 @@ scripts/setup-labels.sh     # Create GitHub labels
 - 75 max turns per issue (`WATCHER_MAX_TURNS`)
 - `auto/issue-<num>-<slug>` branch naming
 - Skips issues with `failed`, `decomposed`, or `in-progress` labels
+- Cancel mid-execution by adding `cancel` label to the issue
+- Watcher instances MUST NOT modify CLAUDE.md or .github/workflows/
 - Logs: `logs/watcher/<date>-issue-<num>.log`
+
+**Auto-merge (Radl repo):**
+PRs created by the watcher are auto-merged by `.github/workflows/auto-merge.yml`:
+- Cron runs every 5 minutes to catch PRs (+ event-driven `check_suite` and label triggers)
+- Requires `watcher` label, no `hold` label, all checks passing, 15-min safety delay
+- On merge: linked issues auto-closed, labels updated, comment posted
 
 **Auto-decompose for broad issues:**
 When a large/vague issue is approved (e.g., "audit all UI/UX"), Claude automatically:
