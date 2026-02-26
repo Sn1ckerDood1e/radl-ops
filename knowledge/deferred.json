@@ -341,6 +341,213 @@
       "sprintPhase": "Phase 92",
       "date": "2026-02-19T15:06:10.949Z",
       "resolved": true
+    },
+    {
+      "id": 39,
+      "title": "Lineup count cap per block in template apply endpoint",
+      "reason": "M-2 security finding — no cap on number of lineups per block. Low risk since coach-only endpoint.",
+      "effort": "small",
+      "sprintPhase": "Phase 101",
+      "date": "2026-02-21T22:36:28.531Z",
+      "resolved": false
+    },
+    {
+      "id": 40,
+      "title": "iCal calendar subscription feed",
+      "reason": "Requires new Prisma schema (CalendarToken model), not a bug fix — separate sprint",
+      "effort": "medium",
+      "sprintPhase": "Phase 102",
+      "date": "2026-02-22T01:29:39.821Z",
+      "resolved": false
+    },
+    {
+      "id": 41,
+      "title": "Lineup count cap per block in template apply endpoint",
+      "reason": "Pre-existing from Phase 101, not addressed in this UX sprint",
+      "effort": "small",
+      "sprintPhase": "Phase 102",
+      "date": "2026-02-22T01:29:39.821Z",
+      "resolved": false
+    },
+    {
+      "id": 42,
+      "title": "Push notification VAPID key generation + Edge Function deployment",
+      "reason": "Ops/config task requiring manual steps — not code changes. VAPID keys, env vars, supabase functions deploy.",
+      "effort": "small",
+      "sprintPhase": "Phase 103",
+      "date": "2026-02-22T13:27:54.888Z",
+      "resolved": false
+    },
+    {
+      "id": 43,
+      "title": "Season manager component at 747 lines — extract schedule builder",
+      "reason": "Near 800 line limit but functional. Extract ScheduleBuilder sub-component when next touched.",
+      "effort": "small",
+      "sprintPhase": "Phase 103",
+      "date": "2026-02-22T13:27:54.888Z",
+      "resolved": false
+    },
+    {
+      "id": 44,
+      "title": "Remaining ~60 teal references in files outside Phase 104 scope (equipment, roster, invitations, compliance)",
+      "reason": "Phase 107 will sweep these as part of page-by-page polish",
+      "effort": "medium",
+      "sprintPhase": "Phase 104",
+      "date": "2026-02-22T18:34:47.737Z",
+      "resolved": false
+    },
+    {
+      "id": 45,
+      "title": "iCal feed rate limiting (M-1 from security review)",
+      "reason": "Pre-existing, not a regression. Needs Upstash integration on public endpoint",
+      "effort": "small",
+      "sprintPhase": "Phase 104",
+      "date": "2026-02-22T18:34:47.737Z",
+      "resolved": false
+    },
+    {
+      "id": 46,
+      "title": "Pass clubId as prop to PermissionGrantsSection (M-2 from security review)",
+      "reason": "Server guard is solid, client-side improvement for defence-in-depth",
+      "effort": "small",
+      "sprintPhase": "Phase 104",
+      "date": "2026-02-22T18:34:47.738Z",
+      "resolved": false
+    },
+    {
+      "id": 47,
+      "title": "feature-flags-settings.tsx still uses setTimeout success pattern instead of toast",
+      "reason": "Missed in T3 settings sweep, minor inconsistency",
+      "effort": "small",
+      "sprintPhase": "Phase 104",
+      "date": "2026-02-22T18:34:47.738Z",
+      "resolved": false
+    },
+    {
+      "id": 48,
+      "title": "Equipment checkout tab UX — remove confusing Check In tab or make it functional",
+      "reason": "Need to investigate the full checkout/checkin flow more deeply before changing it",
+      "effort": "small",
+      "sprintPhase": "Phase 106",
+      "date": "2026-02-23T16:07:21.638Z",
+      "resolved": false
+    },
+    {
+      "id": 49,
+      "title": "Skip for now in athlete wizard calls handleComplete instead of complete",
+      "reason": "Pre-existing bug: 'Skip for now' saves empty preferences instead of just closing wizard. Low impact since preferences are all optional.",
+      "effort": "small",
+      "sprintPhase": "Phase 107",
+      "date": "2026-02-23T16:23:42.896Z",
+      "resolved": false
+    },
+    {
+      "id": 50,
+      "title": "N+1 query: RSVP attendance fetched separately from practice query",
+      "reason": "Could be joined into the main practice query with include. Functional as-is, minor performance hit.",
+      "effort": "small",
+      "sprintPhase": "Phase 107",
+      "date": "2026-02-23T16:23:42.896Z",
+      "resolved": false
+    },
+    {
+      "id": 51,
+      "title": "T2 spec_compliance tests missing in phase111.test.ts",
+      "reason": "Test header claims T2 coverage but no describe block exists. Handler extraction works but no assertions.",
+      "effort": "small",
+      "sprintPhase": "Phase 111",
+      "date": "2026-02-24T13:21:26.454Z",
+      "resolved": false
+    },
+    {
+      "id": 52,
+      "title": "Level 3 wired check uses naive basename grep",
+      "reason": "grep for basename produces false positives (matches comments, vars). Should narrow to import statement pattern.",
+      "effort": "small",
+      "sprintPhase": "Phase 111",
+      "date": "2026-02-24T13:21:26.454Z",
+      "resolved": false
+    },
+    {
+      "id": 53,
+      "title": "Add trace file size cap (50MB daily limit)",
+      "reason": "M-2 from security review: no file size limit on JSONL trace files prevents unbounded growth",
+      "effort": "small",
+      "sprintPhase": "Phase 112",
+      "date": "2026-02-24T13:47:56.154Z",
+      "resolved": false
+    },
+    {
+      "id": 54,
+      "title": "Add Zod schemas for external API response validation in data fetchers",
+      "reason": "M-4 from security review: TypeScript casts instead of runtime validation on Vercel/Sentry/GitHub responses",
+      "effort": "medium",
+      "sprintPhase": "Phase 112",
+      "date": "2026-02-24T13:47:56.154Z",
+      "resolved": false
+    },
+    {
+      "id": 55,
+      "title": "Export WaveInfo interface from decisions.ts",
+      "reason": "Medium code review finding: interface used in exported signatures but not exported itself",
+      "effort": "small",
+      "sprintPhase": "Phase 112",
+      "date": "2026-02-24T13:47:56.154Z",
+      "resolved": false
+    },
+    {
+      "id": 56,
+      "title": "Add entry text lookup for VEC-only results in knowledge_query",
+      "reason": "Vector-only results show raw entry IDs instead of content. Need getEntryText() helper in fts-index.ts.",
+      "effort": "small",
+      "sprintPhase": "Phase 113",
+      "date": "2026-02-25T00:42:26.151Z",
+      "resolved": false
+    },
+    {
+      "id": 57,
+      "title": "Add output sanitization to session recovery formatRecoveryMarkdown",
+      "reason": "Control chars/ANSI escapes in JSONL content could inject misleading context into hook output.",
+      "effort": "small",
+      "sprintPhase": "Phase 113",
+      "date": "2026-02-25T00:42:26.152Z",
+      "resolved": false
+    },
+    {
+      "id": 58,
+      "title": "Split boundary value tests into separate it blocks for better fault isolation",
+      "reason": "Code reviewer flagged dual-assertion tests as reducing diagnostic clarity on failure",
+      "effort": "small",
+      "sprintPhase": "Phase 113",
+      "date": "2026-02-25T00:56:09.098Z",
+      "resolved": false
+    },
+    {
+      "id": 59,
+      "title": "Add ENOENT-differentiated logging to config load (not just SyntaxError)",
+      "reason": "Security reviewer recommended logging EACCES/EISDIR separately from silent ENOENT fallback",
+      "effort": "small",
+      "sprintPhase": "Phase 113",
+      "date": "2026-02-25T00:56:09.098Z",
+      "resolved": false
+    },
+    {
+      "id": 60,
+      "title": "Wrap vector index DELETE+rebuild in single transaction",
+      "reason": "indexAllKnowledge() DELETEs then rebuilds outside a single transaction — partial failure leaves empty table. Security review Medium-2.",
+      "effort": "small",
+      "sprintPhase": "Phase 114",
+      "date": "2026-02-25T01:30:33.865Z",
+      "resolved": false
+    },
+    {
+      "id": 61,
+      "title": "Harden shell hook python3 path interpolation to use sys.argv",
+      "reason": "session-stop.sh and pre-compact.sh interpolate paths into python3 -c strings. Safe with hardcoded paths but fragile. Security review Medium-1.",
+      "effort": "small",
+      "sprintPhase": "Phase 114",
+      "date": "2026-02-25T01:30:33.865Z",
+      "resolved": false
     }
   ]
 }

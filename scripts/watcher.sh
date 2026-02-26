@@ -23,6 +23,7 @@ POLL_INTERVAL="${WATCHER_POLL_INTERVAL:-60}"
 MAX_TURNS="${WATCHER_MAX_TURNS:-75}"
 MAX_BUDGET="${WATCHER_MAX_BUDGET:-5.00}"
 TIMEOUT="${WATCHER_TIMEOUT:-7200}"
+MAX_SUBISSUES="${WATCHER_MAX_SUBISSUES:-5}"
 REPO="${WATCHER_REPO:-Sn1ckerDood1e/Radl}"
 TMUX_SESSION="radl-watcher"
 LOG_DIR="$RADL_OPS_DIR/logs/watcher"
@@ -68,12 +69,29 @@ render_prompt() {
   local issue_body="$3"
   local branch_name="$4"
 
-  sed \
-    -e "s|{{ISSUE_NUM}}|$issue_num|g" \
-    -e "s|{{ISSUE_TITLE}}|$issue_title|g" \
-    -e "s|{{BRANCH_NAME}}|$branch_name|g" \
-    "$PROMPT_TEMPLATE" | \
-  awk -v body="$issue_body" '{gsub(/\{\{ISSUE_BODY\}\}/, body); print}'
+  # Sanitize replacement strings for awk gsub:
+  # - & expands to matched text in gsub replacement (must escape as \&)
+  # - \ must be escaped first to prevent double-escaping
+  # - awk -v interprets \n as real newline (must escape as \\n)
+  local safe_title safe_body safe_branch
+  safe_title=$(printf '%s' "$issue_title" | sed 's/\\/\\\\/g; s/&/\\&/g')
+  safe_body=$(printf '%s' "$issue_body" | sed 's/\\/\\\\/g; s/&/\\&/g')
+  safe_branch=$(printf '%s' "$branch_name" | sed 's/\\/\\\\/g; s/&/\\&/g')
+
+  awk \
+    -v num="$issue_num" \
+    -v title="$safe_title" \
+    -v body="$safe_body" \
+    -v branch="$safe_branch" \
+    -v repo="$REPO" \
+    '{
+      gsub(/\{\{ISSUE_NUM\}\}/, num);
+      gsub(/\{\{ISSUE_TITLE\}\}/, title);
+      gsub(/\{\{ISSUE_BODY\}\}/, body);
+      gsub(/\{\{BRANCH_NAME\}\}/, branch);
+      gsub(/\{\{REPO\}\}/, repo);
+      print
+    }' "$PROMPT_TEMPLATE"
 }
 
 gh_api() {
@@ -122,6 +140,7 @@ cmd_start() {
     exit 1
   fi
 
+  write_state "starting"
   echo "Starting watcher in tmux session '$TMUX_SESSION'..."
   tmux new-session -d -s "$TMUX_SESSION" "$RADL_OPS_DIR/scripts/watcher.sh run"
   echo "Watcher started. Use 'watcher.sh logs' to follow output."
@@ -146,9 +165,14 @@ cmd_status() {
 
     # Show approved issues waiting
     local queue
-    queue=$("$GH" issue list --repo "$REPO" --label "approved" --state open --json number,title 2>/dev/null || echo "[]")
+    queue=$("$GH" issue list --repo "$REPO" --label "approved" --state open --json number,title,labels 2>/dev/null || echo "[]")
     local count
-    count=$(echo "$queue" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+    count=$(echo "$queue" | python3 -c "
+import sys, json
+SKIP = {'failed', 'decomposed', 'in-progress'}
+issues = json.load(sys.stdin)
+print(sum(1 for i in issues if not ({l['name'] for l in i.get('labels',[])} & SKIP)))
+" 2>/dev/null || echo "?")
     echo "Queue:   $count approved issues waiting"
 
     # Show in-progress issues
@@ -178,6 +202,12 @@ cmd_logs() {
 
 cmd_run() {
   # Main poll loop — runs inside tmux
+  # Unset CLAUDECODE ONCE at startup to prevent "nested session" errors.
+  # The tmux session inherits this from the parent Claude Code session.
+  # Must happen here (not per-issue) because the first claude -p call
+  # would see the inherited variable before per-issue unset takes effect.
+  unset CLAUDECODE
+
   log "Watcher started. Polling $REPO every ${POLL_INTERVAL}s."
   log "Config: max_turns=$MAX_TURNS, max_budget=\$${MAX_BUDGET}, timeout=${TIMEOUT}s"
   write_state "polling"
@@ -190,35 +220,30 @@ cmd_run() {
 
 process_queue() {
   # Fetch open issues with "approved" label, oldest first
+  # Include labels so we can filter out failed/decomposed issues
   local issues
   issues=$("$GH" issue list \
     --repo "$REPO" \
     --label "approved" \
     --state open \
-    --json number,title,body \
+    --json number,title,body,labels \
     --search "sort:created-asc" \
     --limit 10 2>/dev/null || echo "[]")
 
-  local count
-  count=$(echo "$issues" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-
-  if [ "$count" = "0" ]; then
-    return
-  fi
-
-  log "Found $count approved issue(s). Processing oldest first."
-
-  # Process one issue at a time (serial execution)
+  # Filter and extract the first actionable issue (skip failed/decomposed/in-progress)
   local first_issue
   first_issue=$(echo "$issues" | python3 -c "
 import sys, json
+SKIP_LABELS = {'failed', 'decomposed', 'in-progress'}
 issues = json.load(sys.stdin)
-if issues:
-    i = issues[0]
-    # Escape for shell: replace single quotes
+for i in issues:
+    labels = {l['name'] for l in i.get('labels', [])}
+    if labels & SKIP_LABELS:
+        continue
     title = i['title'].replace(\"'\", \"'\\\\''\")
     body = (i.get('body') or '(no description)').replace(\"'\", \"'\\\\''\")
     print(f\"{i['number']}\\n{title}\\n{body}\")
+    break
 " 2>/dev/null || echo "")
 
   if [ -z "$first_issue" ]; then
@@ -230,6 +255,13 @@ if issues:
   issue_title=$(echo "$first_issue" | sed -n '2p')
   issue_body=$(echo "$first_issue" | tail -n +3)
 
+  # Validate issue_num is an integer
+  if ! [[ "$issue_num" =~ ^[0-9]+$ ]]; then
+    log "ERROR: Invalid issue number '$issue_num', skipping"
+    return
+  fi
+
+  log "Found actionable issue #$issue_num: $issue_title"
   process_issue "$issue_num" "$issue_title" "$issue_body"
 }
 
@@ -273,16 +305,46 @@ process_issue() {
   local prompt
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
-  # Run claude -p
-  # Unset CLAUDECODE to avoid "nested session" error when watcher is started from within Claude Code
-  unset CLAUDECODE
+  # Run claude -p in background so we can check for cancel label
   log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
-  local claude_exit=0
-  timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
+
+  # Start in new process group so cancel can kill the entire tree
+  setsid timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
     --max-turns "$MAX_TURNS" \
     --permission-mode bypassPermissions \
     --max-budget-usd "$MAX_BUDGET" \
-    >> "$log_file" 2>&1 || claude_exit=$?
+    >> "$log_file" 2>&1 &
+  local claude_pid=$!
+
+  # Monitor for cancel label while claude runs
+  local claude_exit=0
+  while kill -0 "$claude_pid" 2>/dev/null; do
+    # Check if cancel label was added
+    local labels
+    labels=$("$GH" issue view "$issue_num" --repo "$REPO" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+    if echo "$labels" | grep -q "^cancel$"; then
+      log "CANCELLED: Issue #$issue_num cancelled via label"
+      kill -TERM -"$claude_pid" 2>/dev/null || kill "$claude_pid" 2>/dev/null || true
+      sleep 2
+      kill -KILL -"$claude_pid" 2>/dev/null || true
+      wait "$claude_pid" 2>/dev/null || true
+      remove_label "$issue_num" "cancel"
+      fail_issue "$issue_num" "Cancelled by user via \`cancel\` label." "$log_file" "$branch_name"
+      return
+    fi
+    sleep 15
+  done
+  wait "$claude_pid" || claude_exit=$?
+
+  # Check for late cancel (label added in last polling window after claude finished)
+  local post_labels
+  post_labels=$("$GH" issue view "$issue_num" --repo "$REPO" --json labels --jq '.labels[].name' 2>/dev/null || echo "")
+  if echo "$post_labels" | grep -q "^cancel$"; then
+    log "CANCELLED (late): Issue #$issue_num had cancel label set after completion"
+    remove_label "$issue_num" "cancel"
+    fail_issue "$issue_num" "Cancelled by user via \`cancel\` label (late)." "$log_file" "$branch_name"
+    return
+  fi
 
   if [ "$claude_exit" -eq 124 ]; then
     log "TIMEOUT: Issue #$issue_num exceeded ${TIMEOUT}s"
@@ -296,6 +358,43 @@ process_issue() {
     return
   fi
 
+  # Check if Claude decomposed the issue into sub-issues instead of implementing
+  # Search ALL comments (not just last) — Claude may post progress after the decompose summary
+  local all_comments
+  all_comments=$("$GH" issue view "$issue_num" --repo "$REPO" \
+    --json comments --jq '[.comments[].body] | join("\n")' 2>/dev/null || echo "")
+  if echo "$all_comments" | grep -qi "Decomposed into"; then
+    log "DECOMPOSED: Issue #$issue_num was broken into sub-issues"
+
+    # Guard against unbounded sub-issue fanout (budget protection)
+    local subissue_count
+    subissue_count=$("$GH" issue list --repo "$REPO" \
+      --label "approved" --label "watcher" --state open \
+      --json number --jq 'length' 2>/dev/null || echo "0")
+    if [ "$subissue_count" -gt "$MAX_SUBISSUES" ]; then
+      log "WARNING: Decompose created $subissue_count sub-issues (max $MAX_SUBISSUES)"
+      comment_issue "$issue_num" "Warning: $subissue_count sub-issues queued (limit: $MAX_SUBISSUES). Watcher paused — review and remove excess \`approved\` labels before restarting."
+      remove_label "$issue_num" "in-progress"
+      add_label "$issue_num" "decomposed"
+      cd "$RADL_DIR"
+      git checkout main >> "$log_file" 2>&1 || true
+      git branch -D "$branch_name" >> "$log_file" 2>&1 || true
+      write_state "paused-decompose-overflow"
+      return
+    fi
+
+    remove_label "$issue_num" "in-progress"
+    remove_label "$issue_num" "approved"
+    add_label "$issue_num" "decomposed"
+    comment_issue "$issue_num" "Sub-issues created with \`approved\` label. The watcher will process them automatically."
+    # Clean up branch — decompose doesn't produce commits
+    cd "$RADL_DIR"
+    git checkout main >> "$log_file" 2>&1 || true
+    git branch -D "$branch_name" >> "$log_file" 2>&1 || true
+    write_state "polling"
+    return
+  fi
+
   # Check if any commits were made
   cd "$RADL_DIR"
   local commit_count
@@ -305,6 +404,16 @@ process_issue() {
     log "WARNING: No commits made for issue #$issue_num"
     fail_issue "$issue_num" "Claude completed but made no commits. The issue may need a clearer description." "$log_file" "$branch_name"
     return
+  fi
+
+  # Build gate: verify typecheck passes before creating PR
+  log "Running typecheck for issue #$issue_num..."
+  local typecheck_ok=true
+  npm run typecheck >> "$log_file" 2>&1 || typecheck_ok=false
+
+  if [ "$typecheck_ok" = false ]; then
+    log "WARNING: Typecheck failed for issue #$issue_num, PR will be created anyway"
+    comment_issue "$issue_num" "Warning: \`npm run typecheck\` failed on this branch. PR created but may need fixes."
   fi
 
   # Push and create PR

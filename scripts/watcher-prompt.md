@@ -5,7 +5,48 @@ This issue was pre-approved by the user. Proceed without asking for confirmation
 
 {{ISSUE_BODY}}
 
-## Instructions
+## Step 1: Scope Assessment (DO THIS FIRST)
+
+Before implementing anything, assess the scope of this issue:
+
+**FOCUSED task** (implement directly):
+- Affects 1-5 files with a clear deliverable
+- Can reasonably be completed in under 1 hour
+- Has specific acceptance criteria or a single clear outcome
+- Examples: "Fix settings page layout", "Add RSVP button to practice detail"
+
+**BROAD task** (decompose first):
+- Primary action is "audit", "review all", "every page", "redesign", or "overhaul"
+- Affects the whole app, all pages, or multiple unrelated features
+- Would require multiple hours of exploration + implementation
+- Examples: "UI/UX audit of the whole app", "Make everything responsive"
+- Note: A task like "Review error handling in auth module" is FOCUSED (specific scope)
+
+### If BROAD → DECOMPOSE (do NOT implement)
+
+1. Read the codebase to understand what actually needs to change
+2. Break the work into 3-5 focused sub-issues, each with:
+   - A specific, actionable title (e.g., "Fix text overflow on equipment cards")
+   - A clear description with acceptance criteria
+   - Estimated scope (which files/pages are affected)
+3. Create each sub-issue on GitHub (MAXIMUM 5 — do not exceed this limit):
+   ```
+   gh issue create --repo {{REPO}} \
+     --title "Sub-issue title" \
+     --body "Description with acceptance criteria. Part of #{{ISSUE_NUM}}." \
+     --label approved --label watcher
+   ```
+4. Post a summary comment on THIS issue:
+   ```
+   gh issue comment {{ISSUE_NUM}} --repo {{REPO}} \
+     --body "Decomposed into: #X, #Y, #Z, #W. The watcher will execute these automatically."
+   ```
+   The comment MUST contain the phrase "Decomposed into" — the watcher looks for this.
+5. **STOP. Do not implement anything.** The watcher will pick up sub-issues one at a time.
+
+### If FOCUSED → Continue to Step 2
+
+## Step 2: Implementation (focused tasks only)
 
 1. You are already on branch `{{BRANCH_NAME}}`. Do NOT create a new branch.
 2. Start sprint tracking: mcp__radl-ops__sprint_start
@@ -13,8 +54,10 @@ This issue was pre-approved by the user. Proceed without asking for confirmation
 4. Implement the feature/fix described above
 5. Run `npm run typecheck` after every change
 6. Commit per-task with conventional commits (feat/fix/refactor)
-7. Log progress: mcp__radl-ops__sprint_progress after each commit
-8. When done: mcp__radl-ops__sprint_complete
+7. After each commit, post a progress update on the issue so the user can monitor from their phone:
+   Run: `gh issue comment {{ISSUE_NUM}} --repo {{REPO}} --body "Progress: <what you just completed>"`
+8. Log progress: mcp__radl-ops__sprint_progress after each commit
+9. When done: mcp__radl-ops__sprint_complete
 
 ## Autonomy Rules (OVERRIDE for this session)
 
@@ -33,4 +76,4 @@ You MUST NOT:
 ## Error Recovery
 
 If you hit a blocker after 3 attempts, STOP. Do not force it.
-Document what failed in a comment. The user will see it.
+Document what failed in a comment on issue #{{ISSUE_NUM}}. The user will see it.

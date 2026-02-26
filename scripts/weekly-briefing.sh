@@ -9,7 +9,13 @@
 
 set -e
 
-BRIEFING_DIR="/home/hb/radl-ops/briefings"
+RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+# Load nvm — required for cron which doesn't source .bashrc
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
+BRIEFING_DIR="$RADL_OPS_DIR/briefings"
 DATE=$(date +%Y-%m-%d)
 WEEK_START=$(date -d "6 days ago" +%Y-%m-%d)
 BRIEFING_FILE="$BRIEFING_DIR/weekly-$DATE.md"
@@ -26,11 +32,11 @@ if command -v claude &>/dev/null; then
 elif [ -n "$NODE_VERSION" ] && [ -x "$NVM_CLAUDE" ]; then
     CLAUDE_BIN="$NVM_CLAUDE"
 else
-    CLAUDE_BIN="/home/hb/.nvm/versions/node/v22.22.0/bin/claude"
+    CLAUDE_BIN="$HOME/.nvm/versions/node/v22.22.0/bin/claude"
 fi
 
 # Change to radl-ops directory for CLAUDE.md context
-cd /home/hb/radl-ops
+cd "$RADL_OPS_DIR"
 
 if [ ! -x "$CLAUDE_BIN" ]; then
     echo "[$DATE] ERROR: Claude binary not found at $CLAUDE_BIN"
@@ -38,6 +44,9 @@ if [ ! -x "$CLAUDE_BIN" ]; then
 fi
 
 echo "[$DATE] Generating weekly briefing ($WEEK_START to $DATE) with Gmail delivery..."
+
+# Unset CLAUDECODE to avoid "nested session" error if invoked from within Claude Code
+unset CLAUDECODE
 
 # Generate and deliver briefing using Claude Code with MCP tools
 # bypassPermissions: required for autonomous cron execution (no human in the loop)

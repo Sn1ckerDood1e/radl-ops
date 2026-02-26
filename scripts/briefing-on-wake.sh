@@ -6,6 +6,10 @@ set -e
 
 RADL_OPS_DIR="${RADL_OPS_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
+# Load nvm — required for cron which doesn't source .bashrc
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+
 BRIEFING_DIR="$RADL_OPS_DIR/briefings"
 DATE=$(date +%Y-%m-%d)
 DAY_OF_WEEK=$(date +%u)  # 1=Monday, 6=Saturday, 7=Sunday

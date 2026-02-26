@@ -1,1 +1,1329 @@
-{ "nodes": [], "edges": [] }
+{
+  "nodes": [
+    {
+      "id": "c-phase89-1",
+      "type": "condition",
+      "label": "Deferred technical debt (TS errors, security issues, DRY violations)",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "d-phase89-1",
+      "type": "decision",
+      "label": "Prioritize systematic cleanup of accumulated deferred items",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "d-phase89-2",
+      "type": "decision",
+      "label": "Resolve deferred #14 with date range validation fix for practice duplication",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "d-phase89-3",
+      "type": "decision",
+      "label": "Resolve deferred #15 with checklist dismiss error handling",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "d-phase89-4",
+      "type": "decision",
+      "label": "Classify 7 deferred items (#1, #2, #3, #4, #9, #13, #21) as no longer applicable",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "o-phase89-1",
+      "type": "outcome",
+      "label": "9 deferred items resolved across functionality and maintenance",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "o-phase89-2",
+      "type": "outcome",
+      "label": "Sprint completed 30 minutes under 1.5 hour estimate (67% time savings)",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "o-phase89-3",
+      "type": "outcome",
+      "label": "Date range validation bug fixed (prevents practice duplication errors)",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "o-phase89-4",
+      "type": "outcome",
+      "label": "Checklist error handling improved (reduced dismiss-related failures)",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "o-phase89-5",
+      "type": "outcome",
+      "label": "Technical debt backlog clarified (7 items removed from active queue)",
+      "sprint": "phase89",
+      "date": "2026-02-18"
+    },
+    {
+      "id": "d-phase90-1",
+      "type": "decision",
+      "label": "Implement Gmail delivery for weekly_briefing MCP tool",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase90-2",
+      "type": "decision",
+      "label": "Rewrite weekly-briefing.sh from Slack to Gmail",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase90-3",
+      "type": "decision",
+      "label": "Update cron-setup.sh with daily+weekly schedules",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase90-4",
+      "type": "decision",
+      "label": "Harden daily-briefing.sh with dynamic paths",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase90-5",
+      "type": "decision",
+      "label": "Add action repetition detector in session_health",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase90-6",
+      "type": "decision",
+      "label": "Implement tiered severity in briefing template",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase90-1",
+      "type": "outcome",
+      "label": "All 6 ops layer tasks completed successfully",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase90-2",
+      "type": "outcome",
+      "label": "Sprint completed 30 minutes under 1 hour estimate (50% time savings)",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase90-1",
+      "type": "condition",
+      "label": "Ops layer requiring tightening (briefings, health monitoring, cron jobs)",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase90-2",
+      "type": "condition",
+      "label": "Email delivery shift from Slack to Gmail for briefings",
+      "sprint": "phase90",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase91-1",
+      "type": "condition",
+      "label": "Accumulated technical debt (19 deferred items, TS errors, duplicates)",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase91-1",
+      "type": "decision",
+      "label": "Execute comprehensive cleanup of deferred list (mark 19 items resolved)",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase91-2",
+      "type": "decision",
+      "label": "Implement unit tests for ConfirmDialog (11 tests with Vitest + jsdom)",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase91-3",
+      "type": "decision",
+      "label": "Add aria-labels to 13 components for accessibility",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase91-4",
+      "type": "decision",
+      "label": "Resolve TypeScript errors in queries.ts and test files",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase91-1",
+      "type": "outcome",
+      "label": "33 of 35 deferred items resolved (94% completion)",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase91-2",
+      "type": "outcome",
+      "label": "All TypeScript type checks pass",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase91-3",
+      "type": "outcome",
+      "label": "ConfirmDialog unit tests passing (11 tests, 100% coverage)",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase91-4",
+      "type": "outcome",
+      "label": "Sprint completed 1.5 hours actual vs 3 hour estimate (50% time savings)",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase91-5",
+      "type": "outcome",
+      "label": "915 radl-ops tests pass",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase91-2",
+      "type": "condition",
+      "label": "Previous cleanup efforts from Phase 89-90 built momentum and removed 7 items",
+      "sprint": "phase91",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase92-1",
+      "type": "decision",
+      "label": "Wire T1-T3: Implement inferTaskType, inferComplexity, and A1 estimation auto-record with quality gates",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase92-2",
+      "type": "decision",
+      "label": "Wire T4-T7: Create antibodyCore export, proposeChecksFromLessons export, A2 antibody auto-create, A3 crystallize auto-propose",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase92-3",
+      "type": "decision",
+      "label": "Implement causal extraction prompt with edge retry mechanism (T8)",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase92-4",
+      "type": "decision",
+      "label": "Add comprehensive test suite for intelligence layer wiring (T9-T12)",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase92-5",
+      "type": "decision",
+      "label": "Fix completedRaw loading to load unconditionally for quality gates",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase92-1",
+      "type": "outcome",
+      "label": "Wave 1 complete: Task inference and estimation auto-record with quality gates working",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase92-2",
+      "type": "outcome",
+      "label": "Wave 2 complete: Antibody and crystallize automation workflows wired",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase92-3",
+      "type": "outcome",
+      "label": "Wave 3 complete: Causal extraction with retry mechanism implemented",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase92-4",
+      "type": "outcome",
+      "label": "119 new tests passing, 941 total test suite for intelligence layer",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "o-phase92-5",
+      "type": "outcome",
+      "label": "Sprint completed 1 hour actual vs 1.5 hour estimate (33% time savings)",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase92-1",
+      "type": "condition",
+      "label": "Multiple intelligence automation tasks requiring wiring into workflows",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase92-2",
+      "type": "condition",
+      "label": "Need for robust test coverage on intelligence layer integrations",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "c-phase92-3",
+      "type": "condition",
+      "label": "Quality gate data loading issue (completedRaw not loaded unconditionally)",
+      "sprint": "phase92",
+      "date": "2026-02-19"
+    },
+    {
+      "id": "d-phase96-1",
+      "type": "decision",
+      "label": "Simplify practices page to calendar-only view",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "d-phase96-2",
+      "type": "decision",
+      "label": "Implement bulk delete practices API with select mode",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "d-phase96-3",
+      "type": "decision",
+      "label": "Apply truncate protection to button text across 52 files",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "d-phase96-4",
+      "type": "decision",
+      "label": "Refactor facility admin sidebar and bottom nav to match dashboard pattern",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "o-phase96-1",
+      "type": "outcome",
+      "label": "Practices page UX improved with removal of dead list view and queries",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "o-phase96-2",
+      "type": "outcome",
+      "label": "Bulk delete functionality enabled with CSRF protection and confirm dialog",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "o-phase96-3",
+      "type": "outcome",
+      "label": "Button text overflow bugs prevented across UI components",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "o-phase96-4",
+      "type": "outcome",
+      "label": "TypeScript passes all quality gates without errors",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "o-phase96-5",
+      "type": "outcome",
+      "label": "Facility admin layout patterns unified with existing dashboard",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "o-phase96-6",
+      "type": "outcome",
+      "label": "Sprint completed 1.5 hours actual vs 3 hour estimate (50% time savings)",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "c-phase96-1",
+      "type": "condition",
+      "label": "CJR/LRC feedback addressing UI and API gaps",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "c-phase96-2",
+      "type": "condition",
+      "label": "Button text overflow issues reported across multiple components",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "c-phase96-3",
+      "type": "condition",
+      "label": "Facility navigation inconsistent with team dashboard pattern",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "c-phase96-4",
+      "type": "condition",
+      "label": "Team momentum from Phase 91-92 efficiency gains (previous sprints completed 50-33% under budget)",
+      "sprint": "phase96",
+      "date": "2026-02-20"
+    },
+    {
+      "id": "d-phase97-1",
+      "type": "decision",
+      "label": "Implement delete equipment feature",
+      "sprint": "phase97",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase97-2",
+      "type": "decision",
+      "label": "Implement remove roster members feature",
+      "sprint": "phase97",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase97-1",
+      "type": "outcome",
+      "label": "Delete equipment and roster member removal features completed",
+      "sprint": "phase97",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase97-2",
+      "type": "outcome",
+      "label": "Sprint completed 15 minutes actual vs 30 minute estimate (50% time savings)",
+      "sprint": "phase97",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase97-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-97",
+      "sprint": "phase97",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase97-2",
+      "type": "condition",
+      "label": "Straightforward feature scope (delete operations without complex validation)",
+      "sprint": "phase97",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase100-1",
+      "type": "decision",
+      "label": "Implement RSVP from practice list with status badges and quick-toggle",
+      "sprint": "phase100",
+      "date": "2026-02-21T08:03:20-05:00"
+    },
+    {
+      "id": "d-phase100-2",
+      "type": "decision",
+      "label": "Build seasons overview page with season cards and coach metrics",
+      "sprint": "phase100",
+      "date": "2026-02-21T08:05:18-05:00"
+    },
+    {
+      "id": "o-phase100-1",
+      "type": "outcome",
+      "label": "RSVP functionality deployed with quick-toggle across calendar and schedule views",
+      "sprint": "phase100",
+      "date": "2026-02-21T08:03:20-05:00"
+    },
+    {
+      "id": "o-phase100-2",
+      "type": "outcome",
+      "label": "Seasons overview page created with season cards and navigation integration",
+      "sprint": "phase100",
+      "date": "2026-02-21T08:05:18-05:00"
+    },
+    {
+      "id": "o-phase100-3",
+      "type": "outcome",
+      "label": "Sprint completed 1 hour actual vs 1.5 hour estimate (33% time savings)",
+      "sprint": "phase100",
+      "date": "2026-02-21T08:05:18-05:00"
+    },
+    {
+      "id": "c-phase100-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-100",
+      "sprint": "phase100",
+      "date": "2026-02-21"
+    },
+    {
+      "id": "c-phase100-2",
+      "type": "condition",
+      "label": "Straightforward feature scope (RSVP status display and seasons listing)",
+      "sprint": "phase100",
+      "date": "2026-02-21"
+    },
+    {
+      "id": "c-phase100-3",
+      "type": "condition",
+      "label": "Prior calendar and schedule view infrastructure from Phase 96 simplification",
+      "sprint": "phase100",
+      "date": "2026-02-21"
+    },
+    {
+      "id": "d-phase101-1",
+      "type": "decision",
+      "label": "Implement 7 UX improvements for Coach interface",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase101-2",
+      "type": "decision",
+      "label": "Unify button text styling and overflow handling across components",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase101-3",
+      "type": "decision",
+      "label": "Standardize facility navigation with team dashboard pattern",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase101-1",
+      "type": "outcome",
+      "label": "7 high-impact UX improvements deployed across Coach interface",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase101-2",
+      "type": "outcome",
+      "label": "Sprint completed 1.5 hours actual vs 3 hour estimate (50% time savings)",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase101-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-101",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase101-2",
+      "type": "condition",
+      "label": "Button text overflow issues and navigation inconsistencies from prior feedback",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase101-3",
+      "type": "condition",
+      "label": "Existing dashboard and calendar view infrastructure from Phase 96-100",
+      "sprint": "phase101",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase102-1",
+      "type": "decision",
+      "label": "Implement deep UX fixes for core workflows (form validation, navigation, micro-interactions)",
+      "sprint": "phase102",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase102-1",
+      "type": "outcome",
+      "label": "Core workflow UX improvements deployed with enhanced form handling and navigation",
+      "sprint": "phase102",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase102-2",
+      "type": "outcome",
+      "label": "Sprint completed 1.5 hours actual vs 4 hour estimate (62.5% time savings)",
+      "sprint": "phase102",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase102-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-102",
+      "sprint": "phase102",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase102-2",
+      "type": "condition",
+      "label": "Deep UX fixes focused on core workflows with identified pain points",
+      "sprint": "phase102",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase102-3",
+      "type": "condition",
+      "label": "Established component library and patterns from Phase 101 UX standardization",
+      "sprint": "phase102",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase103-1",
+      "type": "decision",
+      "label": "Implement Season Recurring Practices + iCal Calendar feature",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase103-2",
+      "type": "decision",
+      "label": "Fix ESLint warnings and deprecated flatten→treeifyError function",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase103-3",
+      "type": "decision",
+      "label": "Implement critical security fixes (practice generation cap 500, Cache-Control private, remove x-forwarded-host)",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase103-4",
+      "type": "decision",
+      "label": "Address HIGH priority issues (batch inserts, RLS policies, date validation)",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase103-5",
+      "type": "decision",
+      "label": "Resolve MEDIUM priority issues (team-scoped revoke, clipboard fallback, Zod v4 deprecations)",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase103-1",
+      "type": "outcome",
+      "label": "ESLint warnings fixed and TypeScript/lint clean with code + security review findings addressed",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase103-2",
+      "type": "outcome",
+      "label": "Critical, HIGH, and MEDIUM security and code quality issues resolved across 9 commits",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase103-3",
+      "type": "outcome",
+      "label": "Sprint completed 2 hours actual vs 3 hour estimate (33% time savings, continuing trend)",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase103-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-103",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase103-2",
+      "type": "condition",
+      "label": "Established quality standards and code review process from prior phases",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase103-3",
+      "type": "condition",
+      "label": "Multiple prioritized findings from automated code + security review agents",
+      "sprint": "phase103",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase104-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-104",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase104-2",
+      "type": "condition",
+      "label": "Design system tokens and core UI migration infrastructure from Phase 103",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase104-3",
+      "type": "condition",
+      "label": "15 settings-related issues identified as repaired tasks",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase104-1",
+      "type": "decision",
+      "label": "Implement design system token migration across dashboard, settings, layout, and UI directories",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase104-2",
+      "type": "decision",
+      "label": "Execute comprehensive hardcoded color (teal) sweep across all UI directories",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "d-phase104-3",
+      "type": "decision",
+      "label": "Repair settings module and address accumulated issues",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase104-1",
+      "type": "outcome",
+      "label": "Token overhaul completed with logo update and core UI migration across token system",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase104-2",
+      "type": "outcome",
+      "label": "Hardcoded teal colors migrated from 34 files (dashboard, settings, layout) with zero teal references remaining",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase104-3",
+      "type": "outcome",
+      "label": "Settings module repaired with 15 issues resolved",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "o-phase104-4",
+      "type": "outcome",
+      "label": "Sprint completed in 1.5 hours actual vs 3 hour estimate (50% time savings, sustained trend)",
+      "sprint": "phase104",
+      "date": "2026-02-22"
+    },
+    {
+      "id": "c-phase105-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-104",
+      "sprint": "phase105",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase105-2",
+      "type": "condition",
+      "label": "Design system token migration and color standardization from Phase 104",
+      "sprint": "phase105",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase105-3",
+      "type": "condition",
+      "label": "Navigation and discoverability identified as priority feature area",
+      "sprint": "phase105",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "d-phase105-1",
+      "type": "decision",
+      "label": "Implement Mobile More drawer, breadcrumb segment labels, and expanded nav sections",
+      "sprint": "phase105",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase105-1",
+      "type": "outcome",
+      "label": "Mobile More drawer, breadcrumb segment labels, and expanded nav sections completed (3 files, 4 tasks)",
+      "sprint": "phase105",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase105-2",
+      "type": "outcome",
+      "label": "Sprint completed in 15 minutes actual vs 1.5 hour estimate (90% time savings, accelerated trend)",
+      "sprint": "phase105",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase106-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-105",
+      "sprint": "phase106",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase106-2",
+      "type": "condition",
+      "label": "Design system standardization and code quality from Phase 104-105",
+      "sprint": "phase106",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase106-3",
+      "type": "condition",
+      "label": "Multiple feature enhancements already integrated (nav, settings, design system)",
+      "sprint": "phase106",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "d-phase106-1",
+      "type": "decision",
+      "label": "Focus on content depth improvements: rich block view mode, attendance stats, weather forecast, empty state handling",
+      "sprint": "phase106",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase106-1",
+      "type": "outcome",
+      "label": "Content depth enhancements delivered: rich block view mode, attendance stats, weather forecast, empty state improvements (6 files)",
+      "sprint": "phase106",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase106-2",
+      "type": "outcome",
+      "label": "Sprint completed in 20 minutes actual vs 2 hour estimate (83% time savings, extreme efficiency)",
+      "sprint": "phase106",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase107-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-106",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase107-2",
+      "type": "condition",
+      "label": "Dashboard and UI polish requirements from accumulated review findings",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "d-phase107-1",
+      "type": "decision",
+      "label": "Polish dashboard actions: RSVP buttons with aria-pressed, onboarding back buttons, settings hash sync, block type tooltips",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "d-phase107-2",
+      "type": "decision",
+      "label": "Address review findings: fix Content-Type headers and loading order issues",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "d-phase107-3",
+      "type": "decision",
+      "label": "Implement accessibility improvements across dashboard components",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase107-1",
+      "type": "outcome",
+      "label": "Dashboard polish complete: RSVP buttons, onboarding navigation, settings sync, and block tooltips implemented with accessibility fixes",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase107-2",
+      "type": "outcome",
+      "label": "Review findings resolved: Content-Type headers and loading order issues fixed",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "o-phase107-3",
+      "type": "outcome",
+      "label": "Sprint completed in 0.5 hours actual vs 1.5 hour estimate (67% time savings, extreme efficiency trend continues)",
+      "sprint": "phase107",
+      "date": "2026-02-23"
+    },
+    {
+      "id": "c-phase111-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-107",
+      "sprint": "phase111",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase111-2",
+      "type": "condition",
+      "label": "Quality review backlog and verification testing requirements",
+      "sprint": "phase111",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase111-3",
+      "type": "condition",
+      "label": "Accessibility and code quality standards established from Phase 107",
+      "sprint": "phase111",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase111-1",
+      "type": "decision",
+      "label": "Conduct comprehensive verification and review quality testing",
+      "sprint": "phase111",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase111-1",
+      "type": "outcome",
+      "label": "Verification and review quality testing completed successfully",
+      "sprint": "phase111",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase111-2",
+      "type": "outcome",
+      "label": "Sprint completed in 1.5 hours actual vs 2 hours estimate (25% time savings, efficiency trend continues)",
+      "sprint": "phase111",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase112-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-111",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase112-2",
+      "type": "condition",
+      "label": "Observability gaps and architecture review requirements",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "c-phase112-3",
+      "type": "condition",
+      "label": "Code quality baseline and accessibility standards from Phase 107-111",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase112-1",
+      "type": "decision",
+      "label": "Focus on observability improvements and architecture analysis",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase112-2",
+      "type": "decision",
+      "label": "Implement observability instrumentation and monitoring hooks",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase112-1",
+      "type": "outcome",
+      "label": "Observability improvements implemented: instrumentation and monitoring points added",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase112-2",
+      "type": "outcome",
+      "label": "Architecture documentation and observability framework established",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "o-phase112-3",
+      "type": "outcome",
+      "label": "Sprint completed in 1.5 hours actual vs 2 hours estimate (25% time savings, efficiency momentum maintained)",
+      "sprint": "phase112",
+      "date": "2024-01-01"
+    },
+    {
+      "id": "d-phase113a-1",
+      "type": "decision",
+      "label": "Implement vector search layer with sqlite-vec and TF-IDF embeddings",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:25:23-05:00"
+    },
+    {
+      "id": "d-phase113a-2",
+      "type": "decision",
+      "label": "Build session recovery script with JSONL scanning and markdown output",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:27:01-05:00"
+    },
+    {
+      "id": "d-phase113a-3",
+      "type": "decision",
+      "label": "Conduct comprehensive testing and fix code/security issues",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:42:14-05:00"
+    },
+    {
+      "id": "o-phase113a-1",
+      "type": "outcome",
+      "label": "Vector search layer operational: sqlite-vec installed with TF-IDF embeddings integrated into knowledge_query",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:25:23-05:00"
+    },
+    {
+      "id": "o-phase113a-2",
+      "type": "outcome",
+      "label": "Session recovery script complete: JSONL scanning with markdown output wired into SessionStart hook",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:27:01-05:00"
+    },
+    {
+      "id": "o-phase113a-3",
+      "type": "outcome",
+      "label": "Critical issues resolved: 3 HIGH code issues, 1 CRITICAL, 2 HIGH security issues fixed; PR #37 created",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:42:14-05:00"
+    },
+    {
+      "id": "o-phase113a-4",
+      "type": "outcome",
+      "label": "Sprint completed in 1 hour actual vs 1.5 hour estimate (33% time savings, efficiency momentum continues)",
+      "sprint": "phase113a",
+      "date": "2026-02-24T19:42:14-05:00"
+    },
+    {
+      "id": "c-phase113a-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-112",
+      "sprint": "phase113a",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "c-phase113a-2",
+      "type": "condition",
+      "label": "Code quality and observability standards established from Phase 112",
+      "sprint": "phase113a",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "c-phase113a-3",
+      "type": "condition",
+      "label": "Architectural foundation with observability instrumentation in place",
+      "sprint": "phase113a",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "d-phase113b-1",
+      "type": "decision",
+      "label": "Focus on tooling improvements and config optimization",
+      "sprint": "phase113b",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "o-phase113b-1",
+      "type": "outcome",
+      "label": "Sprint completed in 0.75 hours actual vs 1 hour estimate (25% time savings)",
+      "sprint": "phase113b",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "c-phase113b-1",
+      "type": "condition",
+      "label": "Team momentum from sustained efficiency gains across Phase 91-113a (33% savings trend)",
+      "sprint": "phase113b",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "c-phase113b-2",
+      "type": "condition",
+      "label": "Observability instrumentation and architecture foundation established",
+      "sprint": "phase113b",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "c-phase113b-3",
+      "type": "condition",
+      "label": "Code quality baseline and security standards validated (3 HIGH, 1 CRITICAL fixed)",
+      "sprint": "phase113b",
+      "date": "2024-01-15"
+    },
+    {
+      "id": "d-phase114-1",
+      "type": "decision",
+      "label": "Audit dormant systems and clean dead code",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "d-phase114-2",
+      "type": "decision",
+      "label": "Wire FTS5+vector initialization and update project config",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "o-phase114-1",
+      "type": "outcome",
+      "label": "All 6 tasks completed: FTS5+vector wiring, config hardcoding, 9-file dead code deletion, import cleanup, hook script fixes",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "o-phase114-2",
+      "type": "outcome",
+      "label": "Codebase quality improved: dead code removed, imports cleaned, hook scripts optimized (jq→python3)",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "o-phase114-3",
+      "type": "outcome",
+      "label": "Test coverage maintained: typecheck + 1204 tests + build all green",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "o-phase114-4",
+      "type": "outcome",
+      "label": "Sprint completed in 25 minutes actual vs 1.5 hour estimate (94% time savings, exceptional efficiency)",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "c-phase114-1",
+      "type": "condition",
+      "label": "Team momentum from sustained 25-33% efficiency gains across Phase 113a-113b",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "c-phase114-2",
+      "type": "condition",
+      "label": "Code quality and security standards established; architectural foundation stable",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    },
+    {
+      "id": "c-phase114-3",
+      "type": "condition",
+      "label": "FTS5+vector and observability instrumentation already integrated from Phase 113a",
+      "sprint": "phase114",
+      "date": "2026-02-24"
+    }
+  ],
+  "edges": [
+    {
+      "from": "d-phase97-1",
+      "to": "o-phase97-1",
+      "strength": 9,
+      "evidence": "Decision to implement delete equipment directly resulted in completion of that feature as part of sprint outcome"
+    },
+    {
+      "from": "d-phase97-2",
+      "to": "o-phase97-1",
+      "strength": 9,
+      "evidence": "Decision to implement remove roster members directly resulted in completion of that feature as part of sprint outcome"
+    },
+    {
+      "from": "c-phase97-1",
+      "to": "o-phase97-2",
+      "strength": 8,
+      "evidence": "Team momentum from consistent efficiency gains (Phase 96: 50%, Phase 92: 33% time savings) enabled another sprint to complete at 50% time savings (15 min actual vs 30 min estimate)"
+    },
+    {
+      "from": "c-phase97-2",
+      "to": "o-phase97-2",
+      "strength": 8,
+      "evidence": "Straightforward scope of delete operations (no complex validation logic required) contributed to rapid completion at 50% time savings"
+    },
+    {
+      "from": "c-phase97-1",
+      "to": "d-phase97-1",
+      "strength": 5,
+      "evidence": "Team momentum may have enabled efficient decision-making and implementation planning for delete equipment feature"
+    },
+    {
+      "from": "c-phase97-1",
+      "to": "d-phase97-2",
+      "strength": 5,
+      "evidence": "Team momentum may have enabled efficient decision-making and implementation planning for roster member removal feature"
+    },
+    {
+      "from": "c-phase105-1",
+      "to": "d-phase105-1",
+      "strength": 8,
+      "evidence": "Team's sustained efficiency gains from Phase 91-104 (33-50% time savings per sprint) enabled tackling the navigation feature with confidence and rapid execution"
+    },
+    {
+      "from": "c-phase105-2",
+      "to": "d-phase105-1",
+      "strength": 7,
+      "evidence": "Completed design system token migration and color standardization in Phase 104 provided consistent foundation for implementing navigation UI components in Phase 105"
+    },
+    {
+      "from": "c-phase105-3",
+      "to": "d-phase105-1",
+      "strength": 9,
+      "evidence": "Navigation and discoverability was explicitly chosen as the sprint focus, directly driving the decision to implement Mobile More drawer, breadcrumb labels, and expanded nav sections"
+    },
+    {
+      "from": "d-phase105-1",
+      "to": "o-phase105-1",
+      "strength": 10,
+      "evidence": "The decision to implement Mobile More drawer, breadcrumb segment labels, and expanded nav sections was directly executed, resulting in completion of all 3 files and 4 tasks"
+    },
+    {
+      "from": "c-phase105-1",
+      "to": "o-phase105-2",
+      "strength": 9,
+      "evidence": "Sustained team momentum and efficiency gains enabled exceptional 90% time savings (15 min actual vs 1.5 hour estimate), accelerating the efficiency trend established in prior phases"
+    },
+    {
+      "from": "o-phase105-1",
+      "to": "o-phase105-2",
+      "strength": 8,
+      "evidence": "Rapid completion of all navigation features (Mobile More drawer, breadcrumb labels, expanded sections) in minimal scope (3 files, 4 tasks) contributed directly to extreme time savings"
+    },
+    {
+      "from": "c-phase106-1",
+      "to": "o-phase106-2",
+      "strength": 8,
+      "evidence": "Team momentum has accelerated dramatically: Phase 103 (33% savings) → Phase 104 (50% savings) → Phase 105 (90% savings) → Phase 106 (83% savings, 20 min actual). Sustained efficiency trend enables extreme time compression despite new feature scope."
+    },
+    {
+      "from": "c-phase106-2",
+      "to": "d-phase106-1",
+      "strength": 7,
+      "evidence": "Phase 104-105 established design system tokens, color standardization, and navigation patterns. This foundation enables team to confidently scope and execute content depth improvements without architectural rework."
+    },
+    {
+      "from": "c-phase106-3",
+      "to": "d-phase106-1",
+      "strength": 6,
+      "evidence": "Multiple layers of foundational work (design system, settings repairs, nav improvements) completed in prior phases reduced integration risk and enabled focus on higher-level content features (rich blocks, attendance stats, weather)."
+    },
+    {
+      "from": "d-phase106-1",
+      "to": "o-phase106-1",
+      "strength": 9,
+      "evidence": "Decision to implement content depth improvements directly resulted in delivery of all four feature categories (rich block view, attendance stats, weather forecast, empty states) across 6 files with completion message confirming all deliverables."
+    },
+    {
+      "from": "c-phase106-1",
+      "to": "d-phase106-1",
+      "strength": 7,
+      "evidence": "High team momentum and proven execution velocity enabled confidence to tackle broader feature scope (4 content improvements) within compact 2-hour estimate, demonstrating team's ability to commit to ambitious work."
+    },
+    {
+      "from": "c-phase111-1",
+      "to": "d-phase111-1",
+      "strength": 8,
+      "evidence": "Sustained team momentum and efficiency gains from Phase 91-107 enabled the team to tackle verification and review tasks effectively within the 2-hour sprint window"
+    },
+    {
+      "from": "c-phase111-2",
+      "to": "d-phase111-1",
+      "strength": 9,
+      "evidence": "Quality review backlog and verification testing requirements directly motivated and shaped the decision to conduct comprehensive verification and review quality testing as the sprint focus"
+    },
+    {
+      "from": "c-phase111-3",
+      "to": "d-phase111-1",
+      "strength": 7,
+      "evidence": "Established accessibility and code quality standards from Phase 107 provided clear criteria and frameworks for conducting verification and review quality testing"
+    },
+    {
+      "from": "d-phase111-1",
+      "to": "o-phase111-1",
+      "strength": 10,
+      "evidence": "The decision to conduct comprehensive verification and review quality testing directly resulted in successful completion of the testing activities"
+    },
+    {
+      "from": "d-phase111-1",
+      "to": "o-phase111-2",
+      "strength": 8,
+      "evidence": "Efficient execution of the verification and review quality testing decision allowed completion in 1.5 hours (25% time savings), consistent with established efficiency trend"
+    },
+    {
+      "from": "c-phase111-1",
+      "to": "o-phase111-2",
+      "strength": 9,
+      "evidence": "Accumulated team momentum from Phase 91-107 directly contributed to the continued efficiency gains, achieving 25% time savings in Phase 111"
+    },
+    {
+      "from": "c-phase113b-1",
+      "to": "d-phase113b-1",
+      "strength": 8,
+      "evidence": "Team momentum from sustained efficiency gains (Phase 91-113a showing 25-33% time savings) enabled confident tooling-focused iteration; team completed Phase 113a in 33% under estimate"
+    },
+    {
+      "from": "c-phase113b-2",
+      "to": "d-phase113b-1",
+      "strength": 7,
+      "evidence": "Observability instrumentation from Phase 112 and architectural foundation from Phase 113a provided stable base for focused tooling improvements without major refactoring"
+    },
+    {
+      "from": "c-phase113b-3",
+      "to": "d-phase113b-1",
+      "strength": 6,
+      "evidence": "Code quality baseline and resolved security issues (PR #37) established confidence to focus on tooling optimization without addressing quality regressions"
+    },
+    {
+      "from": "d-phase113b-1",
+      "to": "o-phase113b-1",
+      "strength": 9,
+      "evidence": "Focused tooling and config scope directly enabled efficient execution; achieved 25% time savings (0.75 actual vs 1 hour estimate), continuing efficiency momentum"
+    },
+    {
+      "from": "c-phase113b-1",
+      "to": "o-phase113b-1",
+      "strength": 8,
+      "evidence": "Sustained team momentum (Phase 113a: 33% savings) directly enabled Phase 113b efficiency; continuing pattern of 25%+ time savings demonstrates compounding momentum effect"
+    }
+  ]
+}
