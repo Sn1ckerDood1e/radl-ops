@@ -33,6 +33,7 @@ import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.j
 import { searchFts, isFtsAvailable } from '../../knowledge/fts-index.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
 import { session } from './shared/session-state.js';
+import { recordStartEvent, recordProgressEvent, recordCompleteEvent } from './shared/sprint-events.js';
 
 function getDeferredPath(): string {
   return `${getConfig().knowledgeDir}/deferred.json`;
@@ -524,6 +525,9 @@ export function registerSprintTools(server: McpServer): void {
       // Tag all subsequent API calls with this sprint phase
       setCurrentSprintPhase(phase);
 
+      // Record event for audit trail
+      recordStartEvent(phase, title, estimate);
+
       // Clear previous review findings for new sprint
       clearFindings();
 
@@ -597,6 +601,15 @@ export function registerSprintTools(server: McpServer): void {
       const output = runSprint(args);
       notifySprintChanged();
 
+      // Record event for audit trail
+      try {
+        const phaseMatch = output.match(/Phase\s+[\d.]+/i);
+        const currentPhase = phaseMatch ? phaseMatch[0] : 'Unknown';
+        recordProgressEvent(currentPhase, message);
+      } catch {
+        // Non-blocking
+      }
+
       if (intent) {
         logger.info('Sprint progress intent', { intent: intent.substring(0, 80), messageLength: message.length });
       }
@@ -661,6 +674,11 @@ export function registerSprintTools(server: McpServer): void {
 
       // Clear sprint phase tag for cost tracking
       setCurrentSprintPhase(null);
+
+      // Record completion event for audit trail
+      const completionPhaseMatch = output.match(/Phase\s+[\d.]+/i);
+      const completionPhase = completionPhaseMatch ? completionPhaseMatch[0] : 'Unknown';
+      recordCompleteEvent(completionPhase, commit, actual_time);
 
       // Parse sprint phase once for all downstream uses
       const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);

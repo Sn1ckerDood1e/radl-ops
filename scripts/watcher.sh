@@ -381,6 +381,17 @@ process_issue() {
   local prompt
   prompt=$(render_prompt "$issue_num" "$issue_title" "$issue_body" "$branch_name")
 
+  # Register prompt version for tracking (zero-cost, uses prompt-registry.ts)
+  local prompt_template_content
+  prompt_template_content=$(cat "$PROMPT_TEMPLATE" 2>/dev/null || echo "")
+  if [ -n "$prompt_template_content" ]; then
+    node -e "
+      import('$RADL_OPS_DIR/dist/knowledge/prompt-registry.js')
+        .then(m => m.registerPromptVersion('watcher-prompt', process.argv[1]))
+        .catch(() => {})
+    " "$prompt_template_content" 2>>"$log_file" || true
+  fi
+
   # Inject knowledge context from inverse bloom (zero-cost, ~200ms)
   # Cap issue_body to 4000 chars before passing (MEDIUM-1 security fix)
   local knowledge_ctx
@@ -656,6 +667,36 @@ if issues:
   fi
 }
 
+cmd_webhook_handler() {
+  # Process a GitHub webhook payload from stdin.
+  # Accepts issues.labeled events with the "approved" label.
+  # Usage: echo '{"action":"labeled","label":{"name":"approved"},...}' | watcher.sh webhook-handler
+  local payload
+  payload=$(cat)
+
+  local action label_name
+  action=$(echo "$payload" | python3 -c "import sys,json; print(json.load(sys.stdin).get('action',''))" 2>/dev/null || echo "")
+  label_name=$(echo "$payload" | python3 -c "import sys,json; print(json.load(sys.stdin).get('label',{}).get('name',''))" 2>/dev/null || echo "")
+
+  if [ "$action" != "labeled" ] || [ "$label_name" != "approved" ]; then
+    echo "Ignored: action=$action label=$label_name (expected labeled + approved)"
+    return
+  fi
+
+  local issue_num issue_title issue_body
+  issue_num=$(echo "$payload" | python3 -c "import sys,json; print(json.load(sys.stdin).get('issue',{}).get('number',0))" 2>/dev/null || echo "0")
+  issue_title=$(echo "$payload" | python3 -c "import sys,json; print(json.load(sys.stdin).get('issue',{}).get('title',''))" 2>/dev/null || echo "")
+  issue_body=$(echo "$payload" | python3 -c "import sys,json; print(json.load(sys.stdin).get('issue',{}).get('body',''))" 2>/dev/null || echo "")
+
+  if [ "$issue_num" = "0" ] || [ -z "$issue_title" ]; then
+    echo "ERROR: Could not parse issue from webhook payload"
+    return 1
+  fi
+
+  log "Webhook: received approved event for issue #$issue_num: $issue_title"
+  process_issue "$issue_num" "$issue_title" "$issue_body"
+}
+
 # --- Main ---
 
 case "${1:-help}" in
@@ -664,19 +705,21 @@ case "${1:-help}" in
   status) cmd_status ;;
   logs)   cmd_logs ;;
   cancel) cmd_cancel ;;
-  resume) cmd_resume ;;
-  run)    cmd_run ;;
+  resume)          cmd_resume ;;
+  run)             cmd_run ;;
+  webhook-handler) cmd_webhook_handler ;;
   help|*)
     echo "Usage: watcher.sh <command>"
     echo ""
     echo "Commands:"
-    echo "  start   — Launch watcher in tmux session"
-    echo "  stop    — Kill the tmux session"
-    echo "  status  — Show running state and queue depth"
-    echo "  logs    — Tail the latest log file"
-    echo "  cancel  — Cancel the currently in-progress issue"
-    echo "  resume  — Reset circuit breaker and resume polling"
-    echo "  run     — Run poll loop directly (used inside tmux)"
+    echo "  start            — Launch watcher in tmux session"
+    echo "  stop             — Kill the tmux session"
+    echo "  status           — Show running state and queue depth"
+    echo "  logs             — Tail the latest log file"
+    echo "  cancel           — Cancel the currently in-progress issue"
+    echo "  resume           — Reset circuit breaker and resume polling"
+    echo "  run              — Run poll loop directly (used inside tmux)"
+    echo "  webhook-handler  — Process a GitHub webhook payload from stdin"
     echo ""
     echo "Configuration (via .env or environment):"
     echo "  WATCHER_POLL_INTERVAL  Poll interval in seconds (default: 60)"
