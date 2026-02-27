@@ -7,7 +7,9 @@
  * - Haiku: Fast lightweight tasks, 90% of Sonnet capability at 3x savings
  */
 
-import type { ModelId, EffortLevel, ModelRoute, TaskType } from '../types/index.js';
+import type { ModelId, EffortLevel, ModelRoute, TaskType, ModelGateway, ChatParams, ChatResponse } from '../types/index.js';
+import type Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
 
 /**
@@ -230,6 +232,52 @@ export function getRouteWithFallback(
 }
 
 /**
+ * Route a task to a higher-tier model if the initial attempt scored below threshold.
+ *
+ * Cascade: Haiku → Sonnet → Opus. Only escalates one tier at a time.
+ * Tracks cascade events for cost analysis.
+ */
+export function routeByConfidence(
+  taskType: TaskType,
+  currentScore: number,
+  confidenceThreshold: number = 5,
+): ModelRoute {
+  const base = getRoute(taskType);
+
+  if (currentScore >= confidenceThreshold) {
+    return base;
+  }
+
+  const escalationChain: Record<ModelId, ModelId | null> = {
+    'claude-haiku-4-5-20251001': 'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-5-20250929': 'claude-opus-4-6',
+    'claude-opus-4-6': null, // Already at top tier
+  };
+
+  const nextModel = escalationChain[base.model];
+  if (!nextModel) {
+    logger.info('Cascade routing: already at top tier', { taskType, model: base.model, score: currentScore });
+    return base;
+  }
+
+  const pricing = MODEL_PRICING[nextModel];
+  logger.info('Cascade routing: escalating model', {
+    taskType,
+    from: base.model,
+    to: nextModel,
+    score: currentScore,
+    threshold: confidenceThreshold,
+  });
+
+  return {
+    ...base,
+    model: nextModel,
+    inputCostPer1M: pricing.input,
+    outputCostPer1M: pricing.output,
+  };
+}
+
+/**
  * Get all routes for display/debugging
  */
 export function getAllRoutes(): Record<TaskType, ModelRoute> {
@@ -238,4 +286,70 @@ export function getAllRoutes(): Record<TaskType, ModelRoute> {
     result[taskType] = getRoute(taskType);
   }
   return result;
+}
+
+// ============================================
+// Model Gateway
+// ============================================
+
+/**
+ * Default gateway: routes directly to the Anthropic API.
+ * Can be swapped for LiteLLM, Bedrock, or Vertex gateways.
+ */
+export class AnthropicDirectGateway implements ModelGateway {
+  readonly name = 'anthropic-direct';
+  private getClient: () => import('@anthropic-ai/sdk').default;
+
+  constructor(clientFactory: () => import('@anthropic-ai/sdk').default) {
+    this.getClient = clientFactory;
+  }
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    const client = this.getClient();
+
+    const response = await client.messages.create({
+      model: params.model,
+      max_tokens: params.maxTokens,
+      system: params.system,
+      messages: params.messages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+    });
+
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map(b => b.text)
+      .join('\n');
+
+    return {
+      text,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      model: response.model,
+    };
+  }
+}
+
+let activeGateway: ModelGateway | null = null;
+
+/**
+ * Set the active model gateway. Falls back to AnthropicDirectGateway
+ * if none is set (lazy-initialized on first getGateway() call).
+ */
+export function setGateway(gateway: ModelGateway): void {
+  activeGateway = gateway;
+  logger.info('Model gateway set', { name: gateway.name });
+}
+
+/**
+ * Get the active model gateway.
+ * Lazy-initializes to AnthropicDirectGateway if none set.
+ */
+export function getGateway(): ModelGateway {
+  if (!activeGateway) {
+    activeGateway = new AnthropicDirectGateway(getAnthropicClient);
+    logger.info('Default Anthropic gateway initialized');
+  }
+  return activeGateway;
 }

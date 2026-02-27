@@ -187,6 +187,15 @@ export function getCostSummaryForBriefing(): string {
 /**
  * Build analytics from a list of usage entries
  */
+/**
+ * Model-specific input pricing for accurate cache savings calculation.
+ */
+const CACHE_INPUT_RATES: Record<string, number> = {
+  'claude-haiku-4-5-20251001': 0.80,
+  'claude-sonnet-4-5-20250929': 3.0,
+  'claude-opus-4-6': 5.0,
+};
+
 function buildAnalytics(
   entries: TokenUsage[],
   period: 'daily' | 'weekly' | 'monthly',
@@ -196,11 +205,13 @@ function buildAnalytics(
   const byModel: Record<string, { calls: number; costUsd: number; tokens: number }> = {};
   const byTaskType: Record<string, { calls: number; costUsd: number }> = {};
   const bySprint: Record<string, { calls: number; costUsd: number }> = {};
+  const byTool: Record<string, { calls: number; costUsd: number; avgCostUsd: number }> = {};
   let totalCost = 0;
   let totalInput = 0;
   let totalOutput = 0;
   let totalCacheRead = 0;
   let totalCacheWrite = 0;
+  let totalCacheSavings = 0;
 
   for (const entry of entries) {
     totalCost += entry.costUsd;
@@ -208,6 +219,15 @@ function buildAnalytics(
     totalOutput += entry.outputTokens;
     totalCacheRead += entry.cacheReadTokens ?? 0;
     totalCacheWrite += entry.cacheWriteTokens ?? 0;
+
+    // Model-specific cache savings calculation
+    const cacheRead = entry.cacheReadTokens ?? 0;
+    if (cacheRead > 0) {
+      const inputRate = CACHE_INPUT_RATES[entry.model] ?? 3.0;
+      const normalCost = (cacheRead / 1_000_000) * inputRate;
+      const cachedCost = (cacheRead / 1_000_000) * inputRate * 0.1;
+      totalCacheSavings += normalCost - cachedCost;
+    }
 
     const modelKey = entry.model;
     if (!byModel[modelKey]) {
@@ -236,14 +256,25 @@ function buildAnalytics(
       calls: bySprint[sprintKey].calls + 1,
       costUsd: bySprint[sprintKey].costUsd + entry.costUsd,
     };
+
+    // Per-tool cost aggregation
+    const toolKey = entry.toolName ?? 'unknown';
+    if (!byTool[toolKey]) {
+      byTool[toolKey] = { calls: 0, costUsd: 0, avgCostUsd: 0 };
+    }
+    byTool[toolKey] = {
+      calls: byTool[toolKey].calls + 1,
+      costUsd: byTool[toolKey].costUsd + entry.costUsd,
+      avgCostUsd: 0, // computed below
+    };
   }
 
-  // Estimate savings: cache reads cost 10% of normal input price
-  // Average input price across models used (~$3/1M for Sonnet which dominates eval)
-  const avgInputPrice = 3; // conservative estimate (Sonnet pricing)
-  const estimatedSavings = totalCacheRead > 0
-    ? (totalCacheRead / 1_000_000) * avgInputPrice * 0.9
-    : 0;
+  // Compute average cost per tool
+  for (const tool of Object.values(byTool)) {
+    tool.avgCostUsd = tool.calls > 0
+      ? Math.round((tool.costUsd / tool.calls) * 1_000_000) / 1_000_000
+      : 0;
+  }
 
   return {
     period,
@@ -254,10 +285,11 @@ function buildAnalytics(
     totalOutputTokens: totalOutput,
     totalCacheReadTokens: totalCacheRead,
     totalCacheWriteTokens: totalCacheWrite,
-    estimatedCacheSavingsUsd: Math.round(estimatedSavings * 1_000_000) / 1_000_000,
+    estimatedCacheSavingsUsd: Math.round(totalCacheSavings * 1_000_000) / 1_000_000,
     byModel,
     byTaskType,
     bySprint,
+    byTool,
   };
 }
 

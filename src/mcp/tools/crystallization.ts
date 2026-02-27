@@ -381,6 +381,87 @@ function formatCheckForDisplay(check: CrystallizedCheck): string {
 }
 
 // ============================================
+// Anti-Collapse: False Positive Tracking + Auto-Demotion
+// ============================================
+
+/**
+ * Increment false positive count for a crystallized check.
+ * Auto-demotes if false positive rate exceeds 50% with 5+ total evaluations.
+ * Returns whether the check was auto-demoted.
+ */
+export function incrementFalsePositive(id: number): { demoted: boolean; falsePositives: number; total: number } {
+  const crystallized = loadCrystallized();
+  const checkIndex = crystallized.checks.findIndex(c => c.id === id);
+
+  if (checkIndex === -1) {
+    logger.warn('incrementFalsePositive: check not found', { id });
+    return { demoted: false, falsePositives: 0, total: 0 };
+  }
+
+  const existing = crystallized.checks[checkIndex];
+  const newFalsePositives = existing.falsePositives + 1;
+  const total = existing.catches + newFalsePositives;
+  const falsePositiveRate = total > 0 ? newFalsePositives / total : 0;
+
+  const shouldAutoDemote = falsePositiveRate > 0.5 && total >= 5 && existing.status === 'active';
+
+  const updatedCheck: CrystallizedCheck = {
+    ...existing,
+    falsePositives: newFalsePositives,
+    ...(shouldAutoDemote ? {
+      status: 'demoted' as const,
+      demotedAt: new Date().toISOString(),
+      demotionReason: `Auto-demoted: ${newFalsePositives}/${total} false positive rate (${(falsePositiveRate * 100).toFixed(0)}%)`,
+    } : {}),
+  };
+
+  const updatedChecks = crystallized.checks.map((c, i) =>
+    i === checkIndex ? updatedCheck : c,
+  );
+  saveCrystallized({ checks: updatedChecks });
+
+  if (shouldAutoDemote) {
+    logger.info('Crystallized check auto-demoted due to high false positive rate', {
+      id,
+      falsePositives: newFalsePositives,
+      total,
+      rate: falsePositiveRate.toFixed(2),
+    });
+  } else {
+    logger.debug('Crystallized check false positive recorded', {
+      id,
+      falsePositives: newFalsePositives,
+      total,
+    });
+  }
+
+  return { demoted: shouldAutoDemote, falsePositives: newFalsePositives, total };
+}
+
+/**
+ * Get lesson IDs that were recently demoted (within daysBack).
+ * Used for re-proposal protection — prevents re-proposing checks
+ * from lessons that were demoted within the cooldown period.
+ */
+function getRecentlyDemotedLessonIds(daysBack: number = 30): Set<number> {
+  const crystallized = loadCrystallized();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - daysBack);
+  const cutoffStr = cutoff.toISOString();
+
+  const demotedLessonIds = new Set<number>();
+  for (const check of crystallized.checks) {
+    if (check.status === 'demoted' && check.demotedAt && check.demotedAt >= cutoffStr) {
+      for (const lessonId of check.lessonIds) {
+        demotedLessonIds.add(lessonId);
+      }
+    }
+  }
+
+  return demotedLessonIds;
+}
+
+// ============================================
 // Exportable Core Logic (for auto-invocation)
 // ============================================
 
@@ -389,14 +470,19 @@ function formatCheckForDisplay(check: CrystallizedCheck): string {
  * Saves proposals to crystallized.json with status 'proposed'.
  * Returns the number of checks proposed.
  *
+ * Includes re-proposal protection: skips lessons from checks demoted within
+ * the last 30 days to prevent noisy patterns from being re-proposed.
+ *
  * Used by sprint_complete every N sprints to auto-propose checks.
  * Cost: ~$0.002 per call (Haiku).
  */
 export async function proposeChecksFromLessons(minFrequency: number = 1): Promise<number> {
   const lessonsFile = loadLessons();
+  const recentlyDemotedIds = getRecentlyDemotedLessonIds(30);
   const MAX_LESSONS_PER_AUTO_RUN = 30;
   const qualifyingLessons = lessonsFile.lessons
     .filter(l => (l.frequency ?? 1) >= minFrequency)
+    .filter(l => !recentlyDemotedIds.has(l.id))
     .sort((a, b) => (b.frequency ?? 1) - (a.frequency ?? 1))
     .slice(0, MAX_LESSONS_PER_AUTO_RUN);
 

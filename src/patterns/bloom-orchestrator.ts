@@ -82,6 +82,10 @@ export interface SprintData {
   blockers: Array<{ description: string; resolved?: boolean; resolution?: string }>;
   estimate: string;
   actual: string;
+  /** Objective signals for grounding compound learning */
+  typecheckFailures?: number;
+  reviewFindings?: { critical: number; high: number; medium: number };
+  issueOutcome?: 'success' | 'failed' | 'cancelled';
 }
 
 export interface CategorizedLesson {
@@ -162,12 +166,13 @@ function buildStagePrompt(
 3. Blocker patterns (what caused delays?)
 4. Technical decisions made
 5. Workflow patterns (what worked, what didn't)
+6. Correlate objective signals with actions: typecheck failures indicate implementation struggles, review findings indicate quality gaps, issue outcome indicates overall success
 
 <sprint>
 ${sprintText}
 </sprint>
 
-Provide a structured analysis. Be specific about what happened and why.`;
+Provide a structured analysis. Be specific about what happened and why. Pay special attention to objective signals (typecheck failures, review findings, outcome) as evidence for your analysis.`;
 
     case 'ideation':
       return `Based on the sprint analysis below, generate candidate lessons and patterns.

@@ -5,7 +5,7 @@
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 56 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
+ * - Tools: 62 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *
@@ -70,6 +70,11 @@ import { registerProductionStatusTools } from './tools/production-status.js';
 import { registerSessionHealthTools } from './tools/session-health.js';
 import { registerAlertCheckTools } from './tools/alert-check.js';
 import { registerTraceReportTools } from './tools/trace-report.js';
+import { registerRepoMapTools } from './tools/repo-map.js';
+import { registerFailureAnalysisTools } from './tools/failure-analysis.js';
+import { registerEpisodicMemoryTools } from '../knowledge/episodic.js';
+import { registerWatcherMetricsTools } from './tools/watcher-metrics.js';
+import { registerRaptorSummaryTools } from './tools/raptor-summaries.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -127,6 +132,11 @@ registerProductionStatusTools(server);
 registerSessionHealthTools(server);
 registerAlertCheckTools(server);
 registerTraceReportTools(server);
+registerRepoMapTools(server);
+registerFailureAnalysisTools(server);
+registerEpisodicMemoryTools(server);
+registerWatcherMetricsTools(server);
+registerRaptorSummaryTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
