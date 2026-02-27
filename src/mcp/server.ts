@@ -73,6 +73,8 @@ import { registerTraceReportTools } from './tools/trace-report.js';
 import { registerRepoMapTools } from './tools/repo-map.js';
 import { registerFailureAnalysisTools } from './tools/failure-analysis.js';
 import { registerEpisodicMemoryTools } from '../knowledge/episodic.js';
+import { registerWatcherMetricsTools } from './tools/watcher-metrics.js';
+import { registerRaptorSummaryTools } from './tools/raptor-summaries.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -133,6 +135,8 @@ registerTraceReportTools(server);
 registerRepoMapTools(server);
 registerFailureAnalysisTools(server);
 registerEpisodicMemoryTools(server);
+registerWatcherMetricsTools(server);
+registerRaptorSummaryTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
