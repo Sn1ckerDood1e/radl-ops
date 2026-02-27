@@ -252,6 +252,7 @@ scripts/watcher.sh start    # Launch in tmux session
 scripts/watcher.sh stop     # Kill the session
 scripts/watcher.sh status   # Running state + queue depth
 scripts/watcher.sh logs     # Tail latest log
+scripts/watcher.sh cancel   # Cancel the currently in-progress issue
 
 # One-time setup
 scripts/setup-labels.sh     # Create GitHub labels
@@ -264,7 +265,8 @@ scripts/setup-labels.sh     # Create GitHub labels
 - 75 max turns per issue (`WATCHER_MAX_TURNS`)
 - `auto/issue-<num>-<slug>` branch naming
 - Skips issues with `failed`, `decomposed`, or `in-progress` labels
-- Cancel mid-execution by adding `cancel` label to the issue
+- Priority ordering: `priority:high` issues execute first, `priority:low` last, default in between
+- Cancel mid-execution: `watcher.sh cancel` (adds `cancel` label) or manually add `cancel` label
 - Watcher instances MUST NOT modify CLAUDE.md or .github/workflows/
 - Logs: `logs/watcher/<date>-issue-<num>.log`
 
@@ -278,9 +280,10 @@ PRs created by the watcher are auto-merged by `.github/workflows/auto-merge.yml`
 When a large/vague issue is approved (e.g., "audit all UI/UX"), Claude automatically:
 1. Reads the codebase to understand scope
 2. Breaks it into 3-5 focused sub-issues via `gh issue create`
-3. Labels sub-issues with `approved` + `watcher` for auto-execution
-4. Labels parent as `decomposed`
-5. Watcher picks up sub-issues one at a time in subsequent poll cycles
+3. Each sub-issue includes a "Parent Context" section with relevant details from the parent
+4. Labels sub-issues with `approved` + `watcher` for auto-execution
+5. Labels parent as `decomposed`
+6. Watcher picks up sub-issues one at a time in subsequent poll cycles
 
 **Creating issues for the watcher:**
 1. Create GitHub issue with clear title and description

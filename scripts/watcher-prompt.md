@@ -29,11 +29,17 @@ Before implementing anything, assess the scope of this issue:
    - A specific, actionable title (e.g., "Fix text overflow on equipment cards")
    - A clear description with acceptance criteria
    - Estimated scope (which files/pages are affected)
-3. Create each sub-issue on GitHub (MAXIMUM 5 — do not exceed this limit):
+3. Create each sub-issue on GitHub (MAXIMUM 5 — do not exceed this limit).
+   IMPORTANT: Each sub-issue body MUST include a "Parent Context" section so the
+   watcher has full context when executing the sub-issue independently:
    ```
    gh issue create --repo {{REPO}} \
      --title "Sub-issue title" \
-     --body "Description with acceptance criteria. Part of #{{ISSUE_NUM}}." \
+     --body "Description with acceptance criteria.
+
+   ## Parent Context
+   From #{{ISSUE_NUM}}: {{ISSUE_TITLE}}
+   <include relevant details from the parent that this sub-issue needs>" \
      --label approved --label watcher
    ```
 4. Post a summary comment on THIS issue:
