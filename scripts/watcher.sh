@@ -232,20 +232,30 @@ process_queue() {
     --search "sort:created-asc" \
     --limit 10 2>/dev/null || echo "[]")
 
-  # Filter and extract the first actionable issue as JSON (skip failed/decomposed/in-progress)
+  # Filter, priority-sort, and extract the first actionable issue as JSON
+  # Priority: priority:high (0) > default (1) > priority:low (2), then oldest first
   # Uses JSON protocol to avoid newline-in-title corruption (HIGH-2 security fix)
   local first_issue_json
   first_issue_json=$(echo "$issues" | python3 -c "
 import sys, json
 SKIP_LABELS = {'failed', 'decomposed', 'in-progress'}
+# Priority labels affect execution ORDER only, not authorization.
+# The 'approved' label is the authorization gate. Private repo: all collaborators trusted.
+PRIORITY_ORDER = {'priority:high': 0, 'priority:low': 2}
 issues = json.load(sys.stdin)
+candidates = []
 for i in issues:
     labels = {l['name'] for l in i.get('labels', [])}
     if labels & SKIP_LABELS:
         continue
+    priority_labels = [PRIORITY_ORDER[l] for l in labels if l in PRIORITY_ORDER]
+    pri = min(priority_labels) if priority_labels else 1
+    candidates.append((pri, i['number'], i))
+candidates.sort(key=lambda x: (x[0], x[1]))
+if candidates:
+    i = candidates[0][2]
     out = json.dumps({'num': i['number'], 'title': i['title'], 'body': i.get('body') or '(no description)'})
     print(out)
-    break
 " 2>/dev/null || echo "")
 
   if [ -z "$first_issue_json" ]; then
@@ -524,6 +534,35 @@ fail_issue() {
   write_state "polling"
 }
 
+cmd_cancel() {
+  # Find the currently in-progress issue and add the cancel label
+  local active
+  active=$("$GH" issue list --repo "$REPO" --label "in-progress" --state open \
+    --json number,title --limit 1 2>/dev/null || echo "[]")
+  local issue_num
+  issue_num=$(echo "$active" | python3 -c "
+import sys, json
+issues = json.load(sys.stdin)
+if issues:
+    print(issues[0]['number'])
+" 2>/dev/null || echo "")
+
+  if [ -z "$issue_num" ]; then
+    echo "No in-progress issue found. Nothing to cancel."
+    return
+  fi
+
+  local title
+  title=$(echo "$active" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['title'])" 2>/dev/null || echo "")
+  echo "Cancelling issue #$issue_num: $title"
+  add_label "$issue_num" "cancel"
+  if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "Cancel label added. The watcher will stop processing within ~15 seconds."
+  else
+    echo "Cancel label added. Note: watcher is not running — start it with 'watcher.sh start' for the cancel to take effect."
+  fi
+}
+
 # --- Main ---
 
 case "${1:-help}" in
@@ -531,6 +570,7 @@ case "${1:-help}" in
   stop)   cmd_stop ;;
   status) cmd_status ;;
   logs)   cmd_logs ;;
+  cancel) cmd_cancel ;;
   run)    cmd_run ;;
   help|*)
     echo "Usage: watcher.sh <command>"
@@ -540,6 +580,7 @@ case "${1:-help}" in
     echo "  stop    — Kill the tmux session"
     echo "  status  — Show running state and queue depth"
     echo "  logs    — Tail the latest log file"
+    echo "  cancel  — Cancel the currently in-progress issue"
     echo "  run     — Run poll loop directly (used inside tmux)"
     echo ""
     echo "Configuration (via .env or environment):"
