@@ -70,6 +70,12 @@ All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to tog
 | `production_status` | core | Aggregated production health (Vercel + Supabase + Sentry) |
 | `session_health` | core | Session progress tracking and rabbit hole detection |
 | `alert_check` | core | Check for critical production alerts |
+| `repo_map` | core | Generate lightweight file tree with key exports for a scope keyword |
+| `weekly_failure_analysis` | core | Parse watcher logs for failure patterns and AI analysis |
+| `record_episode` | core | Record a sprint decision/outcome for episodic memory |
+| `recall_episodes` | core | Query recent episodes by keyword (FTS5) |
+| `watcher_metrics` | core | Compute watcher pass@1, avg cost, failure breakdown, daily trend |
+| `raptor_summarize` | core | Build or view RAPTOR hierarchical knowledge summaries |
 | `verify` | core | Verify task completion against acceptance criteria |
 | `daily_summary` | content | End-of-day summary via eval-opt quality loop |
 | `eval_opt_generate` | advanced | Generate content with eval-opt quality loop (any prompt + criteria) |
@@ -105,7 +111,7 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 
 ```
 Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
-                                    ├── tools (56 tools, 3 groups + 1 meta, with annotations)
+                                    ├── tools (62 tools, 3 groups + 1 meta, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
                                     ├── sprint conductor:
