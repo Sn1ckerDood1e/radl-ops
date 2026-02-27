@@ -33,6 +33,8 @@ create_label "hold"        "F9D0C4" "Prevent auto-merge"
 create_label "watcher"     "BFD4F2" "Created/managed by watcher system"
 create_label "cancel"         "D93F0B" "Cancel in-progress watcher execution"
 create_label "decomposed"     "1D76DB" "Issue broken into sub-issues by watcher"
+# Priority labels affect execution ORDER only, not authorization (approved label is the gate).
+# On a public repo, restrict who can apply these via repository settings.
 create_label "priority:high"  "B60205" "Execute before default-priority issues"
 create_label "priority:low"   "C5DEF5" "Execute after default-priority issues"
 

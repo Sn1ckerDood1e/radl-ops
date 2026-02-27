@@ -239,6 +239,8 @@ process_queue() {
   first_issue_json=$(echo "$issues" | python3 -c "
 import sys, json
 SKIP_LABELS = {'failed', 'decomposed', 'in-progress'}
+# Priority labels affect execution ORDER only, not authorization.
+# The 'approved' label is the authorization gate. Private repo: all collaborators trusted.
 PRIORITY_ORDER = {'priority:high': 0, 'priority:low': 2}
 issues = json.load(sys.stdin)
 candidates = []
