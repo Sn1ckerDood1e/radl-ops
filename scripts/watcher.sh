@@ -248,7 +248,8 @@ for i in issues:
     labels = {l['name'] for l in i.get('labels', [])}
     if labels & SKIP_LABELS:
         continue
-    pri = min((PRIORITY_ORDER.get(l, 1) for l in labels), default=1)
+    priority_labels = [PRIORITY_ORDER[l] for l in labels if l in PRIORITY_ORDER]
+    pri = min(priority_labels) if priority_labels else 1
     candidates.append((pri, i['number'], i))
 candidates.sort(key=lambda x: (x[0], x[1]))
 if candidates:
@@ -555,7 +556,11 @@ if issues:
   title=$(echo "$active" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['title'])" 2>/dev/null || echo "")
   echo "Cancelling issue #$issue_num: $title"
   add_label "$issue_num" "cancel"
-  echo "Cancel label added. The watcher will stop processing within ~15 seconds."
+  if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "Cancel label added. The watcher will stop processing within ~15 seconds."
+  else
+    echo "Cancel label added. Note: watcher is not running — start it with 'watcher.sh start' for the cancel to take effect."
+  fi
 }
 
 # --- Main ---
