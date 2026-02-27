@@ -29,6 +29,8 @@ TMUX_SESSION="radl-watcher"
 LOG_DIR="$RADL_OPS_DIR/logs/watcher"
 STATE_FILE="$LOG_DIR/.watcher-state"
 PROMPT_TEMPLATE="$RADL_OPS_DIR/scripts/watcher-prompt.md"
+FAILURE_COUNT_FILE="$LOG_DIR/.failure-count"
+MAX_CONSECUTIVE_FAILURES="${WATCHER_MAX_FAILURES:-3}"
 
 GH="${GH_BIN:-$(command -v gh 2>/dev/null || echo "$HOME/.local/bin/gh")}"
 
@@ -61,6 +63,22 @@ write_state() {
 
 read_state() {
   cat "$STATE_FILE" 2>/dev/null || echo "unknown"
+}
+
+read_failure_count() {
+  cat "$FAILURE_COUNT_FILE" 2>/dev/null || echo "0"
+}
+
+increment_failure_count() {
+  local count
+  count=$(read_failure_count)
+  count=$((count + 1))
+  echo "$count" > "$FAILURE_COUNT_FILE"
+  echo "$count"
+}
+
+reset_failure_count() {
+  echo "0" > "$FAILURE_COUNT_FILE"
 }
 
 render_prompt() {
@@ -185,6 +203,13 @@ print(sum(1 for i in issues if not ({l['name'] for l in i.get('labels',[])} & SK
     if [ "$active_count" != "0" ] && [ "$active_count" != "?" ]; then
       echo "Active:  $active_count issue(s) in progress"
     fi
+
+    # Show failure count if any
+    local failures
+    failures=$(read_failure_count)
+    if [ "$failures" -gt 0 ] 2>/dev/null; then
+      echo "Failures: $failures consecutive (circuit breaker at $MAX_CONSECUTIVE_FAILURES)"
+    fi
   else
     echo "Watcher: NOT RUNNING"
     echo "Start with: watcher.sh start"
@@ -273,6 +298,20 @@ if candidates:
     return
   fi
 
+  # Circuit breaker: pause after consecutive failures
+  local failure_count
+  failure_count=$(read_failure_count)
+  if [ "$failure_count" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
+    local state
+    state=$(read_state)
+    if [ "$state" != "paused-circuit-breaker" ]; then
+      log "CIRCUIT BREAKER: $failure_count consecutive failures, pausing watcher"
+      comment_issue "$issue_num" "Watcher paused after $failure_count consecutive failures. Run \`watcher.sh resume\` to reset and continue."
+      write_state "paused-circuit-breaker"
+    fi
+    return
+  fi
+
   log "Found actionable issue #$issue_num: $issue_title"
   process_issue "$issue_num" "$issue_title" "$issue_body"
 }
@@ -289,7 +328,32 @@ process_issue() {
   slug=$(slugify "$issue_title")
   local branch_name="auto/issue-${issue_num}-${slug}"
 
+  # Prompt injection pre-filter: reject issues with suspicious patterns
+  local INJECTION_PATTERNS='(ignore previous|disregard instructions|you are now|system prompt|override all|bypass security|forget your instructions|new persona)'
+  if echo "$issue_body" | grep -qiE "$INJECTION_PATTERNS"; then
+    log "REJECTED: Issue #$issue_num contains suspicious prompt patterns"
+    fail_issue "$issue_num" "Issue body contains suspicious prompt patterns. Manual review required." "/dev/null" ""
+    return
+  fi
+
+  # Effort scaling: adjust budget/turns/timeout based on priority labels
+  local issue_labels
+  issue_labels=$("$GH" issue view "$issue_num" --repo "$REPO" --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null || echo "")
+  local eff_budget="$MAX_BUDGET"
+  local eff_turns="$MAX_TURNS"
+  local eff_timeout="$TIMEOUT"
+  if echo "$issue_labels" | grep -q "priority:high"; then
+    eff_budget="8.00"
+    eff_turns="100"
+    eff_timeout="10800"  # 3 hours
+  elif echo "$issue_labels" | grep -q "priority:low"; then
+    eff_budget="3.00"
+    eff_turns="50"
+    eff_timeout="3600"   # 1 hour
+  fi
+
   log "Processing issue #$issue_num: $issue_title"
+  log "Effort: budget=\$${eff_budget}, turns=$eff_turns, timeout=${eff_timeout}s"
   write_state "processing issue #$issue_num: $issue_title"
 
   # Update labels
@@ -330,13 +394,13 @@ ${knowledge_ctx}"
   fi
 
   # Run claude -p in background so we can check for cancel label
-  log "Running claude -p for issue #$issue_num (timeout: ${TIMEOUT}s, budget: \$${MAX_BUDGET})..."
+  log "Running claude -p for issue #$issue_num (timeout: ${eff_timeout}s, budget: \$${eff_budget})..."
 
   # Start in new process group so cancel can kill the entire tree
-  setsid timeout "$TIMEOUT" "$CLAUDE_BIN" -p "$prompt" \
-    --max-turns "$MAX_TURNS" \
+  setsid timeout "$eff_timeout" "$CLAUDE_BIN" -p "$prompt" \
+    --max-turns "$eff_turns" \
     --permission-mode bypassPermissions \
-    --max-budget-usd "$MAX_BUDGET" \
+    --max-budget-usd "$eff_budget" \
     >> "$log_file" 2>&1 &
   local claude_pid=$!
 
@@ -371,8 +435,8 @@ ${knowledge_ctx}"
   fi
 
   if [ "$claude_exit" -eq 124 ]; then
-    log "TIMEOUT: Issue #$issue_num exceeded ${TIMEOUT}s"
-    fail_issue "$issue_num" "Execution timed out after ${TIMEOUT}s. Partial work may exist on branch \`$branch_name\`." "$log_file" "$branch_name"
+    log "TIMEOUT: Issue #$issue_num exceeded ${eff_timeout}s"
+    fail_issue "$issue_num" "Execution timed out after ${eff_timeout}s. Partial work may exist on branch \`$branch_name\`." "$log_file" "$branch_name"
     return
   fi
 
@@ -482,7 +546,8 @@ EOF
     # Still mark completed since work is done
   fi
 
-  # Mark success
+  # Mark success — reset circuit breaker
+  reset_failure_count
   remove_label "$issue_num" "in-progress"
   add_label "$issue_num" "completed"
 
@@ -505,6 +570,13 @@ fail_issue() {
   local reason="$2"
   local log_file="$3"
   local branch_name="$4"
+
+  # Circuit breaker: track consecutive failures (skip cancellations)
+  if ! echo "$reason" | grep -qi "cancel"; then
+    local new_count
+    new_count=$(increment_failure_count)
+    log "Failure count: $new_count / $MAX_CONSECUTIVE_FAILURES"
+  fi
 
   remove_label "$issue_num" "in-progress"
   add_label "$issue_num" "failed"
@@ -532,6 +604,15 @@ fail_issue() {
   git branch -D "$branch_name" >> "$log_file" 2>&1 || true
 
   write_state "polling"
+}
+
+cmd_resume() {
+  local failures
+  failures=$(read_failure_count)
+  reset_failure_count
+  write_state "polling"
+  echo "Circuit breaker reset (was $failures consecutive failures)."
+  echo "Watcher will resume processing on next poll cycle."
 }
 
 cmd_cancel() {
@@ -571,6 +652,7 @@ case "${1:-help}" in
   status) cmd_status ;;
   logs)   cmd_logs ;;
   cancel) cmd_cancel ;;
+  resume) cmd_resume ;;
   run)    cmd_run ;;
   help|*)
     echo "Usage: watcher.sh <command>"
@@ -581,6 +663,7 @@ case "${1:-help}" in
     echo "  status  — Show running state and queue depth"
     echo "  logs    — Tail the latest log file"
     echo "  cancel  — Cancel the currently in-progress issue"
+    echo "  resume  — Reset circuit breaker and resume polling"
     echo "  run     — Run poll loop directly (used inside tmux)"
     echo ""
     echo "Configuration (via .env or environment):"
@@ -588,6 +671,7 @@ case "${1:-help}" in
     echo "  WATCHER_MAX_TURNS      Max claude -p turns per issue (default: 75)"
     echo "  WATCHER_MAX_BUDGET     Max USD per issue (default: 5.00)"
     echo "  WATCHER_TIMEOUT        Max seconds per issue (default: 7200)"
+    echo "  WATCHER_MAX_FAILURES   Consecutive failures before pause (default: 3)"
     echo "  WATCHER_REPO           GitHub owner/repo (default: Sn1ckerDood1e/Radl)"
     ;;
 esac
