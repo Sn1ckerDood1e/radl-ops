@@ -59,7 +59,8 @@ Before implementing, consult the intelligence tools to avoid repeating past mist
 1. Call `mcp__radl-ops__knowledge_query` with the issue title to find relevant patterns and lessons from past sprints.
 2. Call `mcp__radl-ops__speculative_validate` with `{tasks: [{title: "{{ISSUE_TITLE}}", description: "<your implementation plan>"}]}` to run pre-validation checks against the knowledge base.
    - If warnings are returned, read them carefully and adjust your approach before implementing.
-3. If a "Past Sprint Patterns" section appears at the end of this prompt, read it carefully — it contains matched patterns from past sprints injected by the watcher infrastructure.
+3. If the issue scope is unclear or you need to understand the relevant file structure, call `mcp__radl-ops__repo_map` with a keyword (e.g., "practices", "equipment", "auth") to get a file tree with key exports.
+4. If a "Past Sprint Patterns" section appears at the end of this prompt, read it carefully — it contains matched patterns from past sprints injected by the watcher infrastructure.
 
 ## Step 3: Implementation (focused tasks only)
 

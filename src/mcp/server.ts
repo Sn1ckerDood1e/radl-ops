@@ -70,6 +70,7 @@ import { registerProductionStatusTools } from './tools/production-status.js';
 import { registerSessionHealthTools } from './tools/session-health.js';
 import { registerAlertCheckTools } from './tools/alert-check.js';
 import { registerTraceReportTools } from './tools/trace-report.js';
+import { registerRepoMapTools } from './tools/repo-map.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -127,6 +128,7 @@ registerProductionStatusTools(server);
 registerSessionHealthTools(server);
 registerAlertCheckTools(server);
 registerTraceReportTools(server);
+registerRepoMapTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

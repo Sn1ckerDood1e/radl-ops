@@ -230,6 +230,52 @@ export function getRouteWithFallback(
 }
 
 /**
+ * Route a task to a higher-tier model if the initial attempt scored below threshold.
+ *
+ * Cascade: Haiku → Sonnet → Opus. Only escalates one tier at a time.
+ * Tracks cascade events for cost analysis.
+ */
+export function routeByConfidence(
+  taskType: TaskType,
+  currentScore: number,
+  confidenceThreshold: number = 5,
+): ModelRoute {
+  const base = getRoute(taskType);
+
+  if (currentScore >= confidenceThreshold) {
+    return base;
+  }
+
+  const escalationChain: Record<ModelId, ModelId | null> = {
+    'claude-haiku-4-5-20251001': 'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-5-20250929': 'claude-opus-4-6',
+    'claude-opus-4-6': null, // Already at top tier
+  };
+
+  const nextModel = escalationChain[base.model];
+  if (!nextModel) {
+    logger.info('Cascade routing: already at top tier', { taskType, model: base.model, score: currentScore });
+    return base;
+  }
+
+  const pricing = MODEL_PRICING[nextModel];
+  logger.info('Cascade routing: escalating model', {
+    taskType,
+    from: base.model,
+    to: nextModel,
+    score: currentScore,
+    threshold: confidenceThreshold,
+  });
+
+  return {
+    ...base,
+    model: nextModel,
+    inputCostPer1M: pricing.input,
+    outputCostPer1M: pricing.output,
+  };
+}
+
+/**
  * Get all routes for display/debugging
  */
 export function getAllRoutes(): Record<TaskType, ModelRoute> {
