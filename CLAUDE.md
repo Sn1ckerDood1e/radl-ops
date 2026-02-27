@@ -292,10 +292,20 @@ When a large/vague issue is approved (e.g., "audit all UI/UX"), Claude automatic
 4. Monitor via GitHub notifications for PR or failure comment
 5. For broad tasks: just describe what you want — Claude will decompose automatically
 
-**Prompt template:** `scripts/watcher-prompt.md`
+**Prompt template:** `scripts/watcher-prompt.md` — 5-stage quality gate model:
+1. **Scope Assessment** — FOCUSED (implement) vs BROAD (decompose into sub-issues)
+2. **Knowledge Consultation** — `knowledge_query` + `speculative_validate` before coding
+3. **Implementation** — sprint tracking + per-commit reflection + `verify_data_flow` for new fields + `session_health` for long sprints
+4. **Verification** — `spot_check_diff` + `verify` against acceptance criteria before completing
+5. **Completion** — `sprint_complete` (auto Bloom pipeline) + summary comment for user
+
+**Tools used by autonomous agents (9):**
+`sprint_start`, `sprint_progress`, `sprint_complete`, `knowledge_query`, `speculative_validate`, `verify_data_flow`, `session_health`, `spot_check_diff`, `verify`
+
+**Issue template:** `scripts/issue-template.md` — standard format for creating watcher issues (What/Why/Acceptance Criteria/Scope/Priority). If no acceptance criteria in the issue body, the agent derives 2-4 testable criteria and posts them as a comment before implementing.
 
 **Intelligence (auto-wired):**
-- **Pre-prompt knowledge injection** — `scripts/watcher-knowledge.mjs` runs inverse bloom against the knowledge base before each `claude -p` call. Surfaces relevant patterns, lessons, antibodies, and causal nodes as a "Watch out for" section appended to the prompt. Zero-cost (~200ms, no AI calls).
+- **Pre-prompt knowledge injection** — `scripts/watcher-knowledge.mjs` runs inverse bloom against the knowledge base before each `claude -p` call. Surfaces relevant patterns, lessons, antibodies, and causal nodes as a "Past Sprint Patterns" section appended to the prompt. Zero-cost (~200ms, no AI calls).
 - **Failure antibody creation** — `scripts/watcher-antibody.mjs` auto-creates an antibody via Haiku (~$0.001) when an issue fails (excluding cancellations). Future inverse bloom runs will surface the antibody for similar issues, creating a learning loop.
 
 ## Automated Tasks (Cron)

@@ -52,18 +52,69 @@ Before implementing anything, assess the scope of this issue:
 
 ### If FOCUSED → Continue to Step 2
 
-## Step 2: Implementation (focused tasks only)
+## Step 2: Knowledge Consultation (before writing ANY code)
+
+Before implementing, consult the intelligence tools to avoid repeating past mistakes:
+
+1. Call `mcp__radl-ops__knowledge_query` with the issue title to find relevant patterns and lessons from past sprints.
+2. Call `mcp__radl-ops__speculative_validate` with `{tasks: [{title: "{{ISSUE_TITLE}}", description: "<your implementation plan>"}]}` to run pre-validation checks against the knowledge base.
+   - If warnings are returned, read them carefully and adjust your approach before implementing.
+3. If a "Past Sprint Patterns" section appears at the end of this prompt, read it carefully — it contains matched patterns from past sprints injected by the watcher infrastructure.
+
+## Step 3: Implementation (focused tasks only)
 
 1. You are already on branch `{{BRANCH_NAME}}`. Do NOT create a new branch.
-2. Start sprint tracking: mcp__radl-ops__sprint_start
-3. Read relevant source files before making changes
-4. Implement the feature/fix described above
-5. Run `npm run typecheck` after every change
-6. Commit per-task with conventional commits (feat/fix/refactor)
-7. After each commit, post a progress update on the issue so the user can monitor from their phone:
-   Run: `gh issue comment {{ISSUE_NUM}} --repo {{REPO}} --body "Progress: <what you just completed>"`
-8. Log progress: mcp__radl-ops__sprint_progress after each commit
-9. When done: mcp__radl-ops__sprint_complete
+2. Start sprint tracking: `mcp__radl-ops__sprint_start`
+3. Read relevant source files before making changes.
+4. Implement the feature/fix described above.
+5. Run `npm run typecheck` after every change.
+6. Commit per-task with conventional commits (feat/fix/refactor).
+7. After each commit:
+   a. Post a progress comment so the user can monitor from their phone:
+      `gh issue comment {{ISSUE_NUM}} --repo {{REPO}} --body "Progress: <what you just completed>"`
+   b. Log progress: `mcp__radl-ops__sprint_progress`
+8. **Data flow verification:** IF this issue involves adding a new database field, form field, or API parameter:
+   Call `mcp__radl-ops__verify_data_flow` to check the Schema→Migration→Validation→API→Client lifecycle.
+   This catches the Phase 69 bug class where fields pass validation but are silently discarded.
+9. **Session health:** IF you have completed 3+ commits and more work remains:
+   Call `mcp__radl-ops__session_health` to check for rabbit holes and context pressure.
+10. **Scope discipline:** IF you discover tech debt unrelated to this issue:
+    Note it in an issue comment (do NOT scope-creep to fix it).
+
+### Per-Commit Reflection
+
+After each commit, before moving to the next task, pause and reflect:
+- Did I follow the patterns from the knowledge consultation step?
+- Did the typecheck pass cleanly, or did I have to fix issues?
+- Am I staying within the scope of the issue?
+If you notice a pattern of fixes or drift, adjust your approach for the remaining tasks.
+
+## Step 4: Verification (before completing the sprint)
+
+Before calling sprint_complete, verify your work:
+
+1. Run `npm run typecheck` one final time.
+2. Call `mcp__radl-ops__spot_check_diff` to AI-review your commits for common mistakes.
+3. If acceptance criteria exist in the issue body:
+   Call `mcp__radl-ops__verify` with the acceptance criteria to verify task completion.
+4. If spot_check or verify returns issues, attempt ONE remediation pass (fix and re-commit).
+   Do NOT loop more than once — if the fix introduces new issues, document them in a comment.
+
+## Step 5: Completion
+
+1. Run: `COMMIT=$(git rev-parse --short HEAD)`
+2. Call `mcp__radl-ops__sprint_complete` with `commit: "$COMMIT"` and `actual_time: "estimated"`.
+   (sprint_complete auto-extracts compound learnings via the Bloom pipeline.)
+3. If no acceptance criteria existed in the issue, post a summary comment describing what was built so the user can verify from their phone:
+   `gh issue comment {{ISSUE_NUM}} --repo {{REPO}} --body "Summary: <what was built and how to test it>"`
+
+## Acceptance Criteria Derivation
+
+If the issue body does not contain explicit acceptance criteria (checkboxes, "should", "must"),
+derive 2-4 testable criteria from the issue title and description before implementing.
+Post them as a GitHub issue comment:
+`gh issue comment {{ISSUE_NUM}} --repo {{REPO}} --body "Derived acceptance criteria:\n- [ ] ..."`
+This enables the verify tool in Step 4 to check your work before sprint_complete.
 
 ## Autonomy Rules (OVERRIDE for this session)
 
