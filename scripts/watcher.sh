@@ -546,6 +546,18 @@ EOF
     # Still mark completed since work is done
   fi
 
+  # Extract and log cost from Claude CLI output (last few lines contain usage summary)
+  local cost_line
+  cost_line=$(tail -30 "$log_file" 2>/dev/null | grep -oP 'Total cost: \$[\d.]+' | tail -1 || echo "")
+  local issue_cost="0"
+  if [ -n "$cost_line" ]; then
+    issue_cost=$(echo "$cost_line" | grep -oP '[\d.]+' || echo "0")
+    local cost_date
+    cost_date=$(date +%Y-%m-%d)
+    echo "{\"date\":\"$cost_date\",\"issue\":$issue_num,\"cost_usd\":$issue_cost,\"branch\":\"$branch_name\"}" >> "$LOG_DIR/cost-summary.jsonl"
+    log "Issue #$issue_num cost: \$$issue_cost"
+  fi
+
   # Mark success — reset circuit breaker
   reset_failure_count
   remove_label "$issue_num" "in-progress"

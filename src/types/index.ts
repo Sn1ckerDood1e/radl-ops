@@ -62,6 +62,7 @@ export interface CostAnalytics {
   byModel: Record<string, { calls: number; costUsd: number; tokens: number }>;
   byTaskType: Record<string, { calls: number; costUsd: number }>;
   bySprint: Record<string, { calls: number; costUsd: number }>;
+  byTool: Record<string, { calls: number; costUsd: number; avgCostUsd: number }>;
 }
 
 // ============================================
