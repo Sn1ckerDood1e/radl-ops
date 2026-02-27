@@ -7,7 +7,8 @@
  * - Haiku: Fast lightweight tasks, 90% of Sonnet capability at 3x savings
  */
 
-import type { ModelId, EffortLevel, ModelRoute, TaskType } from '../types/index.js';
+import type { ModelId, EffortLevel, ModelRoute, TaskType, ModelGateway, ChatParams, ChatResponse } from '../types/index.js';
+import type Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../config/logger.js';
 
 /**
@@ -284,4 +285,72 @@ export function getAllRoutes(): Record<TaskType, ModelRoute> {
     result[taskType] = getRoute(taskType);
   }
   return result;
+}
+
+// ============================================
+// Model Gateway
+// ============================================
+
+/**
+ * Default gateway: routes directly to the Anthropic API.
+ * Can be swapped for LiteLLM, Bedrock, or Vertex gateways.
+ */
+export class AnthropicDirectGateway implements ModelGateway {
+  readonly name = 'anthropic-direct';
+  private getClient: () => import('@anthropic-ai/sdk').default;
+
+  constructor(clientFactory: () => import('@anthropic-ai/sdk').default) {
+    this.getClient = clientFactory;
+  }
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    const client = this.getClient();
+
+    const response = await client.messages.create({
+      model: params.model,
+      max_tokens: params.maxTokens,
+      system: params.system,
+      messages: params.messages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })),
+    });
+
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map(b => b.text)
+      .join('\n');
+
+    return {
+      text,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      model: response.model,
+    };
+  }
+}
+
+let activeGateway: ModelGateway | null = null;
+
+/**
+ * Set the active model gateway. Falls back to AnthropicDirectGateway
+ * if none is set (lazy-initialized on first getGateway() call).
+ */
+export function setGateway(gateway: ModelGateway): void {
+  activeGateway = gateway;
+  logger.info('Model gateway set', { name: gateway.name });
+}
+
+/**
+ * Get the active model gateway.
+ * Lazy-initializes to AnthropicDirectGateway if none set.
+ */
+export function getGateway(): ModelGateway {
+  if (!activeGateway) {
+    // Lazy import to avoid circular dependency
+    const { getAnthropicClient } = require('../config/anthropic.js') as { getAnthropicClient: () => import('@anthropic-ai/sdk').default };
+    activeGateway = new AnthropicDirectGateway(getAnthropicClient);
+    logger.info('Default Anthropic gateway initialized');
+  }
+  return activeGateway;
 }

@@ -33,6 +33,34 @@ export type TaskType =
   | 'social_generation';
 
 // ============================================
+// Model Gateway
+// ============================================
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatParams {
+  model: ModelId;
+  maxTokens: number;
+  messages: ChatMessage[];
+  system?: string;
+}
+
+export interface ChatResponse {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+}
+
+export interface ModelGateway {
+  name: string;
+  chat(params: ChatParams): Promise<ChatResponse>;
+}
+
+// ============================================
 // Token Tracking
 // ============================================
 
