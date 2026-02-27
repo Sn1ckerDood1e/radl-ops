@@ -71,6 +71,8 @@ import { registerSessionHealthTools } from './tools/session-health.js';
 import { registerAlertCheckTools } from './tools/alert-check.js';
 import { registerTraceReportTools } from './tools/trace-report.js';
 import { registerRepoMapTools } from './tools/repo-map.js';
+import { registerFailureAnalysisTools } from './tools/failure-analysis.js';
+import { registerEpisodicMemoryTools } from '../knowledge/episodic.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -129,6 +131,8 @@ registerSessionHealthTools(server);
 registerAlertCheckTools(server);
 registerTraceReportTools(server);
 registerRepoMapTools(server);
+registerFailureAnalysisTools(server);
+registerEpisodicMemoryTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);
