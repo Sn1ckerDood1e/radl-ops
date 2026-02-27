@@ -41,6 +41,7 @@ export interface SearchOptions {
   ftsWeight?: number;
   vectorWeight?: number;
   timeDecayHalfLife?: number;
+  useHyDE?: boolean;
 }
 
 interface KnowledgeEntry {
@@ -358,11 +359,100 @@ function sanitizeFtsQuery(raw: string): string {
   return stripped.split(/\s+/).filter(Boolean).join(' OR ');
 }
 
+// ============================================
+// HyDE Query Expansion
+// ============================================
+
+/** Stopwords to filter from HyDE expansion (common terms that add noise) */
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'that', 'this', 'with', 'from', 'are', 'was',
+  'were', 'been', 'have', 'has', 'had', 'not', 'but', 'can', 'will',
+  'should', 'would', 'could', 'may', 'use', 'used', 'using', 'when',
+  'how', 'what', 'which', 'where', 'who', 'why', 'all', 'each',
+  'every', 'both', 'few', 'more', 'most', 'other', 'some', 'such',
+  'than', 'too', 'very', 'just', 'about', 'above', 'after', 'again',
+  'also', 'any', 'because', 'before', 'between', 'into', 'its',
+  'only', 'over', 'same', 'then', 'there', 'these', 'through',
+]);
+
+/**
+ * Expand a query using Hypothetical Document Embedding (HyDE).
+ *
+ * Generates a hypothetical answer using Haiku, then extracts key terms
+ * to bridge the vocabulary gap between short queries and long knowledge entries.
+ * Adds ~200ms latency per query (~$0.001 cost).
+ */
+export async function expandQueryWithHyDE(query: string): Promise<string[]> {
+  try {
+    const { getAnthropicClient } = await import('../config/anthropic.js');
+    const client = getAnthropicClient();
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 150,
+      messages: [{
+        role: 'user',
+        content: `Given this search query about software development patterns, write a 2-sentence paragraph that would appear in a relevant knowledge base entry: ${query}`,
+      }],
+    });
+
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    if (!text) return [];
+
+    // Extract unique tokens, filter stopwords and short terms
+    const tokens = text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 2 && !STOPWORDS.has(t));
+
+    return [...new Set(tokens)];
+  } catch (error) {
+    logger.warn('HyDE expansion failed, using original query', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * Search with optional HyDE expansion.
+ * When useHyDE is true, expands the query before searching.
+ */
+export async function searchWithHyDE(options: SearchOptions): Promise<SearchResult[]> {
+  if (!options.useHyDE) {
+    return searchFts(options);
+  }
+
+  const hydeTerms = await expandQueryWithHyDE(options.query);
+  if (hydeTerms.length === 0) {
+    return searchFts(options);
+  }
+
+  // Combine original query terms with HyDE expansion terms
+  const originalTerms = options.query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length > 2);
+
+  const combinedTerms = [...new Set([...originalTerms, ...hydeTerms])];
+  const expandedQuery = combinedTerms.join(' ');
+
+  logger.info('HyDE query expansion', {
+    original: options.query,
+    expanded: expandedQuery,
+    addedTerms: hydeTerms.length,
+  });
+
+  return searchFts({ ...options, query: expandedQuery });
+}
+
 /**
  * Search the FTS5 index using BM25 ranking with optional time decay.
  *
  * Returns results sorted by combined score (FTS5 BM25 * time decay).
- * The vectorScore field is reserved for future embedding-based search.
+ * When vectorWeight > 0, combines FTS5 with vector similarity search.
  */
 export function searchFts(options: SearchOptions): SearchResult[] {
   const {
@@ -415,11 +505,47 @@ export function searchFts(options: SearchOptions): SearchResult[] {
     return [];
   }
 
-  // Apply time decay and compute combined scores
+  // Build vector score map if hybrid scoring is enabled
+  let vectorScoreMap = new Map<string, number>();
+  if (vectorWeight > 0) {
+    try {
+      const { isVocabularyReady, generateEmbedding, searchByVector, isVecAvailable } = require('./vector.js') as typeof import('./vector.js');
+      if (isVocabularyReady() && isVecAvailable()) {
+        const queryVec = generateEmbedding(query);
+        const vecResults = searchByVector(queryVec, maxResults * 3);
+        for (const vr of vecResults) {
+          vectorScoreMap.set(vr.id, vr.score);
+        }
+      }
+    } catch {
+      // Vector search not available — fall through to FTS-only
+    }
+  }
+
+  // Load retrieval timestamps for access-refreshed decay
+  const retrievalDates = new Map<string, string>();
+  try {
+    const retrievalRows = db.prepare(
+      'SELECT entry_id, last_retrieved_at FROM retrieval_counts WHERE last_retrieved_at IS NOT NULL'
+    ).all() as Array<{ entry_id: string; last_retrieved_at: string }>;
+    for (const r of retrievalRows) {
+      retrievalDates.set(r.entry_id, r.last_retrieved_at);
+    }
+  } catch {
+    // Retrieval table may not exist yet — skip
+  }
+
+  // Apply time decay with access-refreshed dates and compute combined scores
   const results: SearchResult[] = rows.map(row => {
-    const decay = timeDecay(row.date, timeDecayHalfLife);
+    // Access-refreshed decay: use the more recent of entry date or last retrieval
+    const lastAccessed = retrievalDates.get(row.id);
+    const effectiveDate = lastAccessed && lastAccessed > row.date ? lastAccessed : row.date;
+    const decay = timeDecay(effectiveDate, timeDecayHalfLife);
     const ftsScore = row.fts_score * decay;
-    const combinedScore = ftsScore * ftsWeight;
+
+    // Hybrid scoring: combine FTS and vector scores
+    const vecScore = vectorScoreMap.get(row.id) ?? 0;
+    const combinedScore = ftsScore * ftsWeight + vecScore * vectorWeight;
 
     return {
       id: row.id,
@@ -428,11 +554,12 @@ export function searchFts(options: SearchOptions): SearchResult[] {
       text: row.text,
       date: row.date,
       ftsScore,
+      vectorScore: vecScore > 0 ? vecScore : undefined,
       combinedScore,
     };
   });
 
-  // Re-sort by combined score (time decay may change ordering)
+  // Re-sort by combined score (time decay + hybrid may change ordering)
   const sorted = [...results]
     .sort((a, b) => b.combinedScore - a.combinedScore)
     .slice(0, maxResults);
@@ -441,6 +568,7 @@ export function searchFts(options: SearchOptions): SearchResult[] {
     query,
     totalMatches: rows.length,
     returned: sorted.length,
+    hybridEnabled: vectorWeight > 0,
   });
 
   return sorted;
