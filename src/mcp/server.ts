@@ -5,7 +5,7 @@
  * Communicates via stdio (JSON-RPC over stdin/stdout).
  *
  * Capabilities:
- * - Tools: 56 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
+ * - Tools: 62 tools across 3 groups (core, content, advanced) + 1 meta, with annotations
  * - Resources: sprint://current (cached), config://iron-laws, config://tool-groups
  * - Prompts: sprint-start, sprint-review, code-review
  *

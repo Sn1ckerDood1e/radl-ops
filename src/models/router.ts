@@ -9,6 +9,7 @@
 
 import type { ModelId, EffortLevel, ModelRoute, TaskType, ModelGateway, ChatParams, ChatResponse } from '../types/index.js';
 import type Anthropic from '@anthropic-ai/sdk';
+import { getAnthropicClient } from '../config/anthropic.js';
 import { logger } from '../config/logger.js';
 
 /**
@@ -347,8 +348,6 @@ export function setGateway(gateway: ModelGateway): void {
  */
 export function getGateway(): ModelGateway {
   if (!activeGateway) {
-    // Lazy import to avoid circular dependency
-    const { getAnthropicClient } = require('../config/anthropic.js') as { getAnthropicClient: () => import('@anthropic-ai/sdk').default };
     activeGateway = new AnthropicDirectGateway(getAnthropicClient);
     logger.info('Default Anthropic gateway initialized');
   }
