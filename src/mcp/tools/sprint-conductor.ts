@@ -175,16 +175,15 @@ function loadKnowledgeContext(): KnowledgeContext {
     }
   }
 
-  const estimationsPath = `${config.knowledgeDir}/estimation-data.json`;
-  if (existsSync(estimationsPath)) {
-    try {
-      const data = JSON.parse(readFileSync(estimationsPath, 'utf-8'));
-      if (data.calibrationFactor) {
-        result.estimations = `Historical estimation calibration: estimates run ${Math.round(data.calibrationFactor * 100)}% of predicted`;
-      }
-    } catch (error) {
-      logger.error('Failed to parse estimation-data.json', { error: String(error) });
-    }
+  // Use the shared estimation utility (reads estimation-data.json internally)
+  try {
+    const factor = getCalibrationFactor();
+    const store = existsSync(`${config.knowledgeDir}/estimation-data.json`)
+      ? JSON.parse(readFileSync(`${config.knowledgeDir}/estimation-data.json`, 'utf-8'))
+      : {};
+    result.estimations = `Historical estimation calibration: estimates run ${Math.round(factor * 100)}% of predicted (${store.dataPoints?.length ?? 0} data points)`;
+  } catch (error) {
+    logger.error('Failed to load estimation calibration', { error: String(error) });
   }
 
   return result;

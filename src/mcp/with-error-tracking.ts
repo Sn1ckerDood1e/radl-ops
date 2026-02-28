@@ -10,6 +10,7 @@ import { recordError, clearError } from '../guardrails/iron-laws.js';
 import { logger } from '../config/logger.js';
 import { recordToolCall } from './tools/shared/session-state.js';
 import { startSpan, endSpan } from '../observability/tracer.js';
+import { checkToolCall, recordToolResult } from '../guardrails/loop-guard.js';
 
 /**
  * MCP tool handler return type — index signature required by MCP SDK
@@ -40,10 +41,25 @@ export function withErrorTracking<T>(
 ): ToolHandler<T> {
   return async (params: T, extra?: unknown): Promise<ToolResult> => {
     const spanId = startSpan(`tool:${toolName}`, { tags: { tool: toolName } });
+
+    // Loop guard: detect and prevent repeated tool call patterns
+    const guardResult = checkToolCall(toolName, params);
+    if (guardResult.action === 'block') {
+      endSpan(spanId, { status: 'error', error: guardResult.reason });
+      return {
+        content: [{ type: 'text' as const, text: `**LOOP GUARD BLOCKED**: ${guardResult.reason}\n\nDo NOT retry. Try a different approach or ask the user for guidance.` }],
+        isError: true,
+      };
+    }
+    if (guardResult.action === 'warn') {
+      logger.warn('Loop guard warning', { tool: toolName, reason: guardResult.reason });
+    }
+
     try {
       const result = await handler(params, extra);
       clearError(toolName);
       recordToolCall(toolName, true);
+      recordToolResult(toolName, params, result);
       endSpan(spanId, { status: 'ok' });
       return result;
     } catch (error) {

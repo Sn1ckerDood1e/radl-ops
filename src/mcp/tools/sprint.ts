@@ -262,6 +262,33 @@ function getDeferredTriageSummary(): string {
   return `\nDeferred triage (${unresolved.length} unresolved, oldest 3):\n${oldest.join('\n')}`;
 }
 
+/**
+ * Analyze sprint learnings for potential CLAUDE.md rule proposals.
+ * Returns proposed rules (not auto-written — human approval required).
+ */
+function proposeClaudeMdRules(lessons: Array<{ category: string; content: string }>): string[] {
+  const proposals: string[] = [];
+
+  // Look for lessons/patterns that contain directive language
+  const correctionPatterns = lessons.filter(l =>
+    l.category === 'lesson' || l.category === 'pattern'
+  );
+
+  for (const lesson of correctionPatterns) {
+    const content = lesson.content.toLowerCase();
+    // If the lesson mentions "always", "never", "must", "should" — it's a potential rule
+    if (/\b(always|never|must not|should always|do not|avoid)\b/.test(content)) {
+      // Format as a CLAUDE.md-style rule
+      const rule = lesson.content.trim();
+      if (rule.length > 20 && rule.length < 200) {
+        proposals.push(rule);
+      }
+    }
+  }
+
+  return proposals.slice(0, 2); // Max 2 proposals per sprint
+}
+
 function normalizeSprintData(raw: Record<string, unknown>): SprintData {
   return {
     phase: String(raw.phase ?? 'Unknown'),
@@ -435,7 +462,7 @@ function compareValidationWarnings(
 // parseTimeToMinutes moved to shared/quality-gates.ts
 
 // Exported for testing
-export { compareValidationWarnings };
+export { compareValidationWarnings, proposeClaudeMdRules };
 
 export function registerSprintTools(server: McpServer): void {
   server.tool(
@@ -661,11 +688,13 @@ export function registerSprintTools(server: McpServer): void {
       }).optional().describe('Track agent team usage for performance memory'),
       auto_extract: z.boolean().optional().default(true)
         .describe('Auto-run compound learning extraction via Bloom pipeline (default: true)'),
+      context_usage_percent: z.number().min(0).max(100).optional()
+        .describe('Current context window usage percentage (0-100). Passed to cognitive calibration for accuracy.'),
       intent: z.string().min(1).max(100).optional()
         .describe('Short intent description for structured logging (e.g., "ship auth feature")'),
     },
     { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used, auto_extract, intent }) => {
+    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used, auto_extract, context_usage_percent, intent }) => {
       const output = runSprint(['complete', commit, actual_time]);
 
       if (intent) {
@@ -675,14 +704,16 @@ export function registerSprintTools(server: McpServer): void {
       // Clear sprint phase tag for cost tracking
       setCurrentSprintPhase(null);
 
-      // Record completion event for audit trail
-      const completionPhaseMatch = output.match(/Phase\s+[\d.]+/i);
-      const completionPhase = completionPhaseMatch ? completionPhaseMatch[0] : 'Unknown';
-      recordCompleteEvent(completionPhase, commit, actual_time);
+      // Parse structured sprint data (hoisted here for all downstream uses)
+      const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+      const completedRaw = findCompletedSprintData(sprintDir);
+      const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
 
-      // Parse sprint phase once for all downstream uses
-      const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);
-      const sprintPhase = sprintPhaseMatch ? sprintPhaseMatch[0] : 'Unknown';
+      // Use structured data instead of fragile regex on shell stdout
+      const sprintPhase = completedSprintData?.phase ?? 'Unknown';
+
+      // Record completion event for audit trail
+      recordCompleteEvent(sprintPhase, commit, actual_time);
 
       let deferredNote = '';
       if (deferred_items && deferred_items.length > 0) {
@@ -738,11 +769,6 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
-      // Shared state for quality gates + auto_extract blocks (hoist to avoid repeated filesystem reads)
-      const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-      const completedRaw = findCompletedSprintData(sprintDir);
-      const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
-
       // Auto-extract compound learnings via Bloom pipeline
       let extractNote = '';
       if (auto_extract !== false) {
@@ -775,10 +801,22 @@ export function registerSprintTools(server: McpServer): void {
             }, null, 2));
 
             extractNote = `\nCompound extract: ${bloomResult.lessons.length} lessons (quality: ${bloomResult.qualityScore}/10, cost: $${bloomResult.totalCostUsd})`;
+
+            // Propose CLAUDE.md rule additions from sprint learnings
+            const ruleProposals = proposeClaudeMdRules(bloomResult.lessons);
+            if (ruleProposals.length > 0) {
+              extractNote += '\n\n## Proposed CLAUDE.md Rules\n\n';
+              extractNote += 'The following rules were derived from this sprint\'s learnings. Add to CLAUDE.md if appropriate:\n';
+              ruleProposals.forEach((rule, idx) => {
+                extractNote += `\n${idx + 1}. ${rule}`;
+              });
+            }
+
             logger.info('Auto compound extract completed', {
               lessons: bloomResult.lessons.length,
               quality: bloomResult.qualityScore,
               cost: bloomResult.totalCostUsd,
+              ruleProposals: ruleProposals.length,
             });
           }
         } catch (error) {
@@ -915,7 +953,7 @@ export function registerSprintTools(server: McpServer): void {
           recordCognitiveCalibration({
             sprint: sprintPhase,
             taskCount,
-            contextUsagePercent: 50, // Default estimate; can be refined later
+            contextUsagePercent: context_usage_percent ?? 50,
           });
         } catch (error) {
           logger.warn('Cognitive calibration recording failed (non-fatal)', { error: String(error) });
