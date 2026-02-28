@@ -179,8 +179,8 @@ describe('raptor', () => {
     it('builds summaries from FTS entries via Haiku', async () => {
       vi.mocked(isFtsAvailable).mockReturnValue(true);
       vi.mocked(searchFts).mockReturnValue([
-        { id: 'e1', text: 'Always use CSRF headers for auth security', score: 1, metadata: {} },
-        { id: 'e2', text: 'Prisma migration must split enum changes', score: 0.9, metadata: {} },
+        { id: 'e1', source: 'patterns', sourceId: 1, text: 'Always use CSRF headers for auth security', date: '2026-02-01', ftsScore: 1, combinedScore: 1 },
+        { id: 'e2', source: 'lessons', sourceId: 2, text: 'Prisma migration must split enum changes', date: '2026-02-01', ftsScore: 0.9, combinedScore: 0.9 },
       ]);
       vi.mocked(existsSync).mockReturnValue(false);
 
