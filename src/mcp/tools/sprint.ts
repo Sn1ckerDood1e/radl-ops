@@ -34,6 +34,9 @@ import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.j
 import { searchFts, isFtsAvailable } from '../../knowledge/fts-index.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
 import { session } from './shared/session-state.js';
+import { getRoute } from '../../models/router.js';
+import { getAnthropicClient } from '../../config/anthropic.js';
+import type Anthropic from '@anthropic-ai/sdk';
 import { recordStartEvent, recordProgressEvent, recordCompleteEvent } from './shared/sprint-events.js';
 
 function getDeferredPath(): string {
@@ -264,22 +267,18 @@ function getDeferredTriageSummary(): string {
 }
 
 /**
- * Analyze sprint learnings for potential CLAUDE.md rule proposals.
- * Returns proposed rules (not auto-written — human approval required).
+ * Regex-based fallback for rule proposal (used when Haiku is unavailable).
  */
-function proposeClaudeMdRules(lessons: Array<{ category: string; content: string }>): string[] {
+function proposeClaudeMdRulesRegex(lessons: Array<{ category: string; content: string }>): string[] {
   const proposals: string[] = [];
 
-  // Look for lessons/patterns that contain directive language
   const correctionPatterns = lessons.filter(l =>
     l.category === 'lesson' || l.category === 'pattern'
   );
 
   for (const lesson of correctionPatterns) {
     const content = lesson.content.toLowerCase();
-    // If the lesson mentions "always", "never", "must", "should" — it's a potential rule
     if (/\b(always|never|must not|should always|do not|avoid)\b/.test(content)) {
-      // Format as a CLAUDE.md-style rule
       const rule = lesson.content.trim();
       if (rule.length > 20 && rule.length < 200) {
         proposals.push(rule);
@@ -287,7 +286,74 @@ function proposeClaudeMdRules(lessons: Array<{ category: string; content: string
     }
   }
 
-  return proposals.slice(0, 2); // Max 2 proposals per sprint
+  return proposals.slice(0, 2);
+}
+
+/**
+ * Analyze sprint learnings for potential CLAUDE.md rule proposals.
+ * Uses Haiku for semantic analysis, with regex fallback on failure.
+ * Returns proposed rules (not auto-written — human approval required).
+ */
+async function proposeClaudeMdRules(lessons: Array<{ category: string; content: string }>): Promise<string[]> {
+  const correctionLessons = lessons.filter(l =>
+    l.category === 'lesson' || l.category === 'pattern'
+  );
+
+  if (correctionLessons.length === 0) return [];
+
+  try {
+    const route = getRoute('spot_check');
+    const client = getAnthropicClient();
+
+    const lessonsText = correctionLessons
+      .map((l, i) => `${i + 1}. [${l.category}] ${l.content}`)
+      .join('\n');
+
+    const RULE_PROPOSAL_TOOL: Anthropic.Messages.Tool = {
+      name: 'propose_rules',
+      description: 'Propose 0-2 CLAUDE.md rules from sprint lessons',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          rules: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: 2,
+            description: 'Proposed rules (imperative, 20-150 chars each). Empty array if no good candidates.',
+          },
+        },
+        required: ['rules'],
+      },
+    };
+
+    const response = await client.messages.create({
+      model: route.model,
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Analyze these sprint lessons and propose 0-2 concise CLAUDE.md rules. Only propose rules that are specific, actionable, and would prevent future bugs. Skip generic advice.\n\nLessons:\n${lessonsText}`,
+      }],
+      tools: [RULE_PROPOSAL_TOOL],
+      tool_choice: { type: 'tool', name: 'propose_rules' },
+    });
+
+    const toolBlock = response.content.find(
+      (b): b is Anthropic.Messages.ToolUseBlock => b.type === 'tool_use',
+    );
+    if (toolBlock) {
+      const input = toolBlock.input as { rules?: string[] };
+      return (input.rules ?? [])
+        .filter(r => r.length >= 20 && r.length <= 200)
+        .slice(0, 2);
+    }
+  } catch (error) {
+    logger.warn('Haiku rule proposal failed, falling back to regex', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Fallback to regex matching
+  return proposeClaudeMdRulesRegex(lessons);
 }
 
 function normalizeSprintData(raw: Record<string, unknown>): SprintData {
@@ -804,7 +870,7 @@ export function registerSprintTools(server: McpServer): void {
             extractNote = `\nCompound extract: ${bloomResult.lessons.length} lessons (quality: ${bloomResult.qualityScore}/10, cost: $${bloomResult.totalCostUsd})`;
 
             // Propose CLAUDE.md rule additions from sprint learnings
-            const ruleProposals = proposeClaudeMdRules(bloomResult.lessons);
+            const ruleProposals = await proposeClaudeMdRules(bloomResult.lessons);
             if (ruleProposals.length > 0) {
               extractNote += '\n\n## Proposed CLAUDE.md Rules\n\n';
               extractNote += 'The following rules were derived from this sprint\'s learnings. Add to CLAUDE.md if appropriate:\n';
