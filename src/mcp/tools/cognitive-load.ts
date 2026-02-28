@@ -120,29 +120,53 @@ function findCompactionPoint(
 }
 
 /**
+ * Generate an actionable recommendation based on current context usage percentage.
+ * Returns a concise recommendation string for immediate use.
+ */
+export function getContextRecommendation(usagePercent: number): string {
+  if (usagePercent < 60) return 'Proceed normally.';
+  if (usagePercent < 75) return 'Consider compacting after current task.';
+  if (usagePercent < 90) return 'Compact now — use /strategic-compact.';
+  return 'CRITICAL: Compact immediately or risk context loss.';
+}
+
+/**
  * Generate a human-readable recommendation based on status and compaction point.
  */
 function generateRecommendation(
   status: 'safe' | 'warning' | 'critical',
   compactionPoint: number | null,
   tasks: TaskEstimate[],
+  contextUsagePercent?: number,
 ): string {
+  // If no tasks but we have usage info, give context-based recommendation
+  if (tasks.length === 0 && contextUsagePercent !== undefined) {
+    return getContextRecommendation(contextUsagePercent);
+  }
   if (tasks.length === 0) {
     return 'No remaining tasks. Context window is clear.';
   }
 
-  switch (status) {
-    case 'safe':
-      return 'All tasks fit comfortably within the context window. No compaction needed.';
-    case 'warning':
-      return compactionPoint !== null
-        ? `Approaching context limit. Recommend compaction after task ${compactionPoint + 1} ("${tasks[compactionPoint].title}") to maintain headroom.`
-        : 'Approaching context limit. Consider compacting soon to maintain headroom.';
-    case 'critical':
-      return compactionPoint !== null
-        ? `Context overflow predicted. Compact after task ${compactionPoint + 1} ("${tasks[compactionPoint].title}") or split the sprint into smaller batches.`
-        : 'Context overflow predicted before completing tasks. Compact now or split the sprint.';
+  const baseRecommendation = (() => {
+    switch (status) {
+      case 'safe':
+        return 'All tasks fit comfortably within the context window. No compaction needed.';
+      case 'warning':
+        return compactionPoint !== null
+          ? `Approaching context limit. Recommend compaction after task ${compactionPoint + 1} ("${tasks[compactionPoint].title}") to maintain headroom.`
+          : 'Approaching context limit. Consider compacting soon to maintain headroom.';
+      case 'critical':
+        return compactionPoint !== null
+          ? `Context overflow predicted. Compact after task ${compactionPoint + 1} ("${tasks[compactionPoint].title}") or split the sprint into smaller batches.`
+          : 'Context overflow predicted before completing tasks. Compact now or split the sprint.';
+    }
+  })();
+
+  // Append immediate action if context is already high
+  if (contextUsagePercent !== undefined && contextUsagePercent >= 75) {
+    return `${baseRecommendation} **Immediate:** ${getContextRecommendation(contextUsagePercent)}`;
   }
+  return baseRecommendation;
 }
 
 /**
@@ -192,7 +216,7 @@ export function estimateCognitiveLoad(
     ? null
     : findCompactionPoint(taskEstimates, warningTokens);
 
-  const recommendation = generateRecommendation(status, compactionPoint, taskEstimates);
+  const recommendation = generateRecommendation(status, compactionPoint, taskEstimates, usagePercent);
 
   return {
     status,

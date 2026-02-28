@@ -45,6 +45,7 @@ import type { ParallelWave } from './shared/agent-validation.js';
 import { withRetry } from '../../utils/retry.js';
 import { startSpan, endSpan } from '../../observability/tracer.js';
 import { searchFts } from '../../knowledge/fts-index.js';
+import { recallEpisodes } from '../../knowledge/episodic.js';
 import { createPlanFromDecomposition, savePlan } from './shared/plan-store.js';
 import { getCalibrationFactor } from './shared/estimation.js';
 import {
@@ -74,6 +75,7 @@ interface KnowledgeContext {
   deferred: string;
   estimations: string;
   historicalContext: string;
+  episodicContext: string;
 }
 
 interface ConductorResult {
@@ -126,6 +128,7 @@ function loadKnowledgeContext(): KnowledgeContext {
     deferred: '',
     estimations: '',
     historicalContext: '',
+    episodicContext: '',
   };
 
   const patternsPath = `${config.knowledgeDir}/patterns.json`;
@@ -212,6 +215,7 @@ function buildSpecPrompt(feature: string, context: string | undefined, knowledge
     knowledge.lessons,
     knowledge.deferred,
     knowledge.historicalContext,
+    knowledge.episodicContext,
   ].filter(Boolean).join('\n\n');
 
   const ironLaws = getIronLawsSummary();
@@ -717,10 +721,22 @@ async function runConductorPipeline(
     }
   }
 
+  // Enrich with episodic memory (zero-cost FTS5 query)
+  if (!knowledge.episodicContext) {
+    try {
+      const episodes = recallEpisodes(feature, 3);
+      if (episodes.length > 0) {
+        const episodicContext = episodes.map(e => `- [${e.sprintPhase}] ${e.action} → ${e.outcome}`).join('\n');
+        knowledge = { ...knowledge, episodicContext: `Past decisions:\n${episodicContext}` };
+        logger.info('Sprint conductor: injected episodic memory', { count: episodes.length });
+      }
+    } catch { /* non-fatal */ }
+  }
+
   // EFFORT: instant — return knowledge context only (no AI calls)
   if (effort === 'instant') {
     logger.info('Sprint conductor: instant effort — returning knowledge context only');
-    const knowledgeSummary = [knowledge.patterns, knowledge.lessons, knowledge.deferred, knowledge.estimations, knowledge.historicalContext]
+    const knowledgeSummary = [knowledge.patterns, knowledge.lessons, knowledge.deferred, knowledge.estimations, knowledge.historicalContext, knowledge.episodicContext]
       .filter(Boolean).join('\n\n');
     return {
       spec: knowledgeSummary || 'No knowledge context available.',

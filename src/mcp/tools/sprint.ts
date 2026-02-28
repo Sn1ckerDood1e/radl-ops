@@ -29,6 +29,7 @@ import { createAntibodyCore } from './immune-system.js';
 import { proposeChecksFromLessons } from './crystallization.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
+import { recordEpisode } from '../../knowledge/episodic.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
 import { searchFts, isFtsAvailable } from '../../knowledge/fts-index.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
@@ -818,6 +819,20 @@ export function registerSprintTools(server: McpServer): void {
               cost: bloomResult.totalCostUsd,
               ruleProposals: ruleProposals.length,
             });
+
+            // Auto-record episodic memories from bloom lessons
+            if (bloomResult.lessons.length > 0) {
+              try {
+                for (const lesson of bloomResult.lessons.slice(0, 3)) {
+                  recordEpisode(
+                    sprintPhase,
+                    `[${lesson.category}] ${lesson.content.substring(0, 100)}`,
+                    lesson.content,
+                  );
+                }
+                logger.info('Auto-recorded episodic memories', { count: Math.min(bloomResult.lessons.length, 3) });
+              } catch { /* non-fatal */ }
+            }
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
