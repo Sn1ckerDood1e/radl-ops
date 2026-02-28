@@ -216,7 +216,7 @@ export function estimateCognitiveLoad(
     ? null
     : findCompactionPoint(taskEstimates, warningTokens);
 
-  const recommendation = generateRecommendation(status, compactionPoint, taskEstimates, usagePercent);
+  const recommendation = generateRecommendation(status, compactionPoint, taskEstimates, contextUsagePercent);
 
   return {
     status,

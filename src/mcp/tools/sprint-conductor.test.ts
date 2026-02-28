@@ -78,6 +78,11 @@ vi.mock('../../knowledge/reasoning-bank.js', () => ({
   cacheContext: vi.fn(),
 }));
 
+const mockRecallEpisodes = vi.fn();
+vi.mock('../../knowledge/episodic.js', () => ({
+  recallEpisodes: (...args: unknown[]) => mockRecallEpisodes(...args),
+}));
+
 // Extract handlers by registering with a mock server
 async function getHandlers() {
   const handlers: Record<string, Function> = {};
@@ -174,6 +179,7 @@ describe('Sprint Conductor Tool', () => {
       outputCostPer1M: 4,
     });
     mockCalculateCost.mockReturnValue(0.005);
+    mockRecallEpisodes.mockReturnValue([]);
   });
 
   describe('tool registration', () => {
@@ -323,6 +329,43 @@ describe('Sprint Conductor Tool', () => {
       });
 
       // Should still succeed despite parse errors
+      expect(result.content[0].text).toContain('## 1. Sprint Spec');
+    });
+
+    it('injects episodic memory when episodes found', async () => {
+      mockRecallEpisodes.mockReturnValue([
+        {
+          id: 1,
+          sprintPhase: 'Phase 100',
+          timestamp: '2026-02-01T00:00:00Z',
+          action: 'Chose SQLite for local storage',
+          outcome: 'Worked well, 10ms queries',
+          lesson: null,
+          tags: [],
+        },
+      ]);
+
+      const handlers = await getHandlers();
+      await handlers['sprint_conductor']({
+        feature: 'Add local data caching',
+      });
+
+      expect(mockRecallEpisodes).toHaveBeenCalledWith('Add local data caching', 3);
+      // Episodic context should be included in spec prompt
+      const specPrompt = mockRunEvalOptLoop.mock.calls[0][0];
+      expect(specPrompt).toContain('Past decisions');
+      expect(specPrompt).toContain('Chose SQLite');
+    });
+
+    it('proceeds normally when no episodes found', async () => {
+      mockRecallEpisodes.mockReturnValue([]);
+
+      const handlers = await getHandlers();
+      const result = await handlers['sprint_conductor']({
+        feature: 'Add brand new feature',
+      });
+
+      expect(mockRecallEpisodes).toHaveBeenCalled();
       expect(result.content[0].text).toContain('## 1. Sprint Spec');
     });
   });

@@ -776,8 +776,9 @@ export function registerSprintTools(server: McpServer): void {
       const completedRaw = findCompletedSprintData(sprintDir);
       const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
 
-      // Use structured data instead of fragile regex on shell stdout
-      const sprintPhase = completedSprintData?.phase ?? 'Unknown';
+      // Use structured data, falling back to regex on shell stdout
+      const sprintPhase = completedSprintData?.phase
+        ?? (() => { const m = output.match(/Phase\s+[\d.]+/i); return m ? m[0] : 'Unknown'; })();
 
       // Record completion event for audit trail
       recordCompleteEvent(sprintPhase, commit, actual_time);
