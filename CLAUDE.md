@@ -12,7 +12,7 @@ Available as `mcp__radl_ops__*` in Claude Code. Tools are organized into groups 
 
 | Group | Tools |
 |-------|-------|
-| **core** | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load, record_review, resolve_review, production_status, session_health, alert_check |
+| **core** | health_check, sprint_*, iron_laws, cost_report, knowledge_query, verify, team_recipe, audit_triage, sprint_advisor, review_pipeline, sprint_decompose, verify_patterns, sprint_conductor, verify_data_flow, pre_flight_check, spot_check_diff, grill, deferred_triage, sprint_retrospective, auto_prioritize, spec_to_tests, crystallize_*, antibody_*, causal_extract, causal_query, inverse_bloom, trust_report, trust_record, speculative_validate, cognitive_load, record_review, resolve_review, production_status, session_health, alert_check, repo_map, weekly_failure_analysis, record_episode, recall_episodes, watcher_metrics, raptor_summarize |
 | **content** | daily_briefing, weekly_briefing, daily_summary, social_*, roadmap_ideas |
 | **advanced** | eval_opt_generate, compound_extract, tool_forge, counterfactual_analyze |
 
@@ -47,6 +47,7 @@ All tool groups are enabled by default. Use `mcp__radl-ops__enable_tools` to tog
 | `verify_data_flow` | core | Zero-cost field lifecycle check (Schema→Migration→Validation→API→Client) |
 | `pre_flight_check` | core | Zero-cost pre-push verification (branch, sprint, clean tree, typecheck, secrets) |
 | `spot_check_diff` | core | AI spot-check of git diffs for common mistakes |
+| `grill` | core | Adversarial code review via Sonnet with structured verdicts (SHIP_IT/NEEDS_WORK/BLOCK) |
 | `deferred_triage` | core | Manage deferred tech debt items lifecycle |
 | `sprint_retrospective` | core | AI-powered sprint retrospective analysis |
 | `auto_prioritize` | core | AI-prioritize deferred items by impact/effort |
@@ -110,12 +111,17 @@ All tools include `ToolAnnotations` metadata (`readOnlyHint`, `destructiveHint`,
 ## Architecture
 
 ```
-Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
+Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.1.0)
                                     ├── tools (62 tools, 3 groups + 1 meta, with annotations)
                                     ├── resources (3: sprint [cached], iron-laws, tool-groups)
                                     ├── prompts (3: sprint-start, sprint-review, code-review)
+                                    ├── guardrails:
+                                    │   ├── loop guard (wired into every tool via withErrorTracking)
+                                    │   ├── iron laws (3-strike protocol)
+                                    │   └── grill (adversarial Sonnet review with SHIP_IT/NEEDS_WORK/BLOCK)
                                     ├── sprint conductor:
-                                    │   ├── knowledge loading (patterns, lessons, deferred, estimation)
+                                    │   ├── knowledge loading (patterns, lessons, deferred, estimation calibration)
+                                    │   ├── episodic memory enrichment (recalls past sprint decisions)
                                     │   ├── eval-opt spec (Sonnet generates, Opus evaluates)
                                     │   ├── task decomposition (Haiku, forced tool_use)
                                     │   ├── inverse bloom enrichment (time-decay weighted knowledge)
@@ -124,20 +130,31 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
                                     │   └── plan traceability (commit-to-task matching)
                                     ├── closed-loop intelligence:
                                     │   ├── immune system (antibodies with chain matching)
-                                    │   ├── crystallization (propose/approve/demote/list)
+                                    │   ├── crystallization (propose/approve/demote/list + anti-collapse)
                                     │   ├── causal graphs (extract/query with BFS traversal)
                                     │   ├── inverse bloom (30-day half-life time decay)
                                     │   ├── speculative validation (5 zero-cost pre-checks)
-                                    │   ├── cognitive load prediction (overflow forecasting + calibration)
+                                    │   ├── cognitive load prediction (tiered recommendations + calibration)
                                     │   ├── quality ratchet (trust_report/trust_record per domain)
                                     │   ├── task verification (Antfarm verify-then-retry protocol)
                                     │   ├── validation follow-up (sprint_complete warning comparison)
+                                    │   ├── episodic memory (auto-records lessons at sprint_complete)
                                     │   ├── tool forge (Sonnet code gen from checks)
                                     │   └── counterfactual analysis (alternative outcome reasoning)
                                     ├── knowledge infrastructure:
-                                    │   ├── FTS5 BM25 search (better-sqlite3, embedding-ready)
+                                    │   ├── FTS5 BM25 hybrid search (BM25 + TF-IDF vectors, weight 0.3)
+                                    │   ├── episodic memory (FTS5 SQLite, 90-day auto-prune)
+                                    │   ├── RAPTOR hierarchical summaries (multi-level knowledge)
+                                    │   ├── prompt registry (versioned prompt templates)
+                                    │   ├── search evaluation suite (precision/recall benchmarks)
                                     │   └── MITRE ATLAS threat model (knowledge/threats.yaml)
-                                    ├── sprint tools (auto compound extract + trust decisions)
+                                    ├── watcher intelligence:
+                                    │   ├── circuit breaker (3-consecutive-failure cooldown)
+                                    │   ├── effort scaling (budget/turns by issue complexity)
+                                    │   ├── pre-prompt knowledge injection (inverse bloom)
+                                    │   ├── failure antibody creation (auto-learn from failures)
+                                    │   └── watcher metrics (pass@1, cost, failure breakdown)
+                                    ├── sprint tools (auto compound extract + trust decisions + episodic recording)
                                     ├── briefing tools (eval-opt: Haiku+Sonnet)
                                     ├── social tools (Sonnet + Radl brand context + withRetry)
                                     ├── monitoring tools (HTTP health checks)
@@ -149,7 +166,7 @@ Claude Code <--(stdio/JSON-RPC)--> radl-ops MCP Server (v2.0.0)
                                     ├── data flow verifier (zero-cost field lifecycle check)
                                     ├── pre-flight check (zero-cost pre-push verification)
                                     ├── drift detection (verify code against knowledge base patterns)
-                                    ├── per-sprint cost tracking (tags API calls with active phase)
+                                    ├── model routing (cascade routing with per-tool cost tracking)
                                     └── cost reporting (token tracking with cache + sprint metrics)
 ```
 
@@ -242,6 +259,9 @@ npm run typecheck
 # Compound learning (after sprints) — prefer MCP tool over shell
 # mcp__radl-ops__compound_extract (AI-powered Bloom pipeline)
 /home/hb/radl-ops/scripts/compound.sh extract  # legacy fallback
+
+# Knowledge bootstrap (builds FTS5 index + seeds episodic memory)
+npx tsx scripts/bootstrap-knowledge.ts
 ```
 
 ## Issue Watcher (Autonomous Dispatcher)
@@ -269,6 +289,8 @@ scripts/setup-labels.sh     # Create GitHub labels
 - 2-hour timeout per issue (`WATCHER_TIMEOUT`)
 - $5 budget cap per issue (`WATCHER_MAX_BUDGET`)
 - 75 max turns per issue (`WATCHER_MAX_TURNS`)
+- Circuit breaker: 3 consecutive failures triggers 30-min cooldown
+- Effort scaling: budget/turns adjusted by issue complexity labels
 - `auto/issue-<num>-<slug>` branch naming
 - Skips issues with `failed`, `decomposed`, or `in-progress` labels
 - Priority ordering: `priority:high` issues execute first, `priority:low` last, default in between
@@ -338,33 +360,45 @@ Eval-opt uses structured outputs (tool_use + forced tool_choice) for reliable JS
 Eval-opt tracks all iteration attempts and uses prompt caching for evaluation criteria.
 Bloom pipeline uses structured outputs for rollout (lessons array) and judgment (quality score) stages.
 
-## Intelligence Architecture (Phase 80)
+## Intelligence Architecture (Phase 80 → 136)
 
 ### Sprint Conductor Pipeline
-1. **Knowledge loading** — patterns, lessons, deferred items, estimation calibration
-2. **Eval-opt spec** — Sonnet generates, Opus evaluates (quality threshold 8/10)
-3. **Haiku decomposition** — forced `tool_use` for structured task output
-4. **Inverse bloom** — enriches tasks with time-decay weighted knowledge (30-day half-life)
-5. **Speculative validation** — 5 zero-cost pre-checks against knowledge base
-6. **Step checkpointing** — SHA256 feature hash enables resume after context loss
-7. **Plan save** — traceability report matches commits to planned tasks at `sprint_complete`
+1. **Knowledge loading** — patterns, lessons, deferred items, estimation calibration (via `getCalibrationFactor()`)
+2. **Episodic memory enrichment** — recalls past sprint decisions relevant to current feature (FTS5 search)
+3. **Eval-opt spec** — Sonnet generates, Opus evaluates (quality threshold 8/10)
+4. **Haiku decomposition** — forced `tool_use` for structured task output
+5. **Inverse bloom** — enriches tasks with time-decay weighted knowledge (30-day half-life)
+6. **Speculative validation** — 5 zero-cost pre-checks against knowledge base
+7. **Step checkpointing** — SHA256 feature hash enables resume after context loss
+8. **Plan save** — traceability report matches commits to planned tasks at `sprint_complete`
 
 ### Closed-Loop Feedback
 - `sprint_complete` auto-records trust decisions: estimation accuracy, bloom quality, validation warning follow-up
 - `sprint_complete` auto-extracts causal pairs and records cognitive calibration
+- `sprint_complete` auto-records episodic memories from bloom lessons (up to 3 per sprint)
+- `sprint_complete` proposes CLAUDE.md rules via Haiku semantic analysis (with regex fallback)
 - Antibodies increment `catches` when matched during speculative validation
 - Crystallized checks increment `catches` when matched
 - Validation warnings are compared at sprint end: FIXED/PARTIAL/OPEN/REVIEW, recorded as `speculative_validation` trust domain
+- Loop guard detects and blocks repeated tool call patterns (wired into every MCP tool)
 
 ### Knowledge Search
 - FTS5 BM25 hybrid search via `better-sqlite3` (src/knowledge/fts-index.ts)
-- Embedding-ready interface for future vector similarity
-- Time-decay scoring: 30-day half-life for inverse bloom relevance
+- Hybrid scoring: BM25 (weight 1.0) + TF-IDF vectors (weight 0.3), combined ranking
+- Time-decay scoring: 30-day half-life with 0.2 floor for inverse bloom relevance
+- Episodic memory: separate FTS5 SQLite DB for sprint decisions/outcomes (90-day auto-prune)
+- RAPTOR: hierarchical multi-level knowledge summaries
+- Bootstrap: `npx tsx scripts/bootstrap-knowledge.ts` (builds FTS5 index + seeds episodic memory)
 
 ### Agent Patterns
 - **Antfarm pattern**: Read-only agents with KEY:VALUE structured output (see `~/.claude/agents/*-readonly.md`)
 - **Task verification**: verify → parse → retry loop with criteria injection
 - **Agent output parser**: Extracts KEY:VALUE pairs from structured agent responses
+
+### Guardrails
+- **Loop guard**: Detects repeated tool calls (warn at 3, block at global circuit break 30). Wired into `withErrorTracking` — every MCP tool is automatically protected.
+- **Iron laws**: 3-strike error tracking per tool, escalation message after 3 consecutive failures.
+- **Grill**: Adversarial Sonnet review with structured SHIP_IT/NEEDS_WORK/BLOCK verdicts.
 
 ## Agent Teams
 

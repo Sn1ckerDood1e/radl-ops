@@ -58,7 +58,7 @@ interface KnowledgeEntry {
 const DB_FILENAME = 'knowledge.db';
 const DEFAULT_MAX_RESULTS = 10;
 const DEFAULT_FTS_WEIGHT = 1.0;
-const DEFAULT_VECTOR_WEIGHT = 0.0;
+const DEFAULT_VECTOR_WEIGHT = 0.3;
 const DEFAULT_HALF_LIFE_DAYS = 30;
 
 // ============================================

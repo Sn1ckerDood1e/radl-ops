@@ -75,6 +75,7 @@ import { registerFailureAnalysisTools } from './tools/failure-analysis.js';
 import { registerEpisodicMemoryTools } from '../knowledge/episodic.js';
 import { registerWatcherMetricsTools } from './tools/watcher-metrics.js';
 import { registerRaptorSummaryTools } from './tools/raptor-summaries.js';
+import { registerGrillTools } from './tools/grill.js';
 import { ToolRegistry, TOOL_GROUPS } from './tool-registry.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -137,6 +138,7 @@ registerFailureAnalysisTools(server);
 registerEpisodicMemoryTools(server);
 registerWatcherMetricsTools(server);
 registerRaptorSummaryTools(server);
+registerGrillTools(server);
 
 // Register MCP prompts (workflow templates)
 registerPrompts(server);

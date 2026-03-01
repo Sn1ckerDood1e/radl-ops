@@ -29,10 +29,14 @@ import { createAntibodyCore } from './immune-system.js';
 import { proposeChecksFromLessons } from './crystallization.js';
 import { recordTrustDecision } from './quality-ratchet.js';
 import { recordCognitiveCalibration } from './cognitive-load.js';
+import { recordEpisode } from '../../knowledge/episodic.js';
 import { clearFindings, loadFindings, checkUnresolved } from './review-tracker.js';
 import { searchFts, isFtsAvailable } from '../../knowledge/fts-index.js';
 import { createCalendarEvent, updateCalendarEvent, isGoogleConfigured } from '../../integrations/google.js';
 import { session } from './shared/session-state.js';
+import { getRoute } from '../../models/router.js';
+import { getAnthropicClient } from '../../config/anthropic.js';
+import type Anthropic from '@anthropic-ai/sdk';
 import { recordStartEvent, recordProgressEvent, recordCompleteEvent } from './shared/sprint-events.js';
 
 function getDeferredPath(): string {
@@ -262,6 +266,96 @@ function getDeferredTriageSummary(): string {
   return `\nDeferred triage (${unresolved.length} unresolved, oldest 3):\n${oldest.join('\n')}`;
 }
 
+/**
+ * Regex-based fallback for rule proposal (used when Haiku is unavailable).
+ */
+function proposeClaudeMdRulesRegex(lessons: Array<{ category: string; content: string }>): string[] {
+  const proposals: string[] = [];
+
+  const correctionPatterns = lessons.filter(l =>
+    l.category === 'lesson' || l.category === 'pattern'
+  );
+
+  for (const lesson of correctionPatterns) {
+    const content = lesson.content.toLowerCase();
+    if (/\b(always|never|must not|should always|do not|avoid)\b/.test(content)) {
+      const rule = lesson.content.trim();
+      if (rule.length > 20 && rule.length < 200) {
+        proposals.push(rule);
+      }
+    }
+  }
+
+  return proposals.slice(0, 2);
+}
+
+/**
+ * Analyze sprint learnings for potential CLAUDE.md rule proposals.
+ * Uses Haiku for semantic analysis, with regex fallback on failure.
+ * Returns proposed rules (not auto-written — human approval required).
+ */
+async function proposeClaudeMdRules(lessons: Array<{ category: string; content: string }>): Promise<string[]> {
+  const correctionLessons = lessons.filter(l =>
+    l.category === 'lesson' || l.category === 'pattern'
+  );
+
+  if (correctionLessons.length === 0) return [];
+
+  try {
+    const route = getRoute('spot_check');
+    const client = getAnthropicClient();
+
+    const lessonsText = correctionLessons
+      .map((l, i) => `${i + 1}. [${l.category}] ${l.content}`)
+      .join('\n');
+
+    const RULE_PROPOSAL_TOOL: Anthropic.Messages.Tool = {
+      name: 'propose_rules',
+      description: 'Propose 0-2 CLAUDE.md rules from sprint lessons',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          rules: {
+            type: 'array',
+            items: { type: 'string' },
+            maxItems: 2,
+            description: 'Proposed rules (imperative, 20-150 chars each). Empty array if no good candidates.',
+          },
+        },
+        required: ['rules'],
+      },
+    };
+
+    const response = await client.messages.create({
+      model: route.model,
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Analyze these sprint lessons and propose 0-2 concise CLAUDE.md rules. Only propose rules that are specific, actionable, and would prevent future bugs. Skip generic advice.\n\nLessons:\n${lessonsText}`,
+      }],
+      tools: [RULE_PROPOSAL_TOOL],
+      tool_choice: { type: 'tool', name: 'propose_rules' },
+    });
+
+    const toolBlock = response.content.find(
+      (b): b is Anthropic.Messages.ToolUseBlock => b.type === 'tool_use',
+    );
+    if (toolBlock) {
+      const input = toolBlock.input as { rules?: string[] };
+      return (input.rules ?? [])
+        .filter(r => r.length >= 20 && r.length <= 200)
+        .slice(0, 2);
+    }
+  } catch (error) {
+    logger.warn('Haiku rule proposal failed, falling back to regex', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // Fallback to regex matching
+  return proposeClaudeMdRulesRegex(lessons);
+}
+
 function normalizeSprintData(raw: Record<string, unknown>): SprintData {
   return {
     phase: String(raw.phase ?? 'Unknown'),
@@ -435,7 +529,7 @@ function compareValidationWarnings(
 // parseTimeToMinutes moved to shared/quality-gates.ts
 
 // Exported for testing
-export { compareValidationWarnings };
+export { compareValidationWarnings, proposeClaudeMdRules };
 
 export function registerSprintTools(server: McpServer): void {
   server.tool(
@@ -661,11 +755,13 @@ export function registerSprintTools(server: McpServer): void {
       }).optional().describe('Track agent team usage for performance memory'),
       auto_extract: z.boolean().optional().default(true)
         .describe('Auto-run compound learning extraction via Bloom pipeline (default: true)'),
+      context_usage_percent: z.number().min(0).max(100).optional()
+        .describe('Current context window usage percentage (0-100). Passed to cognitive calibration for accuracy.'),
       intent: z.string().min(1).max(100).optional()
         .describe('Short intent description for structured logging (e.g., "ship auth feature")'),
     },
     { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used, auto_extract, intent }) => {
+    withErrorTracking('sprint_complete', async ({ commit, actual_time, deferred_items, team_used, auto_extract, context_usage_percent, intent }) => {
       const output = runSprint(['complete', commit, actual_time]);
 
       if (intent) {
@@ -675,14 +771,17 @@ export function registerSprintTools(server: McpServer): void {
       // Clear sprint phase tag for cost tracking
       setCurrentSprintPhase(null);
 
-      // Record completion event for audit trail
-      const completionPhaseMatch = output.match(/Phase\s+[\d.]+/i);
-      const completionPhase = completionPhaseMatch ? completionPhaseMatch[0] : 'Unknown';
-      recordCompleteEvent(completionPhase, commit, actual_time);
+      // Parse structured sprint data (hoisted here for all downstream uses)
+      const sprintDir = join(getConfig().radlDir, '.planning/sprints');
+      const completedRaw = findCompletedSprintData(sprintDir);
+      const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
 
-      // Parse sprint phase once for all downstream uses
-      const sprintPhaseMatch = output.match(/Phase\s+[\d.]+/i);
-      const sprintPhase = sprintPhaseMatch ? sprintPhaseMatch[0] : 'Unknown';
+      // Use structured data, falling back to regex on shell stdout
+      const sprintPhase = completedSprintData?.phase
+        ?? (() => { const m = output.match(/Phase\s+[\d.]+/i); return m ? m[0] : 'Unknown'; })();
+
+      // Record completion event for audit trail
+      recordCompleteEvent(sprintPhase, commit, actual_time);
 
       let deferredNote = '';
       if (deferred_items && deferred_items.length > 0) {
@@ -738,11 +837,6 @@ export function registerSprintTools(server: McpServer): void {
 
       notifySprintChanged();
 
-      // Shared state for quality gates + auto_extract blocks (hoist to avoid repeated filesystem reads)
-      const sprintDir = join(getConfig().radlDir, '.planning/sprints');
-      const completedRaw = findCompletedSprintData(sprintDir);
-      const completedSprintData = completedRaw ? normalizeSprintData(completedRaw) : null;
-
       // Auto-extract compound learnings via Bloom pipeline
       let extractNote = '';
       if (auto_extract !== false) {
@@ -775,11 +869,37 @@ export function registerSprintTools(server: McpServer): void {
             }, null, 2));
 
             extractNote = `\nCompound extract: ${bloomResult.lessons.length} lessons (quality: ${bloomResult.qualityScore}/10, cost: $${bloomResult.totalCostUsd})`;
+
+            // Propose CLAUDE.md rule additions from sprint learnings
+            const ruleProposals = await proposeClaudeMdRules(bloomResult.lessons);
+            if (ruleProposals.length > 0) {
+              extractNote += '\n\n## Proposed CLAUDE.md Rules\n\n';
+              extractNote += 'The following rules were derived from this sprint\'s learnings. Add to CLAUDE.md if appropriate:\n';
+              ruleProposals.forEach((rule, idx) => {
+                extractNote += `\n${idx + 1}. ${rule}`;
+              });
+            }
+
             logger.info('Auto compound extract completed', {
               lessons: bloomResult.lessons.length,
               quality: bloomResult.qualityScore,
               cost: bloomResult.totalCostUsd,
+              ruleProposals: ruleProposals.length,
             });
+
+            // Auto-record episodic memories from bloom lessons
+            if (bloomResult.lessons.length > 0) {
+              try {
+                for (const lesson of bloomResult.lessons.slice(0, 3)) {
+                  recordEpisode(
+                    sprintPhase,
+                    `[${lesson.category}] ${lesson.content.substring(0, 100)}`,
+                    lesson.content,
+                  );
+                }
+                logger.info('Auto-recorded episodic memories', { count: Math.min(bloomResult.lessons.length, 3) });
+              } catch { /* non-fatal */ }
+            }
           }
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
@@ -915,7 +1035,7 @@ export function registerSprintTools(server: McpServer): void {
           recordCognitiveCalibration({
             sprint: sprintPhase,
             taskCount,
-            contextUsagePercent: 50, // Default estimate; can be refined later
+            contextUsagePercent: context_usage_percent ?? 50,
           });
         } catch (error) {
           logger.warn('Cognitive calibration recording failed (non-fatal)', { error: String(error) });

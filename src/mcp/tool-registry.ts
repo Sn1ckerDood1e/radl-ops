@@ -43,7 +43,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       'speculative_validate', 'cognitive_load',
       'record_review', 'resolve_review', 'spec_compliance', 'tool_guide',
       'production_status', 'session_health', 'alert_check', 'trace_report', 'repo_map',
-      'weekly_failure_analysis', 'record_episode', 'recall_episodes', 'watcher_metrics', 'raptor_summarize',
+      'weekly_failure_analysis', 'record_episode', 'recall_episodes', 'watcher_metrics', 'raptor_summarize', 'grill',
     ],
     defaultEnabled: true,
   },
