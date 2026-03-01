@@ -1,5 +1,5 @@
 /**
- * Guardrails Module - Iron laws, error protocol, drift detection
+ * Guardrails Module - Iron laws, error protocol, drift detection, loop guard
  */
 
 export {
@@ -15,3 +15,12 @@ export type {
   LawCheckContext,
   LawCheckResult,
 } from './iron-laws.js';
+
+export {
+  checkToolCall,
+  recordToolResult,
+  resetLoopGuard,
+  getLoopGuardStats,
+} from './loop-guard.js';
+
+export type { LoopGuardResult } from './loop-guard.js';

@@ -35,6 +35,7 @@ interface WatcherMetrics {
   period: string;
   totalIssues: number;
   passAt1: number;         // fraction that succeed on first attempt
+  autonomyIndex: number;   // tasks_completed_autonomously / total_tasks (0.0-1.0)
   avgCostUsd: number;
   avgDurationMins: number;
   failuresByType: Record<string, number>;
@@ -149,6 +150,19 @@ function parseIssueRuns(daysBack: number): IssueRun[] {
 }
 
 // ============================================
+// Autonomy Index
+// ============================================
+
+/**
+ * Compute autonomy index: ratio of issues that succeeded on first attempt
+ * without human intervention. Value between 0.0 and 1.0.
+ */
+export function computeAutonomyIndex(logs: { succeeded: number; total: number }): number {
+  if (logs.total === 0) return 0;
+  return Math.round((logs.succeeded / logs.total) * 100) / 100;
+}
+
+// ============================================
 // Metrics Computation
 // ============================================
 
@@ -162,6 +176,7 @@ function computeMetrics(runs: IssueRun[], daysBack: number): WatcherMetrics {
       period: `${startDate.toISOString().split('T')[0]} to ${endDate}`,
       totalIssues: 0,
       passAt1: 0,
+      autonomyIndex: 0,
       avgCostUsd: 0,
       avgDurationMins: 0,
       failuresByType: {},
@@ -204,10 +219,17 @@ function computeMetrics(runs: IssueRun[], daysBack: number): WatcherMetrics {
       count: total,
     }));
 
+  // Autonomy index: successful first-attempt issues / total issues
+  const autonomyIndex = computeAutonomyIndex({
+    succeeded: successCount,
+    total: runs.length,
+  });
+
   return {
     period: `${startDate.toISOString().split('T')[0]} to ${endDate}`,
     totalIssues: runs.length,
     passAt1: Math.round(passAt1 * 100) / 100,
+    autonomyIndex,
     avgCostUsd: Math.round(avgCostUsd * 1_000_000) / 1_000_000,
     avgDurationMins: Math.round(avgDurationMins * 10) / 10,
     failuresByType,
@@ -247,6 +269,7 @@ export function registerWatcherMetricsTools(server: McpServer): void {
         `**Period:** ${metrics.period}`,
         `**Total issues:** ${metrics.totalIssues}`,
         `**Pass@1:** ${(metrics.passAt1 * 100).toFixed(0)}%`,
+        `**Autonomy Index:** ${(metrics.autonomyIndex * 100).toFixed(0)}% (${metrics.totalIssues > 0 ? Math.round(metrics.autonomyIndex * metrics.totalIssues) : 0}/${metrics.totalIssues} issues succeeded autonomously)`,
         `**Avg cost:** $${metrics.avgCostUsd.toFixed(4)}`,
         `**Avg duration:** ${metrics.avgDurationMins.toFixed(1)} min`,
         '',
